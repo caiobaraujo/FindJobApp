@@ -48,12 +48,12 @@ function submit() {
                     title="Create job lead"
                     description="Capture a promising opportunity and paste the full job description early so ATS analysis can guide resume tailoring from the start."
                 >
-                    <a
-                        :href="`${route('job-leads.index')}#import-job-lead`"
+                    <Link
+                        :href="route('job-leads.import.entry')"
                         class="premium-button-secondary"
                     >
-                        Import from URL
-                    </a>
+                        Import job
+                    </Link>
                     <Link
                         :href="route('job-leads.index')"
                         class="premium-button-secondary"

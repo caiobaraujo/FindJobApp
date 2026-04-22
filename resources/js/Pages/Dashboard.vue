@@ -57,22 +57,28 @@ const metricCards = [
     <AuthenticatedLayout>
         <template #header>
             <AppShell
-                title="Your application pipeline"
-                subtitle="A clean snapshot of momentum, open loops, and the opportunities worth your attention next."
+                title="Discovery and pipeline overview"
+                subtitle="Use Job Leads as the primary workspace for discovery, then move qualified opportunities into the application pipeline."
             >
                 <template #actions>
                     <div class="mt-6 flex flex-wrap gap-3">
                         <Link
+                            :href="route('job-leads.index')"
+                            class="premium-button-primary"
+                        >
+                            Open job leads
+                        </Link>
+                        <Link
+                            :href="route('job-leads.import.entry')"
+                            class="premium-button-secondary"
+                        >
+                            Import job
+                        </Link>
+                        <Link
                             :href="route('applications.index')"
                             class="premium-button-secondary"
                         >
-                            View pipeline
-                        </Link>
-                        <Link
-                            :href="route('applications.create')"
-                            class="premium-button-primary"
-                        >
-                            Add application
+                            View applications
                         </Link>
                     </div>
                 </template>
@@ -88,7 +94,7 @@ const metricCards = [
                         tone="accent"
                     >
                         <p class="mt-3 text-sm leading-6 text-slateglass-300">
-                            Your complete pipeline across wishlist, active, and closed outcomes.
+                            Your downstream application workflow after opportunities have been captured and reviewed in Job Leads.
                         </p>
                     </MetricCard>
                 </div>
@@ -103,10 +109,16 @@ const metricCards = [
 
             <SectionCard
                 title="Recent applications"
-                description="Your latest tracked opportunities, with status and applied date at a glance."
+                description="Your latest tracked opportunities after they move out of discovery and into the pipeline."
                 :padded="false"
             >
                 <template #actions>
+                    <Link
+                        :href="route('job-leads.index')"
+                        class="premium-link"
+                    >
+                        Go to job leads
+                    </Link>
                     <Link
                         :href="route('applications.index')"
                         class="premium-link"
@@ -126,6 +138,12 @@ const metricCards = [
                     title="No applications yet"
                     description="Start the pipeline with your first tracked opportunity and the dashboard will begin to fill with signal."
                 >
+                    <Link
+                        :href="route('job-leads.index')"
+                        class="premium-button-secondary"
+                    >
+                        Open job leads
+                    </Link>
                     <Link
                         :href="route('applications.create')"
                         class="premium-button-primary"

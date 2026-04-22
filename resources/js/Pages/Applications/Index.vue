@@ -137,8 +137,14 @@ function destroyApplication(id) {
                 <PageHeader
                     eyebrow="Pipeline"
                     title="Applications"
-                    description="Track every opportunity with cleaner filters, clearer status, and a better operational view."
+                    description="Track opportunities after discovery. Job Leads stays the main workspace for sourcing, enrichment, and prioritization."
                 >
+                    <Link
+                        :href="route('job-leads.index')"
+                        class="premium-button-secondary"
+                    >
+                        Back to job leads
+                    </Link>
                     <Link
                         :href="route('applications.create')"
                         class="premium-button-primary"
@@ -243,6 +249,12 @@ function destroyApplication(id) {
                     description="Adjust the filters or add a new opportunity to start shaping the tracker."
                 >
                     <Link
+                        :href="route('job-leads.index')"
+                        class="premium-button-secondary"
+                    >
+                        Open job leads
+                    </Link>
+                    <Link
                         :href="route('applications.create')"
                         class="premium-button-primary"
                     >
@@ -312,6 +324,12 @@ function destroyApplication(id) {
                     title="No pipeline cards yet"
                     description="Add your first opportunity or relax the filters to populate the stage-based view."
                 >
+                    <Link
+                        :href="route('job-leads.index')"
+                        class="premium-button-secondary"
+                    >
+                        Open job leads
+                    </Link>
                     <Link
                         :href="route('applications.create')"
                         class="premium-button-primary"

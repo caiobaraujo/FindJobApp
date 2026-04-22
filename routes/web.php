@@ -18,6 +18,9 @@ Route::get('/', function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [ApplicationController::class, 'dashboard'])->name('dashboard');
+    Route::get('/job-leads/import', function () {
+        return redirect()->route('job-leads.index', ['focus' => 'import']);
+    })->name('job-leads.import.entry');
     Route::post('/job-leads/import', [JobLeadController::class, 'importFromUrl'])->name('job-leads.import');
     Route::resource('job-leads', JobLeadController::class)->except(['show']);
     Route::patch('/applications/{application}/status', [ApplicationController::class, 'updateStatus'])

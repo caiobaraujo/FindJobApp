@@ -6,7 +6,7 @@ import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
-import { reactive } from 'vue';
+import { onMounted, reactive } from 'vue';
 
 const props = defineProps({
     filters: {
@@ -27,6 +27,24 @@ const filterForm = reactive({
     lead_status: props.filters.lead_status || '',
     search: props.filters.search || '',
     minimum_relevance_score: props.filters.minimum_relevance_score || '',
+});
+
+onMounted(() => {
+    if (window.location.hash === '#import-job-lead') {
+        return;
+    }
+
+    if (new URLSearchParams(window.location.search).get('focus') !== 'import') {
+        return;
+    }
+
+    const importSection = document.getElementById('import-job-lead');
+
+    if (! importSection) {
+        return;
+    }
+
+    importSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
 
 const leadStatusClasses = {
@@ -105,12 +123,6 @@ function scoreBadgeClasses(score) {
             >
                 <template #actions>
                     <div class="mt-6 flex flex-wrap gap-3">
-                        <a
-                            href="#import-job-lead"
-                            class="premium-button-secondary"
-                        >
-                            Import from URL
-                        </a>
                         <Link
                             :href="route('job-leads.create')"
                             class="premium-button-primary"
@@ -118,10 +130,16 @@ function scoreBadgeClasses(score) {
                             Add job lead
                         </Link>
                         <Link
+                            :href="route('job-leads.import.entry')"
+                            class="premium-button-secondary"
+                        >
+                            Import job
+                        </Link>
+                        <Link
                             :href="route('applications.index')"
                             class="premium-button-secondary"
                         >
-                            Open application tracker
+                            Open applications
                         </Link>
                     </div>
                 </template>
@@ -139,6 +157,12 @@ function scoreBadgeClasses(score) {
                     class="premium-button-primary"
                 >
                     New lead
+                </Link>
+                <Link
+                    :href="route('job-leads.import.entry')"
+                    class="premium-button-secondary"
+                >
+                    Import job
                 </Link>
             </PageHeader>
 
@@ -237,12 +261,12 @@ function scoreBadgeClasses(score) {
                     >
                         Add first lead
                     </Link>
-                    <a
-                        href="#import-job-lead"
+                    <Link
+                        :href="route('job-leads.import.entry')"
                         class="premium-button-secondary"
                     >
-                        Import from URL
-                    </a>
+                        Import job
+                    </Link>
                 </EmptyState>
 
                 <div

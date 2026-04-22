@@ -12,11 +12,25 @@ const navigationItems = [
         label: 'Dashboard',
         routeName: 'dashboard',
         active: 'dashboard',
+        tone: 'secondary',
+    },
+    {
+        label: 'Job Leads',
+        routeName: 'job-leads.index',
+        active: 'job-leads.index',
+        tone: 'primary',
+    },
+    {
+        label: 'Import Job',
+        routeName: 'job-leads.import.entry',
+        active: 'job-leads.import.entry',
+        tone: 'secondary',
     },
     {
         label: 'Applications',
         routeName: 'applications.index',
         active: 'applications.*',
+        tone: 'secondary',
     },
 ];
 </script>
@@ -39,7 +53,7 @@ const navigationItems = [
                                     FindJobApp
                                 </p>
                                 <p class="text-sm text-slateglass-400">
-                                    Application tracker
+                                    Discovery-first job search workspace
                                 </p>
                             </div>
                         </Link>
@@ -52,7 +66,9 @@ const navigationItems = [
                                 class="rounded-full px-4 py-2 text-sm font-medium transition"
                                 :class="route().current(item.active)
                                     ? 'bg-gold-400/15 text-gold-300'
-                                    : 'text-slateglass-300 hover:bg-white/5 hover:text-white'"
+                                    : item.tone === 'primary'
+                                        ? 'border border-gold-300/20 bg-gold-300/8 text-gold-200 hover:bg-gold-300/12'
+                                        : 'text-slateglass-300 hover:bg-white/5 hover:text-white'"
                             >
                                 {{ item.label }}
                             </Link>
@@ -127,7 +143,9 @@ const navigationItems = [
                             class="rounded-2xl px-4 py-3 text-sm font-medium transition"
                             :class="route().current(item.active)
                                 ? 'bg-gold-400/15 text-gold-300'
-                                : 'bg-white/5 text-slateglass-300 hover:text-white'"
+                                : item.tone === 'primary'
+                                    ? 'border border-gold-300/20 bg-gold-300/8 text-gold-200'
+                                    : 'bg-white/5 text-slateglass-300 hover:text-white'"
                         >
                             {{ item.label }}
                         </Link>
