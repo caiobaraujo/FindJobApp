@@ -47,6 +47,12 @@ function submit() {
                     title="Create job lead"
                     description="Capture a promising opportunity with enough metadata to support future qualification and application optimization."
                 >
+                    <a
+                        :href="`${route('job-leads.index')}#import-job-lead`"
+                        class="premium-button-secondary"
+                    >
+                        Import from URL
+                    </a>
                     <Link
                         :href="route('job-leads.index')"
                         class="premium-button-secondary"

@@ -18,6 +18,7 @@ Route::get('/', function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [ApplicationController::class, 'dashboard'])->name('dashboard');
+    Route::post('/job-leads/import', [JobLeadController::class, 'importFromUrl'])->name('job-leads.import');
     Route::resource('job-leads', JobLeadController::class)->except(['show']);
     Route::patch('/applications/{application}/status', [ApplicationController::class, 'updateStatus'])
         ->name('applications.status.update');

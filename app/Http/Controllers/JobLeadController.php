@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ImportJobLeadFromUrlRequest;
 use App\Http\Requests\StoreJobLeadRequest;
 use App\Http\Requests\UpdateJobLeadRequest;
 use App\Models\JobLead;
@@ -61,6 +62,15 @@ class JobLeadController extends Controller
             ->with('success', 'Job lead created successfully.');
     }
 
+    public function importFromUrl(ImportJobLeadFromUrlRequest $request): RedirectResponse
+    {
+        JobLead::query()->create($this->importedJobLeadData($request));
+
+        return redirect()
+            ->route('job-leads.index')
+            ->with('success', 'Job lead imported successfully.');
+    }
+
     public function edit(JobLead $jobLead, Request $request): Response
     {
         $this->authorizeOwner($jobLead, $request);
@@ -99,6 +109,26 @@ class JobLeadController extends Controller
     /**
      * @return array<string, mixed>
      */
+    private function importedJobLeadData(ImportJobLeadFromUrlRequest $request): array
+    {
+        $sourceUrl = $request->string('source_url')->value();
+
+        return array_filter([
+            'user_id' => $request->user()->id,
+            'source_url' => $sourceUrl,
+            'source_name' => $this->nullableString($request->string('source_name')->value()),
+            'company_name' => $this->nullableString($request->string('company_name')->value())
+                ?? $this->importCompanyName($sourceUrl),
+            'job_title' => $this->nullableString($request->string('job_title')->value())
+                ?? 'Imported job lead',
+            'lead_status' => JobLead::STATUS_SAVED,
+            'discovered_at' => today()->toDateString(),
+        ], fn (mixed $value): bool => $value !== null);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function jobLeadData(JobLead $jobLead): array
     {
         return [
@@ -115,5 +145,27 @@ class JobLeadController extends Controller
             'lead_status' => $jobLead->lead_status,
             'discovered_at' => $jobLead->discovered_at?->toDateString(),
         ];
+    }
+
+    private function nullableString(string $value): ?string
+    {
+        $trimmedValue = trim($value);
+
+        if ($trimmedValue === '') {
+            return null;
+        }
+
+        return $trimmedValue;
+    }
+
+    private function importCompanyName(string $sourceUrl): string
+    {
+        $host = parse_url($sourceUrl, PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '') {
+            return 'Imported company';
+        }
+
+        return $host;
     }
 }

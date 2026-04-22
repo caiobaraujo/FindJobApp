@@ -1,4 +1,5 @@
 <script setup>
+import JobLeadImportForm from '@/Components/JobLeadImportForm.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
 import EmptyState from '@/Components/ui/EmptyState.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
@@ -70,6 +71,12 @@ function destroyJobLead(id) {
             >
                 <template #actions>
                     <div class="mt-6 flex flex-wrap gap-3">
+                        <a
+                            href="#import-job-lead"
+                            class="premium-button-secondary"
+                        >
+                            Import from URL
+                        </a>
                         <Link
                             :href="route('job-leads.create')"
                             class="premium-button-primary"
@@ -100,6 +107,14 @@ function destroyJobLead(id) {
                     New lead
                 </Link>
             </PageHeader>
+
+            <SectionCard
+                id="import-job-lead"
+                title="Import from URL"
+                description="Capture an external listing now. Future parsing can enrich this lead without changing the import entry point."
+            >
+                <JobLeadImportForm />
+            </SectionCard>
 
             <SectionCard
                 title="Filter discovery flow"
@@ -175,6 +190,12 @@ function destroyJobLead(id) {
                     >
                         Add first lead
                     </Link>
+                    <a
+                        href="#import-job-lead"
+                        class="premium-button-secondary"
+                    >
+                        Import from URL
+                    </a>
                 </EmptyState>
 
                 <div
