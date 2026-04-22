@@ -3,7 +3,7 @@ import ApplicationStatusBadge from '@/Components/ApplicationStatusBadge.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 
-defineProps({
+const props = defineProps({
     applications: {
         type: Array,
         required: true,
@@ -17,6 +17,34 @@ defineProps({
         required: true,
     },
 });
+
+const metricCards = [
+    {
+        key: 'wishlist',
+        label: 'Wishlist',
+        value: props.statusCounts.wishlist ?? 0,
+    },
+    {
+        key: 'applied',
+        label: 'Applied',
+        value: props.statusCounts.applied ?? 0,
+    },
+    {
+        key: 'interview',
+        label: 'Interview',
+        value: props.statusCounts.interview ?? 0,
+    },
+    {
+        key: 'offer',
+        label: 'Offer',
+        value: props.statusCounts.offer ?? 0,
+    },
+    {
+        key: 'rejected',
+        label: 'Rejected',
+        value: props.statusCounts.rejected ?? 0,
+    },
+];
 </script>
 
 <template>
@@ -41,12 +69,12 @@ defineProps({
                     </div>
 
                     <div
-                        v-for="(count, status) in statusCounts"
-                        :key="status"
+                        v-for="metric in metricCards"
+                        :key="metric.key"
                         class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
                     >
-                        <p class="text-sm font-medium capitalize text-gray-500">{{ status }}</p>
-                        <p class="mt-2 text-2xl font-semibold text-gray-900">{{ count }}</p>
+                        <p class="text-sm font-medium text-gray-500">{{ metric.label }}</p>
+                        <p class="mt-2 text-2xl font-semibold text-gray-900">{{ metric.value }}</p>
                     </div>
                 </div>
 
