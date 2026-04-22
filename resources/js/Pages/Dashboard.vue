@@ -1,8 +1,6 @@
 <script setup>
-import ApplicationStatusBadge from '@/Components/ApplicationStatusBadge.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
 import EmptyState from '@/Components/ui/EmptyState.vue';
-import MetricCard from '@/Components/ui/MetricCard.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
@@ -20,35 +18,19 @@ const props = defineProps({
         type: Number,
         required: true,
     },
+    hasResumeProfile: {
+        type: Boolean,
+        required: true,
+    },
+    matchedJobsCount: {
+        type: Number,
+        required: true,
+    },
+    resumeReady: {
+        type: Boolean,
+        required: true,
+    },
 });
-
-const metricCards = [
-    {
-        key: 'wishlist',
-        label: 'Wishlist',
-        value: props.statusCounts.wishlist ?? 0,
-    },
-    {
-        key: 'applied',
-        label: 'Applied',
-        value: props.statusCounts.applied ?? 0,
-    },
-    {
-        key: 'interview',
-        label: 'Interview',
-        value: props.statusCounts.interview ?? 0,
-    },
-    {
-        key: 'offer',
-        label: 'Offer',
-        value: props.statusCounts.offer ?? 0,
-    },
-    {
-        key: 'rejected',
-        label: 'Rejected',
-        value: props.statusCounts.rejected ?? 0,
-    },
-];
 </script>
 
 <template>
@@ -57,28 +39,22 @@ const metricCards = [
     <AuthenticatedLayout>
         <template #header>
             <AppShell
-                title="Discovery and pipeline overview"
-                subtitle="Use Job Leads as the primary workspace for discovery, then move qualified opportunities into the application pipeline."
+                title="Resume-first job matching"
+                subtitle="Paste your resume once, let the app detect overlap, and jump straight into the jobs that already match your background."
             >
                 <template #actions>
                     <div class="mt-6 flex flex-wrap gap-3">
                         <Link
-                            :href="route('job-leads.index')"
+                            :href="props.resumeReady ? route('matched-jobs.index') : route('resume-profile.show')"
                             class="premium-button-primary"
                         >
-                            Open job leads
+                            {{ props.resumeReady ? 'View matched jobs' : 'Set up resume' }}
                         </Link>
                         <Link
-                            :href="route('job-leads.import.entry')"
+                            :href="route('resume-profile.show')"
                             class="premium-button-secondary"
                         >
-                            Import job
-                        </Link>
-                        <Link
-                            :href="route('applications.index')"
-                            class="premium-button-secondary"
-                        >
-                            View applications
+                            Resume setup
                         </Link>
                     </div>
                 </template>
@@ -86,103 +62,70 @@ const metricCards = [
         </template>
 
         <AppShell>
-            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-                <div class="md:col-span-2 xl:col-span-2">
-                    <MetricCard
-                        label="Total applications"
-                        :value="totalApplications"
-                        tone="accent"
-                    >
-                        <p class="mt-3 text-sm leading-6 text-slateglass-300">
-                            Your downstream application workflow after opportunities have been captured and reviewed in Job Leads.
-                        </p>
-                    </MetricCard>
-                </div>
-
-                <MetricCard
-                    v-for="metric in metricCards"
-                    :key="metric.key"
-                    :label="metric.label"
-                    :value="metric.value"
-                />
-            </div>
-
             <SectionCard
-                title="Recent applications"
-                description="Your latest tracked opportunities after they move out of discovery and into the pipeline."
-                :padded="false"
+                title="Start here"
+                description="The shortest path to value is resume first. Matching begins after the system has your base resume text."
             >
-                <template #actions>
-                    <Link
-                        :href="route('job-leads.index')"
-                        class="premium-link"
-                    >
-                        Go to job leads
-                    </Link>
-                    <Link
-                        :href="route('applications.index')"
-                        class="premium-link"
-                    >
-                        View all
-                    </Link>
-                    <Link
-                        :href="route('applications.create')"
-                        class="premium-button-primary"
-                    >
-                        New application
-                    </Link>
-                </template>
-
                 <EmptyState
-                    v-if="applications.length === 0"
-                    title="No applications yet"
-                    description="Start the pipeline with your first tracked opportunity and the dashboard will begin to fill with signal."
+                    v-if="!resumeReady"
+                    title="Upload or paste your resume first"
+                    description="Matching starts after you add your base resume text. Once that is in place, the app can surface jobs with overlapping keywords and skills."
                 >
                     <Link
-                        :href="route('job-leads.index')"
-                        class="premium-button-secondary"
-                    >
-                        Open job leads
-                    </Link>
-                    <Link
-                        :href="route('applications.create')"
+                        :href="route('resume-profile.show')"
                         class="premium-button-primary"
                     >
-                        Create application
+                        Set up resume
                     </Link>
                 </EmptyState>
 
-                <div
-                    v-else
-                    class="divide-y divide-white/10"
-                >
-                    <div
-                        v-for="application in applications"
-                        :key="application.id"
-                        class="flex flex-col gap-5 px-6 py-5 lg:flex-row lg:items-center lg:justify-between"
-                    >
-                        <div class="min-w-0">
-                            <div class="flex flex-wrap items-center gap-3">
-                                <h3 class="text-lg font-semibold text-white">
-                                    {{ application.company_name }}
-                                </h3>
-                                <ApplicationStatusBadge :status="application.status" />
-                            </div>
-                            <p class="mt-2 text-sm text-slateglass-300">
-                                {{ application.job_title }}
-                            </p>
-                            <p class="mt-3 text-xs font-medium uppercase tracking-[0.2em] text-slateglass-400">
-                                Applied at {{ application.applied_at || 'Not set' }}
-                            </p>
-                        </div>
-
-                        <div class="flex items-center gap-3">
+                <div v-else class="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+                    <div class="rounded-[2rem] border border-gold-300/15 bg-gradient-to-br from-gold-400/8 via-white/[0.03] to-transparent p-7">
+                        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-gold-300/80">
+                            Matching active
+                        </p>
+                        <h2 class="mt-3 text-3xl font-semibold text-white">
+                            {{ matchedJobsCount }} matched job{{ matchedJobsCount === 1 ? '' : 's' }} ready for review
+                        </h2>
+                        <p class="mt-4 max-w-2xl text-sm leading-7 text-slateglass-300">
+                            Focus on jobs with real overlap first. Each card shows matched keywords, missing keywords, and a direct source link so you can move quickly.
+                        </p>
+                        <div class="mt-6 flex flex-wrap gap-3">
                             <Link
-                                :href="route('applications.edit', application.id)"
+                                :href="route('matched-jobs.index')"
+                                class="premium-button-primary"
+                            >
+                                View matched jobs
+                            </Link>
+                            <Link
+                                :href="route('resume-profile.show')"
                                 class="premium-button-secondary"
                             >
-                                Open
+                                Update resume
                             </Link>
+                        </div>
+                    </div>
+
+                    <div class="rounded-[2rem] border border-white/10 bg-white/[0.03] p-7">
+                        <p class="text-xs font-semibold uppercase tracking-[0.24em] text-slateglass-400">
+                            Secondary workflow
+                        </p>
+                        <h3 class="mt-3 text-xl font-semibold text-white">
+                            Applications stay available later
+                        </h3>
+                        <p class="mt-4 text-sm leading-7 text-slateglass-300">
+                            The product is centered on resume matching and job discovery. Application tracking remains available, but it is not the main path to value.
+                        </p>
+                        <div class="mt-6 flex flex-wrap gap-3">
+                            <Link
+                                :href="route('applications.index')"
+                                class="premium-button-secondary"
+                            >
+                                Open applications
+                            </Link>
+                            <div class="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slateglass-300">
+                                {{ totalApplications }} tracked application{{ totalApplications === 1 ? '' : 's' }}
+                            </div>
                         </div>
                     </div>
                 </div>

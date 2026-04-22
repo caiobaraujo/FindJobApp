@@ -3,42 +3,53 @@ import { ref } from 'vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
-import { Link } from '@inertiajs/vue3';
+import { Link, router, usePage } from '@inertiajs/vue3';
 
 const showingNavigationDropdown = ref(false);
+const page = usePage();
 
 const navigationItems = [
     {
-        label: 'Dashboard',
+        label: 'nav.dashboard',
         routeName: 'dashboard',
         active: 'dashboard',
         tone: 'secondary',
     },
     {
-        label: 'Job Leads',
-        routeName: 'job-leads.index',
-        active: 'job-leads.index',
+        label: 'nav.matched_jobs',
+        routeName: 'matched-jobs.index',
+        active: 'matched-jobs.index',
         tone: 'primary',
     },
     {
-        label: 'Import Job',
-        routeName: 'job-leads.import.entry',
-        active: 'job-leads.import.entry',
-        tone: 'secondary',
-    },
-    {
-        label: 'Resume Profile',
+        label: 'nav.resume',
         routeName: 'resume-profile.show',
         active: 'resume-profile.*',
         tone: 'secondary',
     },
-    {
-        label: 'Applications',
-        routeName: 'applications.index',
-        active: 'applications.*',
-        tone: 'secondary',
-    },
 ];
+
+const locales = [
+    { code: 'pt', label: 'PT' },
+    { code: 'en', label: 'EN' },
+    { code: 'es', label: 'ES' },
+];
+
+function t(path, fallback) {
+    const value = path.split('.').reduce((carry, key) => carry?.[key], page.props.translations);
+
+    return value ?? fallback ?? path;
+}
+
+function currentLocale() {
+    return page.props.locale || document.documentElement.lang.slice(0, 2) || 'en';
+}
+
+function switchLocale(locale) {
+    router.post(route('locale.switch'), { locale }, {
+        preserveScroll: true,
+    });
+}
 </script>
 
 <template>
@@ -59,7 +70,7 @@ const navigationItems = [
                                     FindJobApp
                                 </p>
                                 <p class="text-sm text-slateglass-400">
-                                    Discovery-first job search workspace
+                                    {{ t('shell.tagline', 'Discovery-first job matching') }}
                                 </p>
                             </div>
                         </Link>
@@ -76,12 +87,27 @@ const navigationItems = [
                                         ? 'border border-gold-300/20 bg-gold-300/8 text-gold-200 hover:bg-gold-300/12'
                                         : 'text-slateglass-300 hover:bg-white/5 hover:text-white'"
                             >
-                                {{ item.label }}
+                                {{ t(item.label, item.label) }}
                             </Link>
                         </div>
                     </div>
 
                     <div class="hidden items-center gap-3 md:flex">
+                        <div class="rounded-full border border-white/10 bg-white/5 p-1">
+                            <button
+                                v-for="locale in locales"
+                                :key="locale.code"
+                                type="button"
+                                class="rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition"
+                                :class="currentLocale() === locale.code
+                                    ? 'bg-gold-400/15 text-gold-300'
+                                    : 'text-slateglass-400 hover:text-white'"
+                                @click="switchLocale(locale.code)"
+                            >
+                                {{ locale.label }}
+                            </button>
+                        </div>
+
                         <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-right">
                             <p class="text-sm font-medium text-white">
                                 {{ $page.props.auth.user.name }}
@@ -153,7 +179,7 @@ const navigationItems = [
                                     ? 'border border-gold-300/20 bg-gold-300/8 text-gold-200'
                                     : 'bg-white/5 text-slateglass-300 hover:text-white'"
                         >
-                            {{ item.label }}
+                            {{ t(item.label, item.label) }}
                         </Link>
                     </div>
                     <div class="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -163,6 +189,20 @@ const navigationItems = [
                         <p class="mt-1 text-xs text-slateglass-400">
                             {{ $page.props.auth.user.email }}
                         </p>
+                        <div class="mt-4 rounded-full border border-white/10 bg-black/20 p-1">
+                            <button
+                                v-for="locale in locales"
+                                :key="locale.code"
+                                type="button"
+                                class="rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition"
+                                :class="currentLocale() === locale.code
+                                    ? 'bg-gold-400/15 text-gold-300'
+                                    : 'text-slateglass-400 hover:text-white'"
+                                @click="switchLocale(locale.code)"
+                            >
+                                {{ locale.label }}
+                            </button>
+                        </div>
                         <div class="mt-4 flex flex-wrap gap-3">
                             <Link
                                 :href="route('profile.edit')"

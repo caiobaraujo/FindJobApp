@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Application;
 use App\Http\Requests\ImportJobLeadFromUrlRequest;
 use App\Http\Requests\StoreJobLeadRequest;
 use App\Http\Requests\UpdateJobLeadRequest;
@@ -20,37 +21,61 @@ class JobLeadController extends Controller
     public function index(Request $request): Response
     {
         $filters = $request->validate([
-            'lead_status' => ['nullable', 'string', Rule::in(JobLead::leadStatuses())],
             'search' => ['nullable', 'string', 'max:255'],
-            'minimum_relevance_score' => ['nullable', 'integer', 'min:0', 'max:100'],
         ]);
 
+        $userProfile = $this->userProfile($request->user()->id);
+        $matchedOnly = $request->routeIs('matched-jobs.index');
         $jobLeads = JobLead::query()
             ->where('user_id', $request->user()->id)
             ->orderByPriority()
-            ->when(filled($filters['lead_status'] ?? null), function ($query) use ($filters): void {
-                $query->where('lead_status', $filters['lead_status']);
-            })
             ->search($filters['search'] ?? null)
-            ->minimumRelevanceScore($filters['minimum_relevance_score'] ?? null)
-            ->paginate(12)
-            ->withQueryString()
-            ->through(fn (JobLead $jobLead): array => $this->jobLeadData($jobLead));
+            ->get();
+
+        $matchedJobs = $this->jobCards($jobLeads, $userProfile, $matchedOnly);
 
         return Inertia::render('JobLeads/Index', [
+            ...$this->sharedPageProps(),
             'filters' => [
-                'lead_status' => $filters['lead_status'] ?? '',
                 'search' => $filters['search'] ?? '',
-                'minimum_relevance_score' => $filters['minimum_relevance_score'] ?? '',
             ],
-            'jobLeads' => $jobLeads,
-            'leadStatuses' => JobLead::leadStatuses(),
+            'hasResumeProfile' => $userProfile !== null,
+            'matchedOnly' => $matchedOnly,
+            'resumeReady' => $this->resumeReady($userProfile),
+            'matchedJobs' => $matchedJobs,
+        ]);
+    }
+
+    public function dashboard(Request $request): Response
+    {
+        $user = $request->user();
+        $userProfile = $this->userProfile($user->id);
+        $matchedJobsCount = count($this->matchedJobs(
+            JobLead::query()->where('user_id', $user->id)->orderByPriority()->get(),
+            $userProfile,
+        ));
+
+        return Inertia::render('Dashboard', [
+            ...$this->sharedPageProps(),
+            'applications' => $user
+                ->applications()
+                ->latest()
+                ->take(5)
+                ->get()
+                ->map(fn (Application $application): array => $this->applicationData($application))
+                ->all(),
+            'statusCounts' => $this->statusCounts($user->id),
+            'totalApplications' => $user->applications()->count(),
+            'hasResumeProfile' => $userProfile !== null,
+            'resumeReady' => $this->resumeReady($userProfile),
+            'matchedJobsCount' => $matchedJobsCount,
         ]);
     }
 
     public function create(): Response
     {
         return Inertia::render('JobLeads/Create', [
+            ...$this->sharedPageProps(),
             'leadStatuses' => JobLead::leadStatuses(),
             'workModes' => JobLead::workModes(),
         ]);
@@ -84,6 +109,7 @@ class JobLeadController extends Controller
         $this->authorizeOwner($jobLead, $request);
 
         return Inertia::render('JobLeads/Edit', [
+            ...$this->sharedPageProps(),
             'jobLead' => $this->jobLeadData($jobLead),
             'matchAnalysis' => $this->matchAnalysis($jobLead, $request->user()->id),
             'leadStatuses' => JobLead::leadStatuses(),
@@ -164,9 +190,7 @@ class JobLeadController extends Controller
      */
     private function matchAnalysis(JobLead $jobLead, int $userId): array
     {
-        $userProfile = UserProfile::query()
-            ->where('user_id', $userId)
-            ->first();
+        $userProfile = $this->userProfile($userId);
 
         if ($userProfile === null) {
             return [
@@ -188,12 +212,92 @@ class JobLeadController extends Controller
 
         return [
             'state' => 'ready',
-            ...app(JobLeadMatchAnalyzer::class)->analyze(
-                $jobLead->extracted_keywords ?? [],
-                $userProfile->base_resume_text,
-                $userProfile->core_skills ?? [],
-            ),
+            ...$this->analyzeMatch($jobLead, $userProfile),
         ];
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     * @return list<array<string, mixed>>
+     */
+    private function matchedJobs($jobLeads, ?UserProfile $userProfile): array
+    {
+        return $this->jobCards($jobLeads, $userProfile, true);
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     * @return list<array<string, mixed>>
+     */
+    private function jobCards($jobLeads, ?UserProfile $userProfile, bool $matchedOnly): array
+    {
+        $resumeReady = $this->resumeReady($userProfile);
+
+        if ($matchedOnly && ! $resumeReady) {
+            return [];
+        }
+
+        $jobCards = [];
+
+        foreach ($jobLeads as $jobLead) {
+            $analysis = $resumeReady && ($jobLead->extracted_keywords ?? []) !== []
+                ? $this->analyzeMatch($jobLead, $userProfile)
+                : [
+                    'matched_keywords' => [],
+                    'missing_keywords' => [],
+                    'match_summary' => 'Resume matching starts after resume setup and job keyword extraction.',
+                ];
+
+            if ($matchedOnly && $analysis['matched_keywords'] === []) {
+                continue;
+            }
+
+            $jobCards[] = [
+                'id' => $jobLead->id,
+                'company_name' => $jobLead->company_name,
+                'job_title' => $jobLead->job_title,
+                'source_url' => $jobLead->source_url,
+                'extracted_keywords' => $jobLead->extracted_keywords ?? [],
+                'matched_keywords' => $analysis['matched_keywords'],
+                'missing_keywords' => $analysis['missing_keywords'],
+                'match_summary' => $analysis['match_summary'],
+                'ats_hint' => $jobLead->ats_hints[0] ?? null,
+            ];
+        }
+
+        return $jobCards;
+    }
+
+    /**
+     * @return array{matched_keywords: list<string>, missing_keywords: list<string>, match_summary: string}
+     */
+    private function analyzeMatch(JobLead $jobLead, UserProfile $userProfile): array
+    {
+        return app(JobLeadMatchAnalyzer::class)->analyze(
+            $jobLead->extracted_keywords ?? [],
+            $userProfile->base_resume_text,
+            $userProfile->core_skills ?? [],
+        );
+    }
+
+    private function userProfile(int $userId): ?UserProfile
+    {
+        return UserProfile::query()
+            ->where('user_id', $userId)
+            ->first();
+    }
+
+    private function resumeReady(?UserProfile $userProfile): bool
+    {
+        if ($userProfile === null) {
+            return false;
+        }
+
+        if (filled($userProfile->base_resume_text)) {
+            return true;
+        }
+
+        return ($userProfile->core_skills ?? []) !== [];
     }
 
     /**
@@ -243,5 +347,51 @@ class JobLeadController extends Controller
         }
 
         return $host;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function applicationData(Application $application): array
+    {
+        return [
+            'id' => $application->id,
+            'company_name' => $application->company_name,
+            'job_title' => $application->job_title,
+            'status' => $application->status,
+            'applied_at' => $application->applied_at?->toDateString(),
+        ];
+    }
+
+    /**
+     * @return array<string, int>
+     */
+    private function statusCounts(int $userId): array
+    {
+        $counts = array_fill_keys(Application::statuses(), 0);
+
+        $groupedCounts = Application::query()
+            ->where('user_id', $userId)
+            ->selectRaw('status, COUNT(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        foreach ($groupedCounts as $status => $total) {
+            $counts[$status] = (int) $total;
+        }
+
+        return $counts;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function sharedPageProps(): array
+    {
+        return [
+            'availableLocales' => ['pt', 'en', 'es'],
+            'locale' => app()->getLocale(),
+            'translations' => trans('app'),
+        ];
     }
 }

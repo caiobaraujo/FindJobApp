@@ -10,15 +10,11 @@ it('resolves the authenticated navigation destinations', function (): void {
         ->assertOk();
 
     $this->actingAs($user)
-        ->get(route('job-leads.index'))
+        ->get(route('matched-jobs.index'))
         ->assertOk();
 
     $this->actingAs($user)
-        ->get(route('job-leads.import.entry'))
-        ->assertRedirect(route('job-leads.index', ['focus' => 'import']));
-
-    $this->actingAs($user)
-        ->get(route('applications.index'))
+        ->get(route('resume-profile.show'))
         ->assertOk();
 });
 
@@ -30,14 +26,10 @@ it('renders the main authenticated pages', function (): void {
         ->assertOk();
 
     $this->actingAs($user)
-        ->get(route('job-leads.index'))
+        ->get(route('matched-jobs.index'))
         ->assertOk();
 
     $this->actingAs($user)
-        ->get(route('job-leads.create'))
-        ->assertOk();
-
-    $this->actingAs($user)
-        ->get(route('applications.index'))
+        ->get(route('resume-profile.show'))
         ->assertOk();
 });

@@ -2,6 +2,7 @@
 
 use App\Exceptions\Handler;
 use App\Http\Middleware\LogRequestContext;
+use App\Http\Middleware\SetLocale;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -20,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->append(LogRequestContext::class);
 
         $middleware->web(append: [
+            SetLocale::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);

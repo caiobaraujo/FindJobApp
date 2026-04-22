@@ -1,7 +1,6 @@
 <script setup>
 import UserProfileForm from '@/Components/UserProfileForm.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
-import EmptyState from '@/Components/ui/EmptyState.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -33,7 +32,7 @@ const form = useForm({
 });
 
 function submit() {
-    if (props.userProfile) {
+    if (props.hasResumeProfile) {
         form.patch(route('resume-profile.update'));
         return;
     }
@@ -49,21 +48,21 @@ function t(path, fallback) {
 </script>
 
 <template>
-    <Head :title="t('resume.setup_title', 'Resume setup')" />
+    <Head :title="t('resume.create_title', 'Create resume')" />
 
     <AuthenticatedLayout>
         <template #header>
             <AppShell>
                 <PageHeader
                     :eyebrow="t('resume.eyebrow', 'Resume-first setup')"
-                    :title="t('resume.setup_title', 'Resume setup')"
-                    :description="t('resume.setup_description', 'Upload your resume first. The app uses it to detect overlap, show matched jobs, and prepare future tailored resume workflows.')"
+                    :title="t('resume.create_title', 'Create resume')"
+                    :description="t('resume.create_description', 'No file yet? Build a simple resume draft here. This is the secondary path and still feeds the same matching engine.')"
                 >
                     <Link
-                        :href="route('matched-jobs.index')"
+                        :href="route('resume-profile.show')"
                         class="premium-button-secondary"
                     >
-                        {{ t('buttons.view_matched_jobs', 'View matched jobs') }}
+                        {{ t('buttons.upload_resume', 'Upload your resume') }}
                     </Link>
                 </PageHeader>
             </AppShell>
@@ -71,28 +70,13 @@ function t(path, fallback) {
 
         <AppShell>
             <SectionCard
-                :title="t('resume.upload_title', 'Upload your resume')"
-                :description="t('resume.upload_description', 'Resume upload is the primary setup step. Pasted text stays available as a fallback.')"
+                :title="t('resume.create_title', 'Create resume')"
+                :description="t('resume.create_card_description', 'Fill the basics only. The goal is to get enough resume content into the system to start matching jobs quickly.')"
             >
-                <EmptyState
-                    v-if="!hasResumeProfile"
-                    :title="t('resume.no_setup_title', 'No resume setup yet')"
-                    :description="t('resume.no_setup_description', 'Upload your resume to start automatic matching. No resume yet? Create one.')"
-                />
-
-                <div class="mb-6 flex flex-wrap gap-3">
-                    <Link
-                        :href="route('resume-profile.create')"
-                        class="premium-button-secondary"
-                    >
-                        {{ t('buttons.create_resume', 'Create resume') }}
-                    </Link>
-                </div>
-
                 <UserProfileForm
                     :form="form"
-                    mode="upload"
-                    :submit-label="hasResumeProfile
+                    mode="create"
+                    :submit-label="props.hasResumeProfile
                         ? t('resume.update_setup', 'Update resume setup')
                         : t('resume.save_setup', 'Save resume setup')"
                     @submit="submit"

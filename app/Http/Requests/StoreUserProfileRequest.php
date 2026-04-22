@@ -25,6 +25,7 @@ class StoreUserProfileRequest extends FormRequest
             'certifications_text' => ['nullable', 'string', 'max:5000'],
             'languages_text' => ['nullable', 'string', 'max:2000'],
             'base_resume_text' => ['nullable', 'string', 'max:50000'],
+            'resume_file' => ['nullable', 'file', 'mimes:pdf,doc,docx,txt', 'max:10240'],
         ];
     }
 }

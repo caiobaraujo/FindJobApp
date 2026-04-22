@@ -2,7 +2,7 @@
 
 ## Overview
 
-Discovery-first job search workspace built with Laravel, Vue, and Inertia.
+Resume-first job matching workspace built with Laravel, Vue, and Inertia.
 
 ## Tech Stack
 
@@ -22,18 +22,18 @@ Discovery-first job search workspace built with Laravel, Vue, and Inertia.
 - Use Vue pages and components for the UI.
 - Use MySQL for application data.
 - Keep all records scoped to the authenticated user.
-- Treat `JobLead` as the core discovery entity.
-- Treat `UserProfile` as the base resume and ATS matching entity.
-- Treat `Application` as the supporting tracker after a lead becomes active.
+- Treat `UserProfile` as the primary automation input.
+- Treat `JobLead` as the discovery entity that gets filtered into matched jobs.
+- Treat `Application` as a secondary workflow, not the core product path.
 
 ## Flow
 
 - User registers or logs in.
-- User discovers and centralizes job opportunities as job leads.
-- User maintains a resume profile with base resume text and core skills.
-- User reviews source context, relevance, lead status, ATS keywords, and resume match gaps.
-- User later tracks active applications in the secondary application tracker.
-- The product is prepared for future ingestion and tailored resume or cover-letter customization.
+- User pastes a base resume.
+- The app compares resume content against job leads.
+- The app shows matched jobs with matched and missing keywords.
+- The user jumps directly to the source listing from each matched job card.
+- Application tracking remains available as a future or secondary workflow.
 
 ## Diagram
 
@@ -42,21 +42,21 @@ Discovery-first job search workspace built with Laravel, Vue, and Inertia.
 | Browser | <-------------> | Laravel + Inertia | <------------> | MySQL  |
 +---------+                 +-------------------+                +--------+
      |                               |
-     | Vue pages + forms             | Auth, discovery CRUD, resume matching
+     | Vue pages + forms             | Auth, resume matching, lead filtering
      v                               v
 +------------------------+   +-------------------------------------------+
-| Job leads workspace    |   | JobLead + UserProfile + Application models |
-| Discovery + ATS review |   | Requests / Controllers / Match services    |
+| Resume + matched jobs  |   | JobLead + UserProfile + Application models |
+| Faster matching UX     |   | Requests / Controllers / Match services    |
 +------------------------+   +-------------------------------------------+
 ```
 
 ## Product Direction
 
 - Discover relevant jobs across the internet.
-- Centralize promising opportunities in one workspace.
-- Help optimize resumes per lead with ATS-aware keyword extraction and deterministic resume matching.
+- Let users paste one base resume and get value faster.
+- Surface matched jobs with clear overlap and gap signals.
 - Prepare for future tailored resumes and cover-letter customization.
-- Keep the application tracker as a supporting downstream feature.
+- Keep application tracking secondary to discovery and matching.
 
 ## Run
 

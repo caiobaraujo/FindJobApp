@@ -1,9 +1,9 @@
 - Run `bin/setup` first.
 - Use `php artisan test` after every change.
 - Use `npm run build` for frontend validation.
-- Build discovery-first features around `JobLead`.
-- Build resume optimization features around `UserProfile` plus `JobLead`.
+- Build resume-first matching features around `UserProfile` plus `JobLead`.
 - Keep `Application` as a secondary tracker.
+- Prefer fewer screens and less manual input.
 - Keep functions small.
 - Prefer early return.
 - Avoid duplication.
