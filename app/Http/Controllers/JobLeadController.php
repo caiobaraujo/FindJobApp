@@ -6,7 +6,9 @@ use App\Http\Requests\ImportJobLeadFromUrlRequest;
 use App\Http\Requests\StoreJobLeadRequest;
 use App\Http\Requests\UpdateJobLeadRequest;
 use App\Models\JobLead;
+use App\Models\UserProfile;
 use App\Services\JobLeadKeywordExtractor;
+use App\Services\JobLeadMatchAnalyzer;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -83,6 +85,7 @@ class JobLeadController extends Controller
 
         return Inertia::render('JobLeads/Edit', [
             'jobLead' => $this->jobLeadData($jobLead),
+            'matchAnalysis' => $this->matchAnalysis($jobLead, $request->user()->id),
             'leadStatuses' => JobLead::leadStatuses(),
             'workModes' => JobLead::workModes(),
         ]);
@@ -153,6 +156,43 @@ class JobLeadController extends Controller
             'relevance_score' => $jobLead->relevance_score,
             'lead_status' => $jobLead->lead_status,
             'discovered_at' => $jobLead->discovered_at?->toDateString(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function matchAnalysis(JobLead $jobLead, int $userId): array
+    {
+        $userProfile = UserProfile::query()
+            ->where('user_id', $userId)
+            ->first();
+
+        if ($userProfile === null) {
+            return [
+                'state' => 'missing_profile',
+                'matched_keywords' => [],
+                'missing_keywords' => [],
+                'match_summary' => 'Create your resume profile to compare your background against this job lead.',
+            ];
+        }
+
+        if (blank($jobLead->description_text) || ($jobLead->extracted_keywords ?? []) === []) {
+            return [
+                'state' => 'missing_job_analysis',
+                'matched_keywords' => [],
+                'missing_keywords' => [],
+                'match_summary' => 'Add a full job description to generate keywords before matching against your resume profile.',
+            ];
+        }
+
+        return [
+            'state' => 'ready',
+            ...app(JobLeadMatchAnalyzer::class)->analyze(
+                $jobLead->extracted_keywords ?? [],
+                $userProfile->base_resume_text,
+                $userProfile->core_skills ?? [],
+            ),
         ];
     }
 

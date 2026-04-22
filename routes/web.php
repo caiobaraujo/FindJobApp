@@ -3,6 +3,7 @@
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\JobLeadController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\UserProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -26,6 +27,9 @@ Route::middleware('auth')->group(function () {
     Route::patch('/applications/{application}/status', [ApplicationController::class, 'updateStatus'])
         ->name('applications.status.update');
     Route::resource('applications', ApplicationController::class)->except(['show']);
+    Route::get('/resume-profile', [UserProfileController::class, 'show'])->name('resume-profile.show');
+    Route::post('/resume-profile', [UserProfileController::class, 'store'])->name('resume-profile.store');
+    Route::patch('/resume-profile', [UserProfileController::class, 'update'])->name('resume-profile.update');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

@@ -3,6 +3,7 @@
 - Run `php artisan test` after every change.
 - Run `npm run build` when frontend files change.
 - Treat `JobLead` as the core discovery entity.
+- Treat `UserProfile` as the base resume and ATS matching entity.
 - Treat `Application` as a supporting tracker.
 - Keep functions small.
 - Keep files small.
@@ -15,6 +16,7 @@
 - Add feature coverage in `tests/Feature`.
 - Scope all user data to the authenticated user.
 - Design new discovery and import work around `JobLead`.
+- Design resume optimization work around `UserProfile` plus `JobLead`.
 - Preserve source context for future ingestion and optimization features.
 - Treat auth, ownership, and validation as critical paths.
 - Validate changes with tests before finishing.

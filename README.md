@@ -23,15 +23,17 @@ Discovery-first job search workspace built with Laravel, Vue, and Inertia.
 - Use MySQL for application data.
 - Keep all records scoped to the authenticated user.
 - Treat `JobLead` as the core discovery entity.
+- Treat `UserProfile` as the base resume and ATS matching entity.
 - Treat `Application` as the supporting tracker after a lead becomes active.
 
 ## Flow
 
 - User registers or logs in.
 - User discovers and centralizes job opportunities as job leads.
-- User reviews source context, relevance, and lead status.
+- User maintains a resume profile with base resume text and core skills.
+- User reviews source context, relevance, lead status, ATS keywords, and resume match gaps.
 - User later tracks active applications in the secondary application tracker.
-- The product is prepared for future ingestion and resume or cover-letter customization.
+- The product is prepared for future ingestion and tailored resume or cover-letter customization.
 
 ## Diagram
 
@@ -40,20 +42,20 @@ Discovery-first job search workspace built with Laravel, Vue, and Inertia.
 | Browser | <-------------> | Laravel + Inertia | <------------> | MySQL  |
 +---------+                 +-------------------+                +--------+
      |                               |
-     | Vue pages + forms             | Auth, discovery CRUD, tracker CRUD
+     | Vue pages + forms             | Auth, discovery CRUD, resume matching
      v                               v
-+------------------------+   +------------------------------+
-| Job leads workspace    |   | JobLead + Application models |
-| Discovery + review UI  |   | Requests / Controllers       |
-+------------------------+   +------------------------------+
++------------------------+   +-------------------------------------------+
+| Job leads workspace    |   | JobLead + UserProfile + Application models |
+| Discovery + ATS review |   | Requests / Controllers / Match services    |
++------------------------+   +-------------------------------------------+
 ```
 
 ## Product Direction
 
 - Discover relevant jobs across the internet.
 - Centralize promising opportunities in one workspace.
-- Help optimize applications with better source context and prioritization.
-- Prepare for future resume and cover-letter customization.
+- Help optimize resumes per lead with ATS-aware keyword extraction and deterministic resume matching.
+- Prepare for future tailored resumes and cover-letter customization.
 - Keep the application tracker as a supporting downstream feature.
 
 ## Run

@@ -2,6 +2,7 @@
 - Use `php artisan test` after every change.
 - Use `npm run build` for frontend validation.
 - Build discovery-first features around `JobLead`.
+- Build resume optimization features around `UserProfile` plus `JobLead`.
 - Keep `Application` as a secondary tracker.
 - Keep functions small.
 - Prefer early return.

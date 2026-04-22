@@ -1,4 +1,5 @@
 <script setup>
+import JobLeadMatchCard from '@/Components/JobLeadMatchCard.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
 import JobLeadForm from '@/Components/JobLeadForm.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
@@ -8,6 +9,10 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     jobLead: {
+        type: Object,
+        required: true,
+    },
+    matchAnalysis: {
         type: Object,
         required: true,
     },
@@ -154,6 +159,13 @@ function submit() {
                         </ul>
                     </div>
                 </div>
+            </SectionCard>
+
+            <SectionCard
+                title="Resume match"
+                description="Compare this job lead against your resume profile to see what your current base resume already covers and what is still missing."
+            >
+                <JobLeadMatchCard :analysis="matchAnalysis" />
             </SectionCard>
         </AppShell>
     </AuthenticatedLayout>

@@ -27,6 +27,12 @@ const navigationItems = [
         tone: 'secondary',
     },
     {
+        label: 'Resume Profile',
+        routeName: 'resume-profile.show',
+        active: 'resume-profile.*',
+        tone: 'secondary',
+    },
+    {
         label: 'Applications',
         routeName: 'applications.index',
         active: 'applications.*',
