@@ -26,6 +26,7 @@ const form = useForm({
     work_mode: '',
     salary_range: '',
     description_excerpt: '',
+    description_text: '',
     relevance_score: '',
     lead_status: props.leadStatuses[0] ?? 'saved',
     discovered_at: '',
@@ -45,7 +46,7 @@ function submit() {
                 <PageHeader
                     eyebrow="Discovery"
                     title="Create job lead"
-                    description="Capture a promising opportunity with enough metadata to support future qualification, prioritization, and application optimization."
+                    description="Capture a promising opportunity and paste the full job description early so ATS analysis can guide resume tailoring from the start."
                 >
                     <a
                         :href="`${route('job-leads.index')}#import-job-lead`"
@@ -66,7 +67,7 @@ function submit() {
         <AppShell>
             <SectionCard
                 title="Lead details"
-                description="Store the source context and an initial score so the best opportunities rise first as your discovery workspace grows."
+                description="Store the source context, add the full job description for ATS analysis, and keep personal notes separate."
             >
                 <JobLeadForm
                     :form="form"

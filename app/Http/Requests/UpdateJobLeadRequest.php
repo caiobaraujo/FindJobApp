@@ -33,6 +33,7 @@ class UpdateJobLeadRequest extends FormRequest
             'work_mode' => ['nullable', 'string', Rule::in(JobLead::workModes())],
             'salary_range' => ['nullable', 'string', 'max:255'],
             'description_excerpt' => ['nullable', 'string', 'max:5000'],
+            'description_text' => ['nullable', 'string', 'max:50000'],
             'relevance_score' => ['nullable', 'integer', 'between:0,100'],
             'lead_status' => ['required', 'string', Rule::in(JobLead::leadStatuses())],
             'discovered_at' => ['nullable', 'date'],

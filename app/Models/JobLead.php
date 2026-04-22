@@ -37,6 +37,9 @@ class JobLead extends Model
         'work_mode',
         'salary_range',
         'description_excerpt',
+        'description_text',
+        'extracted_keywords',
+        'ats_hints',
         'relevance_score',
         'lead_status',
         'discovered_at',
@@ -74,6 +77,8 @@ class JobLead extends Model
     {
         return [
             'discovered_at' => 'date',
+            'extracted_keywords' => 'array',
+            'ats_hints' => 'array',
             'relevance_score' => 'integer',
         ];
     }

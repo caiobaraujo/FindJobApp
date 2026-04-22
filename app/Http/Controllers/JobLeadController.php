@@ -6,6 +6,7 @@ use App\Http\Requests\ImportJobLeadFromUrlRequest;
 use App\Http\Requests\StoreJobLeadRequest;
 use App\Http\Requests\UpdateJobLeadRequest;
 use App\Models\JobLead;
+use App\Services\JobLeadKeywordExtractor;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -55,10 +56,12 @@ class JobLeadController extends Controller
 
     public function store(StoreJobLeadRequest $request): RedirectResponse
     {
-        JobLead::query()->create([
-            ...$request->validated(),
-            'user_id' => $request->user()->id,
-        ]);
+        JobLead::query()->create(
+            $this->jobLeadPayload(
+                $request->validated(),
+                $request->user()->id,
+            ),
+        );
 
         return redirect()
             ->route('job-leads.index')
@@ -87,7 +90,7 @@ class JobLeadController extends Controller
 
     public function update(UpdateJobLeadRequest $request, JobLead $jobLead): RedirectResponse
     {
-        $jobLead->update($request->validated());
+        $jobLead->update($this->jobLeadPayload($request->validated()));
 
         return redirect()
             ->route('job-leads.index')
@@ -144,10 +147,31 @@ class JobLeadController extends Controller
             'work_mode' => $jobLead->work_mode,
             'salary_range' => $jobLead->salary_range,
             'description_excerpt' => $jobLead->description_excerpt,
+            'description_text' => $jobLead->description_text,
+            'extracted_keywords' => $jobLead->extracted_keywords ?? [],
+            'ats_hints' => $jobLead->ats_hints ?? [],
             'relevance_score' => $jobLead->relevance_score,
             'lead_status' => $jobLead->lead_status,
             'discovered_at' => $jobLead->discovered_at?->toDateString(),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $validatedData
+     * @return array<string, mixed>
+     */
+    private function jobLeadPayload(array $validatedData, ?int $userId = null): array
+    {
+        $descriptionText = $this->nullableDescriptionText($validatedData['description_text'] ?? null);
+        $analysis = app(JobLeadKeywordExtractor::class)->analyze($descriptionText);
+
+        return array_filter([
+            ...$validatedData,
+            'user_id' => $userId,
+            'description_text' => $descriptionText,
+            'extracted_keywords' => $analysis['extracted_keywords'],
+            'ats_hints' => $analysis['ats_hints'],
+        ], fn (mixed $value): bool => $value !== null);
     }
 
     private function nullableString(string $value): ?string
@@ -159,6 +183,15 @@ class JobLeadController extends Controller
         }
 
         return $trimmedValue;
+    }
+
+    private function nullableDescriptionText(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        return $this->nullableString($value);
     }
 
     private function importCompanyName(string $sourceUrl): string

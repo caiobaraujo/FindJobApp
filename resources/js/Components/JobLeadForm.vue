@@ -26,6 +26,21 @@ defineProps({
 
 <template>
     <form @submit.prevent="$emit('submit')" class="space-y-6">
+        <div class="rounded-3xl border border-gold-300/15 bg-gradient-to-br from-gold-400/8 via-white/[0.03] to-transparent p-6">
+            <label for="description_text" class="premium-input-label">Job description (ATS analysis)</label>
+            <p class="mt-2 text-sm text-slateglass-300">
+                Paste the full job description to extract keywords and optimize your resume
+            </p>
+            <textarea
+                id="description_text"
+                v-model="form.description_text"
+                rows="12"
+                class="mt-4 block w-full"
+                placeholder="Paste the full job description here to unlock ATS insights for this lead."
+            />
+            <InputError class="mt-2" :message="form.errors.description_text" />
+        </div>
+
         <div class="grid gap-6 md:grid-cols-2">
             <div>
                 <label for="company_name" class="premium-input-label">Company name</label>
@@ -167,14 +182,24 @@ defineProps({
             </div>
         </div>
 
-        <div>
-            <label for="description_excerpt" class="premium-input-label">Description excerpt</label>
+        <div class="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                    <label for="description_excerpt" class="premium-input-label">Personal notes</label>
+                    <p class="mt-2 text-sm text-slateglass-400">
+                        Keep your private observations separate from the ATS analysis input.
+                    </p>
+                </div>
+                <span class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slateglass-400">
+                    Notes
+                </span>
+            </div>
             <textarea
                 id="description_excerpt"
                 v-model="form.description_excerpt"
                 rows="5"
-                class="mt-2 block w-full"
-                placeholder="Capture the key signals that make this lead worth revisiting."
+                class="mt-4 block w-full"
+                placeholder="Capture the key signals, concerns, and follow-ups that matter to you."
             />
             <InputError class="mt-2" :message="form.errors.description_excerpt" />
         </div>

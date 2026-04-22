@@ -303,6 +303,73 @@ function scoreBadgeClasses(score) {
                                 {{ jobLead.description_excerpt }}
                             </p>
 
+                            <div class="mt-5 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+                                <div class="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+                                    <div class="flex items-center justify-between gap-3">
+                                        <p class="text-xs font-semibold uppercase tracking-[0.22em] text-gold-300/80">
+                                            Extracted keywords
+                                        </p>
+                                        <span class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slateglass-300">
+                                            {{ jobLead.extracted_keywords.length }} found
+                                        </span>
+                                    </div>
+
+                                    <p
+                                        v-if="!jobLead.description_text"
+                                        class="mt-4 text-sm text-slateglass-400"
+                                    >
+                                        Add a job description to unlock ATS insights
+                                    </p>
+
+                                    <p
+                                        v-else-if="jobLead.extracted_keywords.length === 0"
+                                        class="mt-4 text-sm text-slateglass-400"
+                                    >
+                                        No keywords extracted yet
+                                    </p>
+
+                                    <div
+                                        v-else
+                                        class="mt-4 flex flex-wrap gap-2"
+                                    >
+                                        <span
+                                            v-for="keyword in jobLead.extracted_keywords"
+                                            :key="keyword"
+                                            class="rounded-full border border-gold-300/20 bg-gold-300/10 px-3 py-1 text-xs font-medium text-gold-200"
+                                        >
+                                            {{ keyword }}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-3xl border border-white/10 bg-white/[0.03] p-5">
+                                    <p class="text-xs font-semibold uppercase tracking-[0.22em] text-gold-300/80">
+                                        ATS hints
+                                    </p>
+
+                                    <p
+                                        v-if="!jobLead.description_text"
+                                        class="mt-4 text-sm text-slateglass-400"
+                                    >
+                                        Add a job description to unlock ATS insights
+                                    </p>
+
+                                    <ul
+                                        v-else
+                                        class="mt-4 space-y-3"
+                                    >
+                                        <li
+                                            v-for="hint in jobLead.ats_hints"
+                                            :key="hint"
+                                            class="flex items-start gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm leading-6 text-slateglass-200"
+                                        >
+                                            <span class="mt-2 h-1.5 w-1.5 rounded-full bg-gold-300" />
+                                            <span>{{ hint }}</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
                             <a
                                 :href="jobLead.source_url"
                                 target="_blank"
