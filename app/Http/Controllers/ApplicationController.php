@@ -7,6 +7,7 @@ use App\Http\Requests\UpdateApplicationRequest;
 use App\Models\Application;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -38,26 +39,33 @@ class ApplicationController extends Controller
         $filters = $request->validate([
             'status' => ['nullable', 'string', Rule::in(Application::statuses())],
             'search' => ['nullable', 'string', 'max:255'],
+            'view' => ['nullable', 'string', Rule::in(['list', 'pipeline'])],
         ]);
 
-        $applications = $request
+        $query = $request
             ->user()
             ->applications()
             ->latest()
             ->when(filled($filters['status'] ?? null), function ($query) use ($filters): void {
                 $query->where('status', $filters['status']);
             })
-            ->search($filters['search'] ?? null)
+            ->search($filters['search'] ?? null);
+
+        $applications = (clone $query)
             ->paginate(10)
             ->withQueryString()
             ->through(fn (Application $application): array => $this->applicationData($application));
+
+        $pipelineApplications = (clone $query)->get();
 
         return Inertia::render('Applications/Index', [
             'applications' => $applications,
             'filters' => [
                 'status' => $filters['status'] ?? '',
                 'search' => $filters['search'] ?? '',
+                'view' => $filters['view'] ?? 'list',
             ],
+            'pipelineColumns' => $this->pipelineColumns($pipelineApplications),
             'statuses' => Application::statuses(),
         ]);
     }
@@ -161,5 +169,31 @@ class ApplicationController extends Controller
         }
 
         return $counts;
+    }
+
+    /**
+     * @param  Collection<int, Application>  $applications
+     * @return array<int, array<string, mixed>>
+     */
+    private function pipelineColumns(Collection $applications): array
+    {
+        $groupedApplications = $applications->groupBy('status');
+
+        return collect(Application::statuses())
+            ->map(function (string $status) use ($groupedApplications): array {
+                $items = $groupedApplications
+                    ->get($status, collect())
+                    ->map(fn (Application $application): array => $this->applicationData($application))
+                    ->values()
+                    ->all();
+
+                return [
+                    'key' => $status,
+                    'title' => ucfirst($status),
+                    'count' => count($items),
+                    'applications' => $items,
+                ];
+            })
+            ->all();
     }
 }

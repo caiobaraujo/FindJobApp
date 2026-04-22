@@ -21,11 +21,16 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    pipelineColumns: {
+        type: Array,
+        required: true,
+    },
 });
 
 const filterForm = reactive({
     status: props.filters.status || '',
     search: props.filters.search || '',
+    view: props.filters.view || 'list',
 });
 
 function submitFilters() {
@@ -39,6 +44,11 @@ function submitFilters() {
 function resetFilters() {
     filterForm.status = '';
     filterForm.search = '';
+    submitFilters();
+}
+
+function switchView(view) {
+    filterForm.view = view;
     submitFilters();
 }
 
@@ -133,13 +143,37 @@ function destroyApplication(id) {
                 :padded="false"
             >
                 <template #actions>
-                    <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slateglass-400">
-                        {{ applications.data.length }} visible
-                    </span>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="rounded-full border border-white/10 bg-white/5 p-1">
+                            <button
+                                type="button"
+                                class="rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition"
+                                :class="filterForm.view === 'list'
+                                    ? 'bg-gold-400/15 text-gold-300'
+                                    : 'text-slateglass-400 hover:text-white'"
+                                @click="switchView('list')"
+                            >
+                                List view
+                            </button>
+                            <button
+                                type="button"
+                                class="rounded-full px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] transition"
+                                :class="filterForm.view === 'pipeline'
+                                    ? 'bg-gold-400/15 text-gold-300'
+                                    : 'text-slateglass-400 hover:text-white'"
+                                @click="switchView('pipeline')"
+                            >
+                                Pipeline view
+                            </button>
+                        </div>
+                        <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slateglass-400">
+                            {{ applications.data.length }} visible
+                        </span>
+                    </div>
                 </template>
 
                 <EmptyState
-                    v-if="applications.data.length === 0"
+                    v-if="filterForm.view === 'list' && applications.data.length === 0"
                     title="No applications found"
                     description="Adjust the filters or add a new opportunity to start shaping the tracker."
                 >
@@ -152,7 +186,7 @@ function destroyApplication(id) {
                 </EmptyState>
 
                 <div
-                    v-else
+                    v-else-if="filterForm.view === 'list'"
                     class="divide-y divide-white/10"
                 >
                     <div
@@ -208,8 +242,83 @@ function destroyApplication(id) {
                     </div>
                 </div>
 
+                <EmptyState
+                    v-else-if="pipelineColumns.every((column) => column.count === 0)"
+                    title="No pipeline cards yet"
+                    description="Add your first opportunity or relax the filters to populate the stage-based view."
+                >
+                    <Link
+                        :href="route('applications.create')"
+                        class="premium-button-primary"
+                    >
+                        Create application
+                    </Link>
+                </EmptyState>
+
                 <div
-                    v-if="applications.links.length > 3"
+                    v-else
+                    class="grid gap-5 p-6 xl:grid-cols-5"
+                >
+                    <div
+                        v-for="column in pipelineColumns"
+                        :key="column.key"
+                        class="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 shadow-panel"
+                    >
+                        <div class="mb-4 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
+                            <h3 class="text-sm font-semibold uppercase tracking-[0.18em] text-white">
+                                {{ column.title }}
+                            </h3>
+                            <span class="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slateglass-300">
+                                {{ column.count }}
+                            </span>
+                        </div>
+
+                        <div
+                            v-if="column.applications.length === 0"
+                            class="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-center text-sm text-slateglass-400"
+                        >
+                            No applications
+                        </div>
+
+                        <div
+                            v-else
+                            class="space-y-3"
+                        >
+                            <article
+                                v-for="application in column.applications"
+                                :key="application.id"
+                                class="rounded-2xl border border-white/10 bg-obsidian-850/80 p-4 transition hover:border-gold-400/20 hover:bg-white/[0.05]"
+                            >
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <h4 class="text-sm font-semibold text-white">
+                                        {{ application.company_name }}
+                                    </h4>
+                                    <ApplicationStatusBadge :status="application.status" />
+                                </div>
+                                <p class="mt-2 text-sm text-slateglass-300">
+                                    {{ application.job_title }}
+                                </p>
+                                <p
+                                    v-if="application.applied_at"
+                                    class="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-slateglass-400"
+                                >
+                                    Applied at {{ application.applied_at }}
+                                </p>
+                                <div class="mt-4">
+                                    <Link
+                                        :href="route('applications.edit', application.id)"
+                                        class="premium-link"
+                                    >
+                                        Edit
+                                    </Link>
+                                </div>
+                            </article>
+                        </div>
+                    </div>
+                </div>
+
+                <div
+                    v-if="filterForm.view === 'list' && applications.links.length > 3"
                     class="flex flex-wrap gap-2 border-t border-white/10 px-6 py-5"
                 >
                     <component
