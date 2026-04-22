@@ -7,11 +7,11 @@ const props = defineProps({
 });
 
 const classesByStatus = {
-    wishlist: 'border-slate-200 bg-slate-100 text-slate-700',
-    applied: 'border-sky-200 bg-sky-100 text-sky-700',
-    interview: 'border-amber-200 bg-amber-100 text-amber-800',
-    offer: 'border-emerald-200 bg-emerald-100 text-emerald-800',
-    rejected: 'border-rose-200 bg-rose-100 text-rose-800',
+    wishlist: 'border-slate-400/20 bg-slate-400/10 text-slateglass-200',
+    applied: 'border-slateglass-300/20 bg-slateglass-300/10 text-slateglass-200',
+    interview: 'border-gold-400/20 bg-gold-400/10 text-gold-300',
+    offer: 'border-gold-300/30 bg-gold-300/12 text-gold-200',
+    rejected: 'border-red-400/20 bg-red-400/10 text-red-200',
 };
 
 function labelForStatus(status) {
@@ -21,7 +21,7 @@ function labelForStatus(status) {
 
 <template>
     <span
-        class="inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold"
+        class="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
         :class="classesByStatus[props.status] ?? classesByStatus.wishlist"
     >
         {{ labelForStatus(props.status) }}

@@ -1,7 +1,5 @@
 <script setup>
 import InputError from '@/Components/InputError.vue';
-import InputLabel from '@/Components/InputLabel.vue';
-import PrimaryButton from '@/Components/PrimaryButton.vue';
 import TextInput from '@/Components/TextInput.vue';
 
 defineEmits(['submit']);
@@ -26,12 +24,12 @@ defineProps({
     <form @submit.prevent="$emit('submit')" class="space-y-6">
         <div class="grid gap-6 md:grid-cols-2">
             <div>
-                <InputLabel for="company_name" value="Company name" />
+                <label for="company_name" class="premium-input-label">Company name</label>
                 <TextInput
                     id="company_name"
                     v-model="form.company_name"
                     type="text"
-                    class="mt-1 block w-full"
+                    class="mt-2 block w-full"
                     required
                     autofocus
                 />
@@ -39,23 +37,23 @@ defineProps({
             </div>
 
             <div>
-                <InputLabel for="job_title" value="Job title" />
+                <label for="job_title" class="premium-input-label">Job title</label>
                 <TextInput
                     id="job_title"
                     v-model="form.job_title"
                     type="text"
-                    class="mt-1 block w-full"
+                    class="mt-2 block w-full"
                     required
                 />
                 <InputError class="mt-2" :message="form.errors.job_title" />
             </div>
 
             <div>
-                <InputLabel for="status" value="Status" />
+                <label for="status" class="premium-input-label">Status</label>
                 <select
                     id="status"
                     v-model="form.status"
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    class="mt-2 block w-full"
                     required
                 >
                     <option
@@ -70,48 +68,52 @@ defineProps({
             </div>
 
             <div>
-                <InputLabel for="applied_at" value="Applied at" />
+                <label for="applied_at" class="premium-input-label">Applied at</label>
                 <TextInput
                     id="applied_at"
                     v-model="form.applied_at"
                     type="date"
-                    class="mt-1 block w-full"
+                    class="mt-2 block w-full"
                 />
                 <InputError class="mt-2" :message="form.errors.applied_at" />
             </div>
         </div>
 
         <div>
-            <InputLabel for="source_url" value="Source URL" />
+            <label for="source_url" class="premium-input-label">Source URL</label>
             <TextInput
                 id="source_url"
                 v-model="form.source_url"
                 type="url"
-                class="mt-1 block w-full"
+                class="mt-2 block w-full"
                 placeholder="https://example.com/job-post"
             />
             <InputError class="mt-2" :message="form.errors.source_url" />
         </div>
 
         <div>
-            <InputLabel for="notes" value="Notes" />
+            <label for="notes" class="premium-input-label">Notes</label>
             <textarea
                 id="notes"
                 v-model="form.notes"
                 rows="5"
-                class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                class="mt-2 block w-full"
                 placeholder="Add interview notes, salary expectations, or follow-up reminders."
             />
             <InputError class="mt-2" :message="form.errors.notes" />
         </div>
 
-        <div class="flex items-center gap-4">
-            <PrimaryButton :disabled="form.processing">
+        <div class="flex flex-wrap items-center gap-4 border-t border-white/10 pt-6">
+            <button
+                type="submit"
+                class="premium-button-primary"
+                :disabled="form.processing"
+            >
                 {{ submitLabel }}
-            </PrimaryButton>
+            </button>
             <p
                 v-if="form.hasErrors"
-                class="text-sm text-red-600"
+                class="text-sm text-red-300"
             >
                 Please review the highlighted fields.
             </p>

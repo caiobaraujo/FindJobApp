@@ -1,5 +1,9 @@
 <script setup>
 import ApplicationStatusBadge from '@/Components/ApplicationStatusBadge.vue';
+import AppShell from '@/Components/ui/AppShell.vue';
+import EmptyState from '@/Components/ui/EmptyState.vue';
+import MetricCard from '@/Components/ui/MetricCard.vue';
+import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link } from '@inertiajs/vue3';
 
@@ -52,100 +56,119 @@ const metricCards = [
 
     <AuthenticatedLayout>
         <template #header>
-            <h2
-                class="text-xl font-semibold leading-tight text-gray-800"
+            <AppShell
+                title="Your application pipeline"
+                subtitle="A clean snapshot of momentum, open loops, and the opportunities worth your attention next."
             >
-                Job application dashboard
-            </h2>
-        </template>
-
-        <div class="py-10">
-            <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                <div class="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-                    <div class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm md:col-span-3 xl:col-span-2">
-                        <p class="text-sm font-medium text-gray-500">Total applications</p>
-                        <p class="mt-2 text-3xl font-semibold text-gray-900">{{ totalApplications }}</p>
-                        <p class="mt-2 text-sm text-gray-500">Your pipeline across all statuses.</p>
-                    </div>
-
-                    <div
-                        v-for="metric in metricCards"
-                        :key="metric.key"
-                        class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm"
-                    >
-                        <p class="text-sm font-medium text-gray-500">{{ metric.label }}</p>
-                        <p class="mt-2 text-2xl font-semibold text-gray-900">{{ metric.value }}</p>
-                    </div>
-                </div>
-
-                <div class="mt-8 rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <div class="flex items-center justify-between border-b border-gray-200 px-6 py-4">
-                        <div>
-                            <h3 class="text-lg font-semibold text-gray-900">Recent applications</h3>
-                            <p class="text-sm text-gray-500">Your latest tracked opportunities.</p>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <Link
-                                :href="route('applications.index')"
-                                class="text-sm font-medium text-gray-600 hover:text-gray-900"
-                            >
-                                View all
-                            </Link>
-                            <Link
-                                :href="route('applications.create')"
-                                class="rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
-                            >
-                                New application
-                            </Link>
-                        </div>
-                    </div>
-
-                    <div
-                        v-if="applications.length === 0"
-                        class="px-6 py-12 text-center"
-                    >
-                        <h4 class="text-lg font-semibold text-gray-900">No applications yet</h4>
-                        <p class="mt-2 text-sm text-gray-500">Create your first tracked opportunity to start building your pipeline.</p>
+                <template #actions>
+                    <div class="mt-6 flex flex-wrap gap-3">
+                        <Link
+                            :href="route('applications.index')"
+                            class="premium-button-secondary"
+                        >
+                            View pipeline
+                        </Link>
                         <Link
                             :href="route('applications.create')"
-                            class="mt-4 inline-flex rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-800"
+                            class="premium-button-primary"
                         >
-                            Create application
+                            Add application
                         </Link>
                     </div>
+                </template>
+            </AppShell>
+        </template>
 
-                    <div
-                        v-else
-                        class="divide-y divide-gray-200"
+        <AppShell>
+            <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+                <div class="md:col-span-2 xl:col-span-2">
+                    <MetricCard
+                        label="Total applications"
+                        :value="totalApplications"
+                        tone="accent"
                     >
-                        <div
-                            v-for="application in applications"
-                            :key="application.id"
-                            class="flex flex-col gap-4 px-6 py-5 md:flex-row md:items-center md:justify-between"
-                        >
-                            <div>
-                                <div class="flex items-center gap-3">
-                                    <h4 class="text-base font-semibold text-gray-900">
-                                        {{ application.company_name }}
-                                    </h4>
-                                    <ApplicationStatusBadge :status="application.status" />
-                                </div>
-                                <p class="mt-1 text-sm text-gray-600">{{ application.job_title }}</p>
-                                <p class="mt-2 text-xs text-gray-500">
-                                    Applied at: {{ application.applied_at || 'Not set' }}
-                                </p>
-                            </div>
+                        <p class="mt-3 text-sm leading-6 text-slateglass-300">
+                            Your complete pipeline across wishlist, active, and closed outcomes.
+                        </p>
+                    </MetricCard>
+                </div>
 
+                <MetricCard
+                    v-for="metric in metricCards"
+                    :key="metric.key"
+                    :label="metric.label"
+                    :value="metric.value"
+                />
+            </div>
+
+            <SectionCard
+                title="Recent applications"
+                description="Your latest tracked opportunities, with status and applied date at a glance."
+                :padded="false"
+            >
+                <template #actions>
+                    <Link
+                        :href="route('applications.index')"
+                        class="premium-link"
+                    >
+                        View all
+                    </Link>
+                    <Link
+                        :href="route('applications.create')"
+                        class="premium-button-primary"
+                    >
+                        New application
+                    </Link>
+                </template>
+
+                <EmptyState
+                    v-if="applications.length === 0"
+                    title="No applications yet"
+                    description="Start the pipeline with your first tracked opportunity and the dashboard will begin to fill with signal."
+                >
+                    <Link
+                        :href="route('applications.create')"
+                        class="premium-button-primary"
+                    >
+                        Create application
+                    </Link>
+                </EmptyState>
+
+                <div
+                    v-else
+                    class="divide-y divide-white/10"
+                >
+                    <div
+                        v-for="application in applications"
+                        :key="application.id"
+                        class="flex flex-col gap-5 px-6 py-5 lg:flex-row lg:items-center lg:justify-between"
+                    >
+                        <div class="min-w-0">
+                            <div class="flex flex-wrap items-center gap-3">
+                                <h3 class="text-lg font-semibold text-white">
+                                    {{ application.company_name }}
+                                </h3>
+                                <ApplicationStatusBadge :status="application.status" />
+                            </div>
+                            <p class="mt-2 text-sm text-slateglass-300">
+                                {{ application.job_title }}
+                            </p>
+                            <p class="mt-3 text-xs font-medium uppercase tracking-[0.2em] text-slateglass-400">
+                                Applied at {{ application.applied_at || 'Not set' }}
+                            </p>
+                        </div>
+
+                        <div class="flex items-center gap-3">
                             <Link
                                 :href="route('applications.edit', application.id)"
-                                class="text-sm font-medium text-gray-600 hover:text-gray-900"
+                                class="premium-button-secondary"
                             >
-                                Edit
+                                Open
                             </Link>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </SectionCard>
+        </AppShell>
     </AuthenticatedLayout>
 </template>
