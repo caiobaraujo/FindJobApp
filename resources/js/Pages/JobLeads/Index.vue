@@ -26,6 +26,7 @@ const props = defineProps({
 const filterForm = reactive({
     lead_status: props.filters.lead_status || '',
     search: props.filters.search || '',
+    minimum_relevance_score: props.filters.minimum_relevance_score || '',
 });
 
 const leadStatusClasses = {
@@ -46,6 +47,7 @@ function submitFilters() {
 function resetFilters() {
     filterForm.lead_status = '';
     filterForm.search = '';
+    filterForm.minimum_relevance_score = '';
     submitFilters();
 }
 
@@ -57,6 +59,38 @@ function destroyJobLead(id) {
     router.delete(route('job-leads.destroy', id), {
         preserveScroll: true,
     });
+}
+
+function scoreCardClasses(score) {
+    if (score === null) {
+        return 'border-white/10';
+    }
+
+    if (score >= 85) {
+        return 'border-gold-300/35 bg-gradient-to-br from-gold-400/10 via-white/4 to-transparent shadow-[0_20px_60px_-28px_rgba(245,208,104,0.45)]';
+    }
+
+    if (score >= 70) {
+        return 'border-slateglass-200/20 bg-white/[0.035]';
+    }
+
+    return 'border-white/10';
+}
+
+function scoreBadgeClasses(score) {
+    if (score === null) {
+        return 'border-white/10 bg-white/5 text-slateglass-300';
+    }
+
+    if (score >= 85) {
+        return 'border-gold-300/30 bg-gold-300/12 text-gold-200';
+    }
+
+    if (score >= 70) {
+        return 'border-slateglass-200/20 bg-slateglass-200/10 text-slateglass-100';
+    }
+
+    return 'border-white/10 bg-white/5 text-slateglass-200';
 }
 </script>
 
@@ -118,9 +152,9 @@ function destroyJobLead(id) {
 
             <SectionCard
                 title="Filter discovery flow"
-                description="Search by company or role and narrow by current lead status."
+                description="Search by company or role, narrow by status, and raise the score floor when you need the strongest opportunities first."
             >
-                <form @submit.prevent="submitFilters" class="grid gap-4 xl:grid-cols-[220px_1fr_auto]">
+                <form @submit.prevent="submitFilters" class="grid gap-4 xl:grid-cols-[220px_1fr_220px_auto]">
                     <div>
                         <label for="lead_status" class="premium-input-label">Lead status</label>
                         <select
@@ -147,6 +181,19 @@ function destroyJobLead(id) {
                             type="text"
                             class="mt-2 block w-full"
                             placeholder="Company or job title"
+                        >
+                    </div>
+
+                    <div>
+                        <label for="minimum_relevance_score" class="premium-input-label">Minimum score</label>
+                        <input
+                            id="minimum_relevance_score"
+                            v-model="filterForm.minimum_relevance_score"
+                            type="number"
+                            min="0"
+                            max="100"
+                            class="mt-2 block w-full"
+                            placeholder="70"
                         >
                     </div>
 
@@ -205,7 +252,8 @@ function destroyJobLead(id) {
                     <div
                         v-for="jobLead in jobLeads.data"
                         :key="jobLead.id"
-                        class="flex flex-col gap-6 px-6 py-6 xl:flex-row xl:items-start xl:justify-between"
+                        class="flex flex-col gap-6 border-l-2 px-6 py-6 transition xl:flex-row xl:items-start xl:justify-between"
+                        :class="scoreCardClasses(jobLead.relevance_score)"
                     >
                         <div class="min-w-0">
                             <div class="flex flex-wrap items-center gap-3">
@@ -217,6 +265,12 @@ function destroyJobLead(id) {
                                     :class="leadStatusClasses[jobLead.lead_status] ?? leadStatusClasses.saved"
                                 >
                                     {{ jobLead.lead_status }}
+                                </span>
+                                <span
+                                    class="inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                                    :class="scoreBadgeClasses(jobLead.relevance_score)"
+                                >
+                                    {{ jobLead.relevance_score === null ? 'Unscored' : `Score ${jobLead.relevance_score}` }}
                                 </span>
                             </div>
 
@@ -236,9 +290,6 @@ function destroyJobLead(id) {
                                 </span>
                                 <span v-if="jobLead.salary_range">
                                     {{ jobLead.salary_range }}
-                                </span>
-                                <span v-if="jobLead.relevance_score !== null">
-                                    Relevance {{ jobLead.relevance_score }}
                                 </span>
                                 <span>
                                     Discovered {{ jobLead.discovered_at || 'Not set' }}

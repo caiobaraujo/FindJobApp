@@ -95,4 +95,22 @@ class JobLead extends Model
                 ->orWhere('job_title', 'like', "%{$search}%");
         });
     }
+
+    public function scopeMinimumRelevanceScore(Builder $query, ?int $minimumRelevanceScore): Builder
+    {
+        if ($minimumRelevanceScore === null) {
+            return $query;
+        }
+
+        return $query->whereNotNull('relevance_score')
+            ->where('relevance_score', '>=', $minimumRelevanceScore);
+    }
+
+    public function scopeOrderByPriority(Builder $query): Builder
+    {
+        return $query
+            ->orderByRaw('relevance_score IS NULL')
+            ->orderByDesc('relevance_score')
+            ->latest();
+    }
 }

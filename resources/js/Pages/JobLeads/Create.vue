@@ -45,7 +45,7 @@ function submit() {
                 <PageHeader
                     eyebrow="Discovery"
                     title="Create job lead"
-                    description="Capture a promising opportunity with enough metadata to support future qualification and application optimization."
+                    description="Capture a promising opportunity with enough metadata to support future qualification, prioritization, and application optimization."
                 >
                     <a
                         :href="`${route('job-leads.index')}#import-job-lead`"
@@ -66,7 +66,7 @@ function submit() {
         <AppShell>
             <SectionCard
                 title="Lead details"
-                description="Store the source context now so the product can support ranking, outreach, and application customization later."
+                description="Store the source context and an initial score so the best opportunities rise first as your discovery workspace grows."
             >
                 <JobLeadForm
                     :form="form"

@@ -19,15 +19,17 @@ class JobLeadController extends Controller
         $filters = $request->validate([
             'lead_status' => ['nullable', 'string', Rule::in(JobLead::leadStatuses())],
             'search' => ['nullable', 'string', 'max:255'],
+            'minimum_relevance_score' => ['nullable', 'integer', 'min:0', 'max:100'],
         ]);
 
         $jobLeads = JobLead::query()
             ->where('user_id', $request->user()->id)
-            ->latest()
+            ->orderByPriority()
             ->when(filled($filters['lead_status'] ?? null), function ($query) use ($filters): void {
                 $query->where('lead_status', $filters['lead_status']);
             })
             ->search($filters['search'] ?? null)
+            ->minimumRelevanceScore($filters['minimum_relevance_score'] ?? null)
             ->paginate(12)
             ->withQueryString()
             ->through(fn (JobLead $jobLead): array => $this->jobLeadData($jobLead));
@@ -36,6 +38,7 @@ class JobLeadController extends Controller
             'filters' => [
                 'lead_status' => $filters['lead_status'] ?? '',
                 'search' => $filters['search'] ?? '',
+                'minimum_relevance_score' => $filters['minimum_relevance_score'] ?? '',
             ],
             'jobLeads' => $jobLeads,
             'leadStatuses' => JobLead::leadStatuses(),

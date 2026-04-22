@@ -126,9 +126,13 @@ defineProps({
                     v-model="form.relevance_score"
                     type="number"
                     min="0"
+                    max="100"
                     class="mt-2 block w-full"
-                    placeholder="85"
+                    placeholder="0 to 100"
                 />
+                <p class="mt-2 text-xs uppercase tracking-[0.18em] text-slateglass-400">
+                    Higher scores surface first in the discovery workspace.
+                </p>
                 <InputError class="mt-2" :message="form.errors.relevance_score" />
             </div>
 

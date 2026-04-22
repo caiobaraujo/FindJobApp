@@ -49,7 +49,7 @@ function submit() {
                 <PageHeader
                     eyebrow="Discovery"
                     title="Edit job lead"
-                    description="Keep the lead accurate so future ranking and application work starts from better source data."
+                    description="Keep the lead accurate and scored so prioritization stays aligned with the opportunities that matter most."
                 >
                     <Link
                         :href="route('job-leads.index')"
@@ -64,7 +64,7 @@ function submit() {
         <AppShell>
             <SectionCard
                 title="Lead details"
-                description="Update the discovery record without losing the source signals that make it useful later."
+                description="Update the discovery record and relevance score without losing the source signals that make it useful later."
             >
                 <JobLeadForm
                     :form="form"
