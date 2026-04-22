@@ -1,5 +1,7 @@
 <script setup>
 import AppShell from '@/Components/ui/AppShell.vue';
+import MatchWhyDrawer from '@/Components/MatchWhyDrawer.vue';
+import ResumeSkillsCard from '@/Components/ResumeSkillsCard.vue';
 import EmptyState from '@/Components/ui/EmptyState.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
@@ -10,6 +12,10 @@ import { reactive } from 'vue';
 const props = defineProps({
     filters: {
         type: Object,
+        required: true,
+    },
+    detectedResumeSkills: {
+        type: Array,
         required: true,
     },
     hasResumeProfile: {
@@ -87,6 +93,8 @@ function t(path, fallback) {
         </template>
 
         <AppShell>
+            <ResumeSkillsCard :skills="detectedResumeSkills" />
+
             <PageHeader
                 :eyebrow="t('matched_jobs.eyebrow', 'Core product')"
                 :title="t('matched_jobs.title', 'Matched jobs')"
@@ -266,6 +274,14 @@ function t(path, fallback) {
                                     {{ t('matched_jobs.review_match', 'Review match') }}
                                 </Link>
                             </div>
+
+                            <MatchWhyDrawer
+                                v-if="jobLead.can_explain_match"
+                                :resume-skills="jobLead.resume_skills_used"
+                                :job-keywords="jobLead.job_keywords_used"
+                                :matched-keywords="jobLead.matched_keywords"
+                                :missing-keywords="jobLead.missing_keywords"
+                            />
                         </div>
                     </div>
                 </div>

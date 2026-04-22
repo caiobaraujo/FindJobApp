@@ -26,19 +26,21 @@ class JobLeadController extends Controller
 
         $userProfile = $this->userProfile($request->user()->id);
         $matchedOnly = $request->routeIs('matched-jobs.index');
+        $detectedResumeSkills = $this->detectedResumeSkills($userProfile);
         $jobLeads = JobLead::query()
             ->where('user_id', $request->user()->id)
             ->orderByPriority()
             ->search($filters['search'] ?? null)
             ->get();
 
-        $matchedJobs = $this->jobCards($jobLeads, $userProfile, $matchedOnly);
+        $matchedJobs = $this->jobCards($jobLeads, $userProfile, $matchedOnly, $detectedResumeSkills);
 
         return Inertia::render('JobLeads/Index', [
             ...$this->sharedPageProps(),
             'filters' => [
                 'search' => $filters['search'] ?? '',
             ],
+            'detectedResumeSkills' => $detectedResumeSkills,
             'hasResumeProfile' => $userProfile !== null,
             'matchedOnly' => $matchedOnly,
             'resumeReady' => $this->resumeReady($userProfile),
@@ -224,14 +226,14 @@ class JobLeadController extends Controller
      */
     private function matchedJobs($jobLeads, ?UserProfile $userProfile): array
     {
-        return $this->jobCards($jobLeads, $userProfile, true);
+        return $this->jobCards($jobLeads, $userProfile, true, $this->detectedResumeSkills($userProfile));
     }
 
     /**
      * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
      * @return list<array<string, mixed>>
      */
-    private function jobCards($jobLeads, ?UserProfile $userProfile, bool $matchedOnly): array
+    private function jobCards($jobLeads, ?UserProfile $userProfile, bool $matchedOnly, array $detectedResumeSkills): array
     {
         $resumeReady = $this->resumeReady($userProfile);
 
@@ -260,9 +262,12 @@ class JobLeadController extends Controller
                 'job_title' => $jobLead->job_title,
                 'source_url' => $jobLead->source_url,
                 'extracted_keywords' => $jobLead->extracted_keywords ?? [],
+                'resume_skills_used' => $detectedResumeSkills,
+                'job_keywords_used' => $jobLead->extracted_keywords ?? [],
                 'matched_keywords' => $analysis['matched_keywords'],
                 'missing_keywords' => $analysis['missing_keywords'],
                 'match_summary' => $analysis['match_summary'],
+                'can_explain_match' => $detectedResumeSkills !== [] && ($jobLead->extracted_keywords ?? []) !== [],
                 'ats_hint' => $jobLead->ats_hints[0] ?? null,
             ];
         }
@@ -313,6 +318,46 @@ class JobLeadController extends Controller
         }
 
         return $userProfile->resume_file_path !== null;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function detectedResumeSkills(?UserProfile $userProfile): array
+    {
+        if ($userProfile === null) {
+            return [];
+        }
+
+        $skills = [];
+
+        foreach ($userProfile->core_skills ?? [] as $skill) {
+            if (! is_string($skill)) {
+                continue;
+            }
+
+            $normalizedSkill = $this->nullableDescriptionText($skill);
+
+            if ($normalizedSkill === null) {
+                continue;
+            }
+
+            $skills[] = mb_strtolower($normalizedSkill);
+        }
+
+        if (filled($userProfile->base_resume_text)) {
+            $analysis = app(JobLeadKeywordExtractor::class)->analyze($userProfile->base_resume_text);
+
+            foreach ($analysis['extracted_keywords'] as $keyword) {
+                if (! is_string($keyword)) {
+                    continue;
+                }
+
+                $skills[] = $keyword;
+            }
+        }
+
+        return array_slice(array_values(array_unique($skills)), 0, 10);
     }
 
     /**

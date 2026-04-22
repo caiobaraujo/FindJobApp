@@ -19,6 +19,43 @@ it('shows a resume first cta on the dashboard when no resume exists', function (
         );
 });
 
+it('renders detected resume skills when available', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue, SQL, and AWS delivery experience.',
+        'core_skills' => ['Laravel', 'Vue'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('resume-profile.show'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Profile/ResumeProfile')
+            ->where('detectedResumeSkills.0', 'laravel')
+            ->where('detectedResumeSkills.1', 'vue')
+        );
+});
+
+it('renders an empty detected resume skills state when unavailable', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => null,
+        'core_skills' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('resume-profile.show'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Profile/ResumeProfile')
+            ->where('detectedResumeSkills', [])
+        );
+});
+
 it('renders matched jobs with matched and missing keywords when resume data exists', function (): void {
     $user = User::factory()->create();
 
@@ -51,8 +88,12 @@ it('renders matched jobs with matched and missing keywords when resume data exis
             ->component('JobLeads/Index')
             ->where('hasResumeProfile', true)
             ->where('resumeReady', true)
+            ->where('detectedResumeSkills.0', 'laravel')
             ->has('matchedJobs', 1)
             ->where('matchedJobs.0.company_name', 'Northwind')
+            ->where('matchedJobs.0.can_explain_match', true)
+            ->where('matchedJobs.0.resume_skills_used.0', 'laravel')
+            ->where('matchedJobs.0.job_keywords_used.0', 'laravel')
             ->where('matchedJobs.0.matched_keywords.0', 'laravel')
             ->where('matchedJobs.0.matched_keywords.1', 'vue')
             ->where('matchedJobs.0.missing_keywords.0', 'aws')
@@ -82,6 +123,32 @@ it('keeps jobs without a source url from exposing a go to job button payload', f
         ->assertInertia(fn (Assert $page) => $page
             ->component('JobLeads/Index')
             ->where('matchedJobs.0.source_url', '')
+        );
+});
+
+it('keeps match explanation data secondary when prerequisites are missing', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => null,
+        'core_skills' => ['Laravel'],
+    ]);
+
+    JobLead::factory()->for($user)->create([
+        'company_name' => 'Partial Match Co',
+        'job_title' => 'Laravel Engineer',
+        'source_url' => 'https://example.com/jobs/partial',
+        'extracted_keywords' => [],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('detectedResumeSkills.0', 'laravel')
+            ->has('matchedJobs', 0)
         );
 });
 

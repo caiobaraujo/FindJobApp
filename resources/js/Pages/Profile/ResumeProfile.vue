@@ -1,5 +1,6 @@
 <script setup>
 import UserProfileForm from '@/Components/UserProfileForm.vue';
+import ResumeSkillsCard from '@/Components/ResumeSkillsCard.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
 import EmptyState from '@/Components/ui/EmptyState.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
@@ -10,6 +11,10 @@ import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 const props = defineProps({
     hasResumeProfile: {
         type: Boolean,
+        required: true,
+    },
+    detectedResumeSkills: {
+        type: Array,
         required: true,
     },
     userProfile: {
@@ -78,6 +83,8 @@ function t(path, fallback) {
         </template>
 
         <AppShell>
+            <ResumeSkillsCard :skills="detectedResumeSkills" />
+
             <SectionCard
                 :title="t('resume.upload_title', 'Upload your resume')"
                 :description="t('resume.upload_description', 'Resume upload is the primary setup step. Pasted text stays available as a fallback.')"

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreUserProfileRequest;
 use App\Http\Requests\UpdateUserProfileRequest;
 use App\Models\UserProfile;
+use App\Services\JobLeadKeywordExtractor;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ class UserProfileController extends Controller
         return Inertia::render('Profile/ResumeProfile', [
             ...$this->sharedPageProps(),
             'hasResumeProfile' => $userProfile !== null,
+            'detectedResumeSkills' => $this->detectedResumeSkills($userProfile),
             'userProfile' => $this->userProfileData($userProfile),
         ]);
     }
@@ -36,6 +38,7 @@ class UserProfileController extends Controller
         return Inertia::render('Profile/CreateResume', [
             ...$this->sharedPageProps(),
             'hasResumeProfile' => $userProfile !== null,
+            'detectedResumeSkills' => $this->detectedResumeSkills($userProfile),
             'userProfile' => $this->userProfileData($userProfile),
         ]);
     }
@@ -244,6 +247,46 @@ class UserProfileController extends Controller
             'resume_file_mime' => $uploadedResumeFile->getClientMimeType(),
             'resume_file_size' => $uploadedResumeFile->getSize(),
         ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function detectedResumeSkills(?UserProfile $userProfile): array
+    {
+        if ($userProfile === null) {
+            return [];
+        }
+
+        $skills = [];
+
+        foreach ($userProfile->core_skills ?? [] as $skill) {
+            if (! is_string($skill)) {
+                continue;
+            }
+
+            $normalizedSkill = $this->nullableString($skill);
+
+            if ($normalizedSkill === null) {
+                continue;
+            }
+
+            $skills[] = mb_strtolower($normalizedSkill);
+        }
+
+        if (filled($userProfile->base_resume_text)) {
+            $analysis = app(JobLeadKeywordExtractor::class)->analyze($userProfile->base_resume_text);
+
+            foreach ($analysis['extracted_keywords'] as $keyword) {
+                if (! is_string($keyword)) {
+                    continue;
+                }
+
+                $skills[] = $keyword;
+            }
+        }
+
+        return array_slice(array_values(array_unique($skills)), 0, 10);
     }
 
     /**
