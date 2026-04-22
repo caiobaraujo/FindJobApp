@@ -84,3 +84,86 @@ it('keeps jobs without a source url from exposing a go to job button payload', f
             ->where('matchedJobs.0.source_url', '')
         );
 });
+
+it('uses the latest persisted profile data on the next matched jobs page load', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer',
+    ]);
+
+    JobLead::factory()->for($user)->create([
+        'company_name' => 'Fresh Match Co',
+        'job_title' => 'Python Engineer',
+        'source_url' => 'https://example.com/jobs/python',
+        'extracted_keywords' => ['python'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 0)
+        );
+
+    $this->actingAs($user)
+        ->patch(route('resume-profile.update'), [
+            'base_resume_text' => 'Python engineer with APIs and automation.',
+        ])
+        ->assertRedirect(route('resume-profile.show'));
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('resumeReady', true)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Fresh Match Co')
+            ->where('matchedJobs.0.matched_keywords.0', 'python')
+        );
+});
+
+it('does not keep stale match output after a non-text resume upload replaces old resume text', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue.',
+    ]);
+
+    JobLead::factory()->for($user)->create([
+        'company_name' => 'Old Match Co',
+        'job_title' => 'Laravel Engineer',
+        'source_url' => 'https://example.com/jobs/laravel',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    $this->actingAs($user)
+        ->patch(route('resume-profile.update'), [
+            'base_resume_text' => '',
+            'resume_file' => \Illuminate\Http\UploadedFile::fake()->create('resume.pdf', 120, 'application/pdf'),
+        ])
+        ->assertRedirect(route('resume-profile.show'));
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('resumeReady', false)
+            ->where('resumeNeedsTextInput', true)
+            ->has('matchedJobs', 0)
+        )
+        ->assertDontSee('Old Match Co');
+});
+
+it('sends add job calls to a usable intake route', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->get(route('job-leads.import.entry'))
+        ->assertRedirect(route('job-leads.create'));
+});

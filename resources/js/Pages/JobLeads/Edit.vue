@@ -5,7 +5,7 @@ import JobLeadForm from '@/Components/JobLeadForm.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm } from '@inertiajs/vue3';
+import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
 
 const props = defineProps({
     jobLead: {
@@ -41,27 +41,35 @@ const form = useForm({
     discovered_at: props.jobLead.discovered_at ?? '',
 });
 
+const page = usePage();
+
 function submit() {
     form.put(route('job-leads.update', props.jobLead.id));
+}
+
+function t(path, fallback) {
+    const value = path.split('.').reduce((carry, key) => carry?.[key], page.props.translations);
+
+    return value ?? fallback ?? path;
 }
 </script>
 
 <template>
-    <Head title="Edit Job Lead" />
+    <Head :title="t('job_lead_edit.title', 'Edit job lead')" />
 
     <AuthenticatedLayout>
         <template #header>
             <AppShell>
                 <PageHeader
-                    eyebrow="Discovery"
-                    title="Edit job lead"
-                    description="Keep the lead accurate, update the full job description, and use ATS insights to decide how your resume should adapt."
+                    :eyebrow="t('job_lead_edit.eyebrow', 'Discovery')"
+                    :title="t('job_lead_edit.title', 'Edit job lead')"
+                    :description="t('job_lead_edit.description', 'Keep the lead accurate, update the full job description, and use ATS insights to decide how your resume should adapt.')"
                 >
                     <Link
                         :href="route('job-leads.index')"
                         class="premium-button-secondary"
                     >
-                        Back to job leads
+                        {{ t('job_lead_edit.back_to_jobs', 'Back to matched jobs') }}
                     </Link>
                 </PageHeader>
             </AppShell>
@@ -69,35 +77,35 @@ function submit() {
 
         <AppShell>
             <SectionCard
-                title="Lead details"
-                description="Update the discovery record, keep personal notes separate, and make sure the ATS analysis input stays current."
+                :title="t('job_lead_edit.details_title', 'Lead details')"
+                :description="t('job_lead_edit.details_description', 'Update the discovery record, keep personal notes separate, and make sure the ATS analysis input stays current.')"
             >
                 <JobLeadForm
                     :form="form"
                     :lead-statuses="leadStatuses"
                     :work-modes="workModes"
-                    submit-label="Save changes"
+                    :submit-label="t('job_lead_edit.save_changes', 'Save changes')"
                     @submit="submit"
                 />
             </SectionCard>
 
             <SectionCard
-                title="ATS review"
-                description="Use the extracted keywords and hints to decide what language your resume should mirror for this role."
+                :title="t('job_lead_edit.ats_review_title', 'ATS review')"
+                :description="t('job_lead_edit.ats_review_description', 'Use the extracted keywords and hints to decide what language your resume should mirror for this role.')"
             >
                 <div class="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
                     <div class="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
                         <div class="flex items-center justify-between gap-3">
                             <div>
                                 <p class="text-xs font-semibold uppercase tracking-[0.24em] text-gold-300/80">
-                                    Extracted keywords
+                                    {{ t('job_lead_edit.extracted_keywords_label', 'Extracted keywords') }}
                                 </p>
                                 <h3 class="mt-2 text-lg font-semibold text-white">
-                                    Resume keyword targets
+                                    {{ t('job_lead_edit.resume_keyword_targets', 'Resume keyword targets') }}
                                 </h3>
                             </div>
                             <span class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slateglass-300">
-                                {{ jobLead.extracted_keywords.length }} found
+                                {{ jobLead.extracted_keywords.length }} {{ t('job_lead_edit.found', 'found') }}
                             </span>
                         </div>
 
@@ -105,14 +113,14 @@ function submit() {
                             v-if="!jobLead.description_text"
                             class="mt-4 text-sm text-slateglass-400"
                         >
-                            Add a job description to unlock ATS insights
+                            {{ t('job_lead_edit.empty_description', 'Add a job description to unlock ATS insights') }}
                         </p>
 
                         <p
                             v-else-if="jobLead.extracted_keywords.length === 0"
                             class="mt-4 text-sm text-slateglass-400"
                         >
-                            No keywords extracted yet
+                            {{ t('job_lead_edit.no_keywords', 'No keywords extracted yet') }}
                         </p>
 
                         <div
@@ -131,17 +139,17 @@ function submit() {
 
                     <div class="rounded-3xl border border-white/10 bg-white/[0.03] p-6">
                         <p class="text-xs font-semibold uppercase tracking-[0.24em] text-gold-300/80">
-                            ATS hints
+                            {{ t('job_lead_edit.ats_hints_label', 'ATS hints') }}
                         </p>
                         <h3 class="mt-2 text-lg font-semibold text-white">
-                            Resume guidance
+                            {{ t('job_lead_edit.resume_guidance', 'Resume guidance') }}
                         </h3>
 
                         <p
                             v-if="!jobLead.description_text"
                             class="mt-4 text-sm text-slateglass-400"
                         >
-                            Add a job description to unlock ATS insights
+                            {{ t('job_lead_edit.empty_description', 'Add a job description to unlock ATS insights') }}
                         </p>
 
                         <ul
@@ -162,8 +170,8 @@ function submit() {
             </SectionCard>
 
             <SectionCard
-                title="Resume match"
-                description="Compare this job lead against your resume profile to see what your current base resume already covers and what is still missing."
+                :title="t('job_lead_edit.resume_match_title', 'Resume match')"
+                :description="t('job_lead_edit.resume_match_description', 'Compare this job lead against your resume profile to see what your current base resume already covers and what is still missing.')"
             >
                 <JobLeadMatchCard :analysis="matchAnalysis" />
             </SectionCard>

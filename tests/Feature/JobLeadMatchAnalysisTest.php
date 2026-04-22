@@ -76,3 +76,44 @@ it('shows an empty state when job analysis prerequisites are missing', function 
             ->where('matchAnalysis.match_summary', 'Add a full job description to generate keywords before matching against your resume profile.')
         );
 });
+
+it('recomputes job lead match analysis from the latest persisted profile data', function (): void {
+    $user = User::factory()->create();
+
+    $profile = UserProfile::query()->create([
+        'user_id' => $user->id,
+        'core_skills' => ['Laravel'],
+        'base_resume_text' => 'Laravel engineer',
+    ]);
+
+    $jobLead = JobLead::factory()->for($user)->create([
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['python', 'sql'],
+        'ats_hints' => ['Hint'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.edit', $jobLead))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Edit')
+            ->where('matchAnalysis.matched_keywords', [])
+            ->where('matchAnalysis.missing_keywords.0', 'python')
+            ->where('matchAnalysis.missing_keywords.1', 'sql')
+        );
+
+    $profile->update([
+        'base_resume_text' => 'Python engineer with SQL experience.',
+        'core_skills' => ['Python', 'SQL'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.edit', $jobLead))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Edit')
+            ->where('matchAnalysis.matched_keywords.0', 'python')
+            ->where('matchAnalysis.matched_keywords.1', 'sql')
+            ->where('matchAnalysis.missing_keywords', [])
+        );
+});

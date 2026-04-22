@@ -42,26 +42,34 @@ class UserProfileController extends Controller
 
     public function store(StoreUserProfileRequest $request): RedirectResponse
     {
-        UserProfile::query()->updateOrCreate(
-            ['user_id' => $request->user()->id],
+        $userProfile = UserProfile::query()->firstOrNew([
+            'user_id' => $request->user()->id,
+        ]);
+
+        $this->saveUserProfile(
+            $userProfile,
             $this->userProfilePayload($request->validated(), $request->user()->id),
         );
 
         return redirect()
             ->route('resume-profile.show')
-            ->with('success', 'Resume setup saved successfully.');
+            ->with('success', __('app.resume.save_success'));
     }
 
     public function update(UpdateUserProfileRequest $request): RedirectResponse
     {
-        UserProfile::query()->updateOrCreate(
-            ['user_id' => $request->user()->id],
+        $userProfile = UserProfile::query()->firstOrNew([
+            'user_id' => $request->user()->id,
+        ]);
+
+        $this->saveUserProfile(
+            $userProfile,
             $this->userProfilePayload($request->validated(), $request->user()->id),
         );
 
         return redirect()
             ->route('resume-profile.show')
-            ->with('success', 'Resume setup updated successfully.');
+            ->with('success', __('app.resume.update_success'));
     }
 
     /**
@@ -72,12 +80,13 @@ class UserProfileController extends Controller
     {
         $uploadedResumeFile = $validatedData['resume_file'] ?? null;
         $storedResumeText = $this->storedResumeText($uploadedResumeFile, $validatedData['base_resume_text'] ?? null);
+        $resumeFileMetadata = $this->resumeFileMetadata($uploadedResumeFile, $userId);
 
         if ($uploadedResumeFile instanceof UploadedFile) {
-            $this->storeResumeFile($uploadedResumeFile, $userId);
+            $this->storeResumeFile($uploadedResumeFile, $resumeFileMetadata['resume_file_path']);
         }
 
-        return array_filter([
+        $payload = [
             'user_id' => $userId,
             'target_role' => $this->nullableString($validatedData['target_role'] ?? null),
             'professional_summary' => $this->nullableString($validatedData['professional_summary'] ?? null),
@@ -87,7 +96,16 @@ class UserProfileController extends Controller
             'certifications_text' => $this->nullableString($validatedData['certifications_text'] ?? null),
             'languages_text' => $this->nullableString($validatedData['languages_text'] ?? null),
             'base_resume_text' => $storedResumeText,
-        ], fn (mixed $value): bool => $value !== null);
+        ];
+
+        if ($resumeFileMetadata === []) {
+            return $payload;
+        }
+
+        return [
+            ...$payload,
+            ...$resumeFileMetadata,
+        ];
     }
 
     /**
@@ -108,8 +126,20 @@ class UserProfileController extends Controller
             'certifications_text' => $userProfile->certifications_text,
             'languages_text' => $userProfile->languages_text,
             'base_resume_text' => $userProfile->base_resume_text,
-            'uploaded_resume' => $this->uploadedResumeData($userProfile->user_id),
+            'uploaded_resume' => $this->uploadedResumeData($userProfile),
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    private function saveUserProfile(UserProfile $userProfile, array $attributes): void
+    {
+        foreach ($attributes as $key => $value) {
+            $userProfile->{$key} = $value;
+        }
+
+        $userProfile->save();
     }
 
     /**
@@ -168,13 +198,13 @@ class UserProfileController extends Controller
         return $this->nullableString($contents);
     }
 
-    private function storeResumeFile(UploadedFile $uploadedResumeFile, int $userId): void
+    private function storeResumeFile(UploadedFile $uploadedResumeFile, string $path): void
     {
-        $directory = "resume-uploads/{$userId}";
-        Storage::disk('local')->deleteDirectory($directory);
+        Storage::disk('local')->deleteDirectory(dirname($path));
+
         $uploadedResumeFile->storeAs(
-            $directory,
-            'current.'.$uploadedResumeFile->getClientOriginalExtension(),
+            dirname($path),
+            basename($path),
             'local',
         );
     }
@@ -182,21 +212,37 @@ class UserProfileController extends Controller
     /**
      * @return array<string, mixed>|null
      */
-    private function uploadedResumeData(int $userId): ?array
+    private function uploadedResumeData(UserProfile $userProfile): ?array
     {
-        $files = Storage::disk('local')->files("resume-uploads/{$userId}");
-
-        if ($files === []) {
+        if ($userProfile->resume_file_path === null || $userProfile->resume_file_name === null) {
             return null;
         }
 
-        $path = $files[0];
+        return [
+            'filename' => $userProfile->resume_file_name,
+            'mime' => $userProfile->resume_file_mime,
+            'size' => $userProfile->resume_file_size,
+            'path' => $userProfile->resume_file_path,
+            'uploaded' => true,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resumeFileMetadata(mixed $uploadedResumeFile, int $userId): array
+    {
+        if (! $uploadedResumeFile instanceof UploadedFile) {
+            return [];
+        }
+
+        $filename = 'current.'.$uploadedResumeFile->getClientOriginalExtension();
 
         return [
-            'filename' => basename($path),
-            'extension' => pathinfo($path, PATHINFO_EXTENSION),
-            'size' => Storage::disk('local')->size($path),
-            'last_modified' => Storage::disk('local')->lastModified($path),
+            'resume_file_path' => "resume-uploads/{$userId}/{$filename}",
+            'resume_file_name' => $uploadedResumeFile->getClientOriginalName(),
+            'resume_file_mime' => $uploadedResumeFile->getClientMimeType(),
+            'resume_file_size' => $uploadedResumeFile->getSize(),
         ];
     }
 

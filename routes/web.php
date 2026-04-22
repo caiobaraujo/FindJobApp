@@ -31,7 +31,7 @@ Route::middleware('auth')->group(function () {
         return back();
     })->name('locale.switch');
     Route::get('/job-leads/import', function () {
-        return redirect()->route('job-leads.index', ['focus' => 'import']);
+        return redirect()->route('job-leads.create');
     })->name('job-leads.import.entry');
     Route::post('/job-leads/import', [JobLeadController::class, 'importFromUrl'])->name('job-leads.import');
     Route::resource('job-leads', JobLeadController::class)->except(['show']);

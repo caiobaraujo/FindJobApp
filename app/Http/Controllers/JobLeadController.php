@@ -42,6 +42,7 @@ class JobLeadController extends Controller
             'hasResumeProfile' => $userProfile !== null,
             'matchedOnly' => $matchedOnly,
             'resumeReady' => $this->resumeReady($userProfile),
+            'resumeNeedsTextInput' => $this->resumeNeedsTextInput($userProfile),
             'matchedJobs' => $matchedJobs,
         ]);
     }
@@ -68,6 +69,7 @@ class JobLeadController extends Controller
             'totalApplications' => $user->applications()->count(),
             'hasResumeProfile' => $userProfile !== null,
             'resumeReady' => $this->resumeReady($userProfile),
+            'resumeNeedsTextInput' => $this->resumeNeedsTextInput($userProfile),
             'matchedJobsCount' => $matchedJobsCount,
         ]);
     }
@@ -92,7 +94,7 @@ class JobLeadController extends Controller
 
         return redirect()
             ->route('job-leads.index')
-            ->with('success', 'Job lead created successfully.');
+            ->with('success', __('app.job_lead_edit.create_success'));
     }
 
     public function importFromUrl(ImportJobLeadFromUrlRequest $request): RedirectResponse
@@ -101,7 +103,7 @@ class JobLeadController extends Controller
 
         return redirect()
             ->route('job-leads.index')
-            ->with('success', 'Job lead imported successfully.');
+            ->with('success', __('app.matched_jobs.import_success'));
     }
 
     public function edit(JobLead $jobLead, Request $request): Response
@@ -123,7 +125,7 @@ class JobLeadController extends Controller
 
         return redirect()
             ->route('job-leads.index')
-            ->with('success', 'Job lead updated successfully.');
+            ->with('success', __('app.job_lead_edit.update_success'));
     }
 
     public function destroy(JobLead $jobLead, Request $request): RedirectResponse
@@ -133,7 +135,7 @@ class JobLeadController extends Controller
 
         return redirect()
             ->route('job-leads.index')
-            ->with('success', 'Job lead deleted successfully.');
+            ->with('success', __('app.job_lead_edit.delete_success'));
     }
 
     private function authorizeOwner(JobLead $jobLead, Request $request): void
@@ -197,7 +199,7 @@ class JobLeadController extends Controller
                 'state' => 'missing_profile',
                 'matched_keywords' => [],
                 'missing_keywords' => [],
-                'match_summary' => 'Create your resume profile to compare your background against this job lead.',
+                'match_summary' => __('app.job_lead_edit.match_missing_profile'),
             ];
         }
 
@@ -206,7 +208,7 @@ class JobLeadController extends Controller
                 'state' => 'missing_job_analysis',
                 'matched_keywords' => [],
                 'missing_keywords' => [],
-                'match_summary' => 'Add a full job description to generate keywords before matching against your resume profile.',
+                'match_summary' => __('app.job_lead_edit.match_missing_job_analysis'),
             ];
         }
 
@@ -245,7 +247,7 @@ class JobLeadController extends Controller
                 : [
                     'matched_keywords' => [],
                     'missing_keywords' => [],
-                    'match_summary' => 'Resume matching starts after resume setup and job keyword extraction.',
+                    'match_summary' => __('app.matched_jobs.match_summary_pending'),
                 ];
 
             if ($matchedOnly && $analysis['matched_keywords'] === []) {
@@ -298,6 +300,19 @@ class JobLeadController extends Controller
         }
 
         return ($userProfile->core_skills ?? []) !== [];
+    }
+
+    private function resumeNeedsTextInput(?UserProfile $userProfile): bool
+    {
+        if ($userProfile === null) {
+            return false;
+        }
+
+        if ($this->resumeReady($userProfile)) {
+            return false;
+        }
+
+        return $userProfile->resume_file_path !== null;
     }
 
     /**

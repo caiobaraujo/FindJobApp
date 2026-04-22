@@ -56,26 +56,26 @@ function switchLocale(locale) {
     <div class="min-h-screen">
         <div class="mx-auto max-w-7xl px-4 pt-5 sm:px-6 lg:px-8">
             <nav class="premium-panel px-5 py-4 sm:px-6">
-                <div class="flex items-center justify-between gap-4">
-                    <div class="flex items-center gap-6">
+                <div class="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                    <div class="flex min-w-0 flex-1 items-center justify-between gap-4 xl:justify-start xl:gap-8">
                         <Link
                             :href="route('dashboard')"
-                            class="flex items-center gap-3"
+                            class="flex min-w-0 items-center gap-3"
                         >
                             <div class="flex h-11 w-11 items-center justify-center rounded-2xl border border-gold-400/20 bg-gold-400/10">
                                 <ApplicationLogo class="h-6 w-6 fill-current text-gold-300" />
                             </div>
-                            <div>
+                            <div class="min-w-0">
                                 <p class="text-xs font-semibold uppercase tracking-[0.28em] text-gold-300/80">
                                     FindJobApp
                                 </p>
-                                <p class="text-sm text-slateglass-400">
+                                <p class="truncate text-sm text-slateglass-400">
                                     {{ t('shell.tagline', 'Discovery-first job matching') }}
                                 </p>
                             </div>
                         </Link>
 
-                        <div class="hidden items-center gap-2 md:flex">
+                        <div class="hidden flex-wrap items-center gap-2 xl:flex">
                             <Link
                                 v-for="item in navigationItems"
                                 :key="item.routeName"
@@ -90,15 +90,23 @@ function switchLocale(locale) {
                                 {{ t(item.label, item.label) }}
                             </Link>
                         </div>
+
+                        <button
+                            type="button"
+                            class="premium-button-secondary xl:hidden"
+                            @click="showingNavigationDropdown = !showingNavigationDropdown"
+                        >
+                            {{ t('shell.menu', 'Menu') }}
+                        </button>
                     </div>
 
-                    <div class="hidden items-center gap-3 md:flex">
-                        <div class="rounded-full border border-white/10 bg-white/5 p-1">
+                    <div class="hidden flex-none items-center justify-end gap-3 xl:flex">
+                        <div class="flex items-center rounded-full border border-white/10 bg-white/5 p-1">
                             <button
                                 v-for="locale in locales"
                                 :key="locale.code"
                                 type="button"
-                                class="rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition"
+                                class="rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] leading-none transition"
                                 :class="currentLocale() === locale.code
                                     ? 'bg-gold-400/15 text-gold-300'
                                     : 'text-slateglass-400 hover:text-white'"
@@ -108,13 +116,15 @@ function switchLocale(locale) {
                             </button>
                         </div>
 
-                        <div class="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-right">
-                            <p class="text-sm font-medium text-white">
-                                {{ $page.props.auth.user.name }}
-                            </p>
-                            <p class="text-xs text-slateglass-400">
-                                {{ $page.props.auth.user.email }}
-                            </p>
+                        <div class="flex min-w-[14rem] items-center justify-end rounded-full border border-white/10 bg-white/5 px-4 py-2">
+                            <div class="text-right">
+                                <p class="text-sm font-medium text-white">
+                                    {{ $page.props.auth.user.name }}
+                                </p>
+                                <p class="text-xs text-slateglass-400">
+                                    {{ $page.props.auth.user.email }}
+                                </p>
+                            </div>
                         </div>
 
                         <Dropdown align="right" width="48">
@@ -123,7 +133,7 @@ function switchLocale(locale) {
                                     type="button"
                                     class="premium-button-secondary"
                                 >
-                                    Account
+                                    {{ t('shell.account', 'Account') }}
                                     <svg
                                         class="ml-2 h-4 w-4"
                                         xmlns="http://www.w3.org/2000/svg"
@@ -141,31 +151,23 @@ function switchLocale(locale) {
 
                             <template #content>
                                 <DropdownLink :href="route('profile.edit')">
-                                    Profile
+                                    {{ t('shell.profile', 'Profile') }}
                                 </DropdownLink>
                                 <DropdownLink
                                     :href="route('logout')"
                                     method="post"
                                     as="button"
                                 >
-                                    Log Out
+                                    {{ t('shell.log_out', 'Log out') }}
                                 </DropdownLink>
                             </template>
                         </Dropdown>
                     </div>
-
-                    <button
-                        type="button"
-                        class="premium-button-secondary md:hidden"
-                        @click="showingNavigationDropdown = !showingNavigationDropdown"
-                    >
-                        Menu
-                    </button>
                 </div>
 
                 <div
                     v-if="showingNavigationDropdown"
-                    class="mt-4 space-y-4 border-t border-white/10 pt-4 md:hidden"
+                    class="mt-4 space-y-4 border-t border-white/10 pt-4 xl:hidden"
                 >
                     <div class="grid gap-2">
                         <Link
@@ -189,12 +191,12 @@ function switchLocale(locale) {
                         <p class="mt-1 text-xs text-slateglass-400">
                             {{ $page.props.auth.user.email }}
                         </p>
-                        <div class="mt-4 rounded-full border border-white/10 bg-black/20 p-1">
+                        <div class="mt-4 flex items-center rounded-full border border-white/10 bg-black/20 p-1">
                             <button
                                 v-for="locale in locales"
                                 :key="locale.code"
                                 type="button"
-                                class="rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition"
+                                class="rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] leading-none transition"
                                 :class="currentLocale() === locale.code
                                     ? 'bg-gold-400/15 text-gold-300'
                                     : 'text-slateglass-400 hover:text-white'"
@@ -208,7 +210,7 @@ function switchLocale(locale) {
                                 :href="route('profile.edit')"
                                 class="premium-button-secondary"
                             >
-                                Profile
+                                {{ t('shell.profile', 'Profile') }}
                             </Link>
                             <Link
                                 :href="route('logout')"
@@ -216,7 +218,7 @@ function switchLocale(locale) {
                                 as="button"
                                 class="premium-button-secondary"
                             >
-                                Log Out
+                                {{ t('shell.log_out', 'Log out') }}
                             </Link>
                         </div>
                     </div>

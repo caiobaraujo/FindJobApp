@@ -34,11 +34,19 @@ const form = useForm({
 
 function submit() {
     if (props.userProfile) {
-        form.patch(route('resume-profile.update'));
+        form.transform((data) => ({
+            ...data,
+            _method: 'patch',
+        })).post(route('resume-profile.update'), {
+            forceFormData: true,
+            onFinish: () => form.transform((data) => data),
+        });
         return;
     }
 
-    form.post(route('resume-profile.store'));
+    form.post(route('resume-profile.store'), {
+        forceFormData: true,
+    });
 }
 
 function t(path, fallback) {
@@ -91,6 +99,7 @@ function t(path, fallback) {
 
                 <UserProfileForm
                     :form="form"
+                    :saved-resume="userProfile?.uploaded_resume ?? null"
                     mode="upload"
                     :submit-label="hasResumeProfile
                         ? t('resume.update_setup', 'Update resume setup')

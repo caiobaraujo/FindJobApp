@@ -10,6 +10,10 @@ const props = defineProps({
         type: Object,
         required: true,
     },
+    savedResume: {
+        type: Object,
+        default: null,
+    },
     mode: {
         type: String,
         default: 'upload',
@@ -32,6 +36,22 @@ function t(path, fallback) {
 
     return value ?? fallback ?? path;
 }
+
+function formattedFileSize(size) {
+    if (typeof size !== 'number' || Number.isNaN(size) || size <= 0) {
+        return null;
+    }
+
+    if (size < 1024) {
+        return `${size} B`;
+    }
+
+    if (size < 1024 * 1024) {
+        return `${(size / 1024).toFixed(1)} KB`;
+    }
+
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+}
 </script>
 
 <template>
@@ -44,6 +64,35 @@ function t(path, fallback) {
             <p class="mt-3 text-sm leading-7 text-slateglass-300">
                 {{ t('resume.upload_primary_description', 'Upload your resume file to start matching jobs automatically. TXT files can be read immediately. PDF, DOC, and DOCX are stored now and ready for future parsing.') }}
             </p>
+
+            <div
+                v-if="savedResume"
+                class="mt-5 rounded-3xl border border-emerald-400/15 bg-emerald-400/[0.06] px-5 py-4"
+            >
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300/90">
+                            Uploaded
+                        </p>
+                        <p class="mt-2 text-sm font-medium text-white">
+                            {{ savedResume.filename }}
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.18em] text-emerald-200/80">
+                        <span
+                            v-if="formattedFileSize(savedResume.size)"
+                            class="rounded-full border border-emerald-400/20 bg-black/20 px-3 py-1"
+                        >
+                            {{ formattedFileSize(savedResume.size) }}
+                        </span>
+                        <span class="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1">
+                            Saved
+                        </span>
+                    </div>
+                </div>
+            </div>
+
             <input
                 id="resume_file"
                 type="file"
