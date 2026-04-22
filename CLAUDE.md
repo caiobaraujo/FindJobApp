@@ -1,10 +1,12 @@
 - Run `bin/setup` first.
 - Use `php artisan test` after every change.
 - Use `npm run build` for frontend validation.
+- Build discovery-first features around `JobLead`.
+- Keep `Application` as a secondary tracker.
 - Keep functions small.
 - Prefer early return.
 - Avoid duplication.
 - Add backend work in `app/` and `database/`.
 - Add frontend work in `resources/js/`.
-- Be careful in auth, policies, and user-scoped queries.
+- Be careful in auth and user-scoped queries.
 - Finish with tests passing.

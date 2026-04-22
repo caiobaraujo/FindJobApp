@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreApplicationRequest;
 use App\Http\Requests\UpdateApplicationRequest;
+use App\Http\Requests\UpdateApplicationStatusRequest;
 use App\Models\Application;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -105,6 +106,13 @@ class ApplicationController extends Controller
         return redirect()
             ->route('applications.index')
             ->with('success', 'Application updated successfully.');
+    }
+
+    public function updateStatus(UpdateApplicationStatusRequest $request, Application $application): RedirectResponse
+    {
+        $application->update($request->validated());
+
+        return back()->with('success', 'Application status updated successfully.');
     }
 
     public function destroy(Application $application): RedirectResponse

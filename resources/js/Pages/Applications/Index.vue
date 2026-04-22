@@ -33,6 +33,13 @@ const filterForm = reactive({
     view: props.filters.view || 'list',
 });
 
+const dragState = reactive({
+    applicationId: null,
+    sourceStatus: '',
+    targetStatus: '',
+    processing: false,
+});
+
 function submitFilters() {
     router.get(route('applications.index'), filterForm, {
         preserveState: true,
@@ -50,6 +57,64 @@ function resetFilters() {
 function switchView(view) {
     filterForm.view = view;
     submitFilters();
+}
+
+function startDrag(application) {
+    if (dragState.processing) {
+        return;
+    }
+
+    dragState.applicationId = application.id;
+    dragState.sourceStatus = application.status;
+    dragState.targetStatus = '';
+}
+
+function endDrag() {
+    dragState.applicationId = null;
+    dragState.sourceStatus = '';
+    dragState.targetStatus = '';
+}
+
+function enterColumn(status) {
+    if (dragState.processing || dragState.applicationId === null) {
+        return;
+    }
+
+    dragState.targetStatus = status;
+}
+
+function leaveColumn(status) {
+    if (dragState.targetStatus !== status) {
+        return;
+    }
+
+    dragState.targetStatus = '';
+}
+
+function dropOnColumn(status) {
+    if (dragState.processing || dragState.applicationId === null) {
+        return;
+    }
+
+    if (dragState.sourceStatus === status) {
+        endDrag();
+        return;
+    }
+
+    dragState.processing = true;
+
+    router.patch(
+        route('applications.status.update', dragState.applicationId),
+        { status },
+        {
+            preserveScroll: true,
+            preserveState: false,
+            onFinish: () => {
+                dragState.processing = false;
+                endDrag();
+            },
+        },
+    );
 }
 
 function destroyApplication(id) {
@@ -262,7 +327,14 @@ function destroyApplication(id) {
                     <div
                         v-for="column in pipelineColumns"
                         :key="column.key"
-                        class="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 shadow-panel"
+                        class="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-4 shadow-panel transition"
+                        :class="dragState.targetStatus === column.key
+                            ? 'border-gold-400/40 bg-gold-400/[0.06]'
+                            : ''"
+                        @dragover.prevent="enterColumn(column.key)"
+                        @dragenter.prevent="enterColumn(column.key)"
+                        @dragleave="leaveColumn(column.key)"
+                        @drop.prevent="dropOnColumn(column.key)"
                     >
                         <div class="mb-4 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
                             <h3 class="text-sm font-semibold uppercase tracking-[0.18em] text-white">
@@ -287,7 +359,13 @@ function destroyApplication(id) {
                             <article
                                 v-for="application in column.applications"
                                 :key="application.id"
-                                class="rounded-2xl border border-white/10 bg-obsidian-850/80 p-4 transition hover:border-gold-400/20 hover:bg-white/[0.05]"
+                                class="cursor-grab rounded-2xl border border-white/10 bg-obsidian-850/80 p-4 transition hover:border-gold-400/20 hover:bg-white/[0.05] active:cursor-grabbing"
+                                :class="dragState.applicationId === application.id
+                                    ? 'border-gold-400/40 opacity-60'
+                                    : ''"
+                                draggable="true"
+                                @dragstart="startDrag(application)"
+                                @dragend="endDrag"
                             >
                                 <div class="flex flex-wrap items-center gap-2">
                                     <h4 class="text-sm font-semibold text-white">

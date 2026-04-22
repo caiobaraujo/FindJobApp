@@ -2,6 +2,8 @@
 - Run `bin/setup` before first change.
 - Run `php artisan test` after every change.
 - Run `npm run build` when frontend files change.
+- Treat `JobLead` as the core discovery entity.
+- Treat `Application` as a supporting tracker.
 - Keep functions small.
 - Keep files small.
 - Prefer early return.
@@ -11,7 +13,9 @@
 - Add backend features in `app/Http`, `app/Models`, `app/Policies`, and `database`.
 - Add frontend features in `resources/js/Pages` and `resources/js/Components`.
 - Add feature coverage in `tests/Feature`.
-- Scope all application data to the authenticated user.
-- Treat auth, policies, and validation as critical paths.
+- Scope all user data to the authenticated user.
+- Design new discovery and import work around `JobLead`.
+- Preserve source context for future ingestion and optimization features.
+- Treat auth, ownership, and validation as critical paths.
 - Validate changes with tests before finishing.
 - Do not leave the repo with failing tests.
