@@ -1,0 +1,17 @@
+- Read `README.md` first.
+- Run `bin/setup` before first change.
+- Run `php artisan test` after every change.
+- Run `npm run build` when frontend files change.
+- Keep functions small.
+- Keep files small.
+- Prefer early return.
+- Avoid duplication.
+- Use clear, grepable names.
+- Write all code and comments in English.
+- Add backend features in `app/Http`, `app/Models`, `app/Policies`, and `database`.
+- Add frontend features in `resources/js/Pages` and `resources/js/Components`.
+- Add feature coverage in `tests/Feature`.
+- Scope all application data to the authenticated user.
+- Treat auth, policies, and validation as critical paths.
+- Validate changes with tests before finishing.
+- Do not leave the repo with failing tests.
