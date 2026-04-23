@@ -2,11 +2,12 @@
 import AppShell from '@/Components/ui/AppShell.vue';
 import MatchWhyDrawer from '@/Components/MatchWhyDrawer.vue';
 import ResumeSkillsCard from '@/Components/ResumeSkillsCard.vue';
+import { useI18n } from '@/composables/useI18n';
 import EmptyState from '@/Components/ui/EmptyState.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, Link, router } from '@inertiajs/vue3';
 import { reactive } from 'vue';
 
 const props = defineProps({
@@ -40,7 +41,7 @@ const props = defineProps({
     },
 });
 
-const page = usePage();
+const { t } = useI18n();
 
 const filterForm = reactive({
     search: props.filters.search || '',
@@ -59,11 +60,6 @@ function resetFilters() {
     submitFilters();
 }
 
-function t(path, fallback) {
-    const value = path.split('.').reduce((carry, key) => carry?.[key], page.props.translations);
-
-    return value ?? fallback ?? path;
-}
 </script>
 
 <template>
@@ -89,7 +85,7 @@ function t(path, fallback) {
                             :href="route('job-leads.create')"
                             class="premium-button-secondary"
                         >
-                            Add job
+                            {{ t('buttons.add_job', 'Add job') }}
                         </Link>
                     </div>
                 </template>
@@ -114,7 +110,7 @@ function t(path, fallback) {
                     :href="route('job-leads.create')"
                     class="premium-button-secondary"
                 >
-                    Add job
+                    {{ t('buttons.add_job', 'Add job') }}
                 </Link>
             </PageHeader>
 
@@ -127,13 +123,13 @@ function t(path, fallback) {
                     class="mb-5 rounded-3xl border border-gold-300/15 bg-gold-300/[0.06] px-5 py-4 text-sm leading-7 text-slateglass-200"
                 >
                     {{ leadsMissingAnalysisCount === 1
-                        ? '1 saved lead does not have keyword analysis yet.'
-                        : `${leadsMissingAnalysisCount} saved leads do not have keyword analysis yet.` }}
+                        ? t('matched_jobs.missing_analysis_single', '1 saved lead does not have keyword analysis yet.')
+                        : t('matched_jobs.missing_analysis_multiple', ':count saved leads do not have keyword analysis yet.').replace(':count', String(leadsMissingAnalysisCount)) }}
                     <Link
                         :href="route('job-leads.create')"
                         class="ml-2 font-semibold text-gold-200 underline decoration-gold-300/40 underline-offset-4"
                     >
-                        Paste job text on intake
+                        {{ t('matched_jobs.paste_job_text', 'Paste job text on intake') }}
                     </Link>
                 </div>
 
@@ -202,7 +198,7 @@ function t(path, fallback) {
                         :href="route('job-leads.create')"
                         class="premium-button-secondary"
                     >
-                        Add job
+                        {{ t('buttons.add_job', 'Add job') }}
                     </Link>
                     <Link
                         :href="route('job-leads.create')"
@@ -226,6 +222,18 @@ function t(path, fallback) {
                                 <h3 class="text-xl font-semibold text-white">
                                     {{ jobLead.company_name }}
                                 </h3>
+                                <span
+                                    v-if="jobLead.source_name"
+                                    class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slateglass-300"
+                                >
+                                    {{ jobLead.source_name }}
+                                </span>
+                                <span
+                                    v-if="jobLead.source_host"
+                                    class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slateglass-400"
+                                >
+                                    {{ jobLead.source_host }}
+                                </span>
                             </div>
 
                             <p class="mt-2 text-sm text-slateglass-300">
@@ -298,7 +306,7 @@ function t(path, fallback) {
                                 v-if="jobLead.job_keywords_used.length === 0"
                                 class="mt-5 rounded-3xl border border-gold-300/15 bg-gold-300/[0.06] px-4 py-3 text-sm text-slateglass-200"
                             >
-                                Keyword analysis is not available yet for this lead. Paste the job description to unlock keyword analysis.
+                                {{ t('matched_jobs.analysis_unavailable', 'Keyword analysis is not available yet for this lead. Paste the job description to unlock keyword analysis.') }}
                             </div>
 
                             <MatchWhyDrawer

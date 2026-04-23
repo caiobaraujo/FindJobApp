@@ -1,12 +1,13 @@
 <script setup>
-import UserProfileForm from "@/Components/UserProfileForm.vue";
-import ResumeSkillsCard from "@/Components/ResumeSkillsCard.vue";
-import AppShell from "@/Components/ui/AppShell.vue";
-import EmptyState from "@/Components/ui/EmptyState.vue";
-import PageHeader from "@/Components/ui/PageHeader.vue";
-import SectionCard from "@/Components/ui/SectionCard.vue";
-import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout.vue";
-import { Head, Link, useForm, usePage } from "@inertiajs/vue3";
+import ResumeSkillsCard from '@/Components/ResumeSkillsCard.vue';
+import UserProfileForm from '@/Components/UserProfileForm.vue';
+import AppShell from '@/Components/ui/AppShell.vue';
+import EmptyState from '@/Components/ui/EmptyState.vue';
+import PageHeader from '@/Components/ui/PageHeader.vue';
+import SectionCard from '@/Components/ui/SectionCard.vue';
+import { useI18n } from '@/composables/useI18n';
+import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     hasResumeProfile: {
@@ -23,17 +24,17 @@ const props = defineProps({
     },
 });
 
-const page = usePage();
+const { t } = useI18n();
 
 const form = useForm({
-    target_role: props.userProfile?.target_role ?? "",
-    professional_summary: props.userProfile?.professional_summary ?? "",
-    core_skills: props.userProfile?.core_skills?.join(", ") ?? "",
-    work_experience_text: props.userProfile?.work_experience_text ?? "",
-    education_text: props.userProfile?.education_text ?? "",
-    certifications_text: props.userProfile?.certifications_text ?? "",
-    languages_text: props.userProfile?.languages_text ?? "",
-    base_resume_text: props.userProfile?.base_resume_text ?? "",
+    target_role: props.userProfile?.target_role ?? '',
+    professional_summary: props.userProfile?.professional_summary ?? '',
+    core_skills: props.userProfile?.core_skills?.join(', ') ?? '',
+    work_experience_text: props.userProfile?.work_experience_text ?? '',
+    education_text: props.userProfile?.education_text ?? '',
+    certifications_text: props.userProfile?.certifications_text ?? '',
+    languages_text: props.userProfile?.languages_text ?? '',
+    base_resume_text: props.userProfile?.base_resume_text ?? '',
     resume_file: null,
 });
 
@@ -41,25 +42,17 @@ function submit() {
     if (props.userProfile) {
         form.transform((data) => ({
             ...data,
-            _method: "patch",
-        })).post(route("resume-profile.update"), {
+            _method: 'patch',
+        })).post(route('resume-profile.update'), {
             forceFormData: true,
             onFinish: () => form.transform((data) => data),
         });
         return;
     }
 
-    form.post(route("resume-profile.store"), {
+    form.post(route('resume-profile.store'), {
         forceFormData: true,
     });
-}
-
-function t(path, fallback) {
-    const value = path
-        .split(".")
-        .reduce((carry, key) => carry?.[key], page.props.translations);
-
-    return value ?? fallback ?? path;
 }
 </script>
 
@@ -83,9 +76,7 @@ function t(path, fallback) {
                         :href="route('matched-jobs.index')"
                         class="premium-button-secondary"
                     >
-                        {{
-                            t("buttons.view_matched_jobs", "View matched jobs")
-                        }}
+                        {{ t('buttons.view_matched_jobs', 'View matched jobs') }}
                     </Link>
                 </PageHeader>
             </AppShell>
@@ -119,7 +110,7 @@ function t(path, fallback) {
                         :href="route('resume-profile.create')"
                         class="premium-button-secondary"
                     >
-                        {{ t("buttons.create_resume", "Create resume") }}
+                        {{ t('buttons.create_resume', 'Create resume') }}
                     </Link>
                 </div>
 

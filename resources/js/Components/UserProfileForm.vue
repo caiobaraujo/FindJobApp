@@ -1,7 +1,7 @@
 <script setup>
 import InputError from '@/Components/InputError.vue';
 import TextInput from '@/Components/TextInput.vue';
-import { usePage } from '@inertiajs/vue3';
+import { useI18n } from '@/composables/useI18n';
 
 defineEmits(['submit']);
 
@@ -24,17 +24,11 @@ const props = defineProps({
     },
 });
 
-const page = usePage();
+const { t } = useI18n();
 
 function setResumeFile(event) {
     const [file] = event.target.files || [];
     props.form.resume_file = file ?? null;
-}
-
-function t(path, fallback) {
-    const value = path.split('.').reduce((carry, key) => carry?.[key], page.props.translations);
-
-    return value ?? fallback ?? path;
 }
 
 function formattedFileSize(size) {
@@ -72,7 +66,7 @@ function formattedFileSize(size) {
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <p class="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300/90">
-                            Uploaded
+                            {{ t('resume.uploaded', 'Uploaded') }}
                         </p>
                         <p class="mt-2 text-sm font-medium text-white">
                             {{ savedResume.filename }}
@@ -87,7 +81,7 @@ function formattedFileSize(size) {
                             {{ formattedFileSize(savedResume.size) }}
                         </span>
                         <span class="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1">
-                            Saved
+                            {{ t('resume.saved', 'Saved') }}
                         </span>
                     </div>
                 </div>
@@ -163,7 +157,7 @@ function formattedFileSize(size) {
                         v-model="form.target_role"
                         type="text"
                         class="mt-2 block w-full"
-                        placeholder="Senior Product Engineer"
+                        :placeholder="t('resume.target_role_placeholder', 'Senior Product Engineer')"
                     />
                     <InputError class="mt-2" :message="form.errors.target_role" />
                 </div>
@@ -175,7 +169,7 @@ function formattedFileSize(size) {
                         v-model="form.core_skills"
                         rows="4"
                         class="mt-2 block w-full"
-                        placeholder="Laravel, Vue, SQL, AWS"
+                        :placeholder="t('resume.core_skills_placeholder', 'Laravel, Vue, SQL, AWS')"
                     />
                     <p class="mt-2 text-xs uppercase tracking-[0.18em] text-slateglass-400">
                         {{ t('resume.core_skills_helper', 'Separate skills with commas or new lines.') }}

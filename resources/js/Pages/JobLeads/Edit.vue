@@ -2,10 +2,11 @@
 import JobLeadMatchCard from '@/Components/JobLeadMatchCard.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
 import JobLeadForm from '@/Components/JobLeadForm.vue';
+import { useI18n } from '@/composables/useI18n';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     jobLead: {
@@ -41,8 +42,7 @@ const form = useForm({
     discovered_at: props.jobLead.discovered_at ?? '',
 });
 const deleteForm = useForm({});
-
-const page = usePage();
+const { t } = useI18n();
 
 function submit() {
     form.put(route('job-leads.update', props.jobLead.id));
@@ -56,11 +56,6 @@ function deleteJobLead() {
     deleteForm.delete(route('job-leads.destroy', props.jobLead.id));
 }
 
-function t(path, fallback) {
-    const value = path.split('.').reduce((carry, key) => carry?.[key], page.props.translations);
-
-    return value ?? fallback ?? path;
-}
 </script>
 
 <template>

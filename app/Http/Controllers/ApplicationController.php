@@ -86,7 +86,7 @@ class ApplicationController extends Controller
             if ($existingApplication !== null) {
                 return redirect()
                     ->route('applications.edit', $existingApplication)
-                    ->with('success', 'Application already exists for this job lead.');
+                    ->with('success', __('app.applications.already_exists_for_job_lead'));
             }
         }
 
@@ -110,7 +110,7 @@ class ApplicationController extends Controller
             if ($existingApplication !== null) {
                 return redirect()
                     ->route('applications.edit', $existingApplication)
-                    ->with('success', 'Application already exists for this job lead.');
+                    ->with('success', __('app.applications.already_exists_for_job_lead'));
             }
         }
 
@@ -118,7 +118,7 @@ class ApplicationController extends Controller
 
         return redirect()
             ->route('applications.index')
-            ->with('success', 'Application created successfully.');
+            ->with('success', __('app.applications.create_success'));
     }
 
     public function edit(Application $application): Response
@@ -137,14 +137,14 @@ class ApplicationController extends Controller
 
         return redirect()
             ->route('applications.index')
-            ->with('success', 'Application updated successfully.');
+            ->with('success', __('app.applications.update_success'));
     }
 
     public function updateStatus(UpdateApplicationStatusRequest $request, Application $application): RedirectResponse
     {
         $application->update($request->validated());
 
-        return back()->with('success', 'Application status updated successfully.');
+        return back()->with('success', __('app.applications.status_update_success'));
     }
 
     public function destroy(Application $application): RedirectResponse
@@ -154,7 +154,7 @@ class ApplicationController extends Controller
 
         return redirect()
             ->route('applications.index')
-            ->with('success', 'Application deleted successfully.');
+            ->with('success', __('app.applications.delete_success'));
     }
 
     /**

@@ -23,7 +23,6 @@ class UserProfileController extends Controller
             ->first();
 
         return Inertia::render('Profile/ResumeProfile', [
-            ...$this->sharedPageProps(),
             'hasResumeProfile' => $userProfile !== null,
             'detectedResumeSkills' => $this->detectedResumeSkills($userProfile),
             'userProfile' => $this->userProfileData($userProfile),
@@ -37,7 +36,6 @@ class UserProfileController extends Controller
             ->first();
 
         return Inertia::render('Profile/CreateResume', [
-            ...$this->sharedPageProps(),
             'hasResumeProfile' => $userProfile !== null,
             'detectedResumeSkills' => $this->detectedResumeSkills($userProfile),
             'userProfile' => $this->userProfileData($userProfile),
@@ -284,17 +282,5 @@ class UserProfileController extends Controller
         }
 
         return array_slice(array_values(array_unique($skills)), 0, 10);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function sharedPageProps(): array
-    {
-        return [
-            'availableLocales' => ['pt', 'en', 'es'],
-            'locale' => app()->getLocale(),
-            'translations' => trans('app'),
-        ];
     }
 }

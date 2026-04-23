@@ -1,9 +1,10 @@
 <script setup>
 import AppShell from '@/Components/ui/AppShell.vue';
 import EmptyState from '@/Components/ui/EmptyState.vue';
+import { useI18n } from '@/composables/useI18n';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Head, Link } from '@inertiajs/vue3';
 
 const props = defineProps({
     applications: {
@@ -36,13 +37,7 @@ const props = defineProps({
     },
 });
 
-const page = usePage();
-
-function t(path, fallback) {
-    const value = path.split('.').reduce((carry, key) => carry?.[key], page.props.translations);
-
-    return value ?? fallback ?? path;
-}
+const { t } = useI18n();
 </script>
 
 <template>
@@ -84,7 +79,7 @@ function t(path, fallback) {
                     v-if="!resumeReady"
                     :title="t('dashboard.empty_title', 'Upload your resume first')"
                     :description="resumeNeedsTextInput
-                        ? 'Your resume file is saved, but matching still needs plain resume text. TXT uploads work immediately. For PDF, DOC, or DOCX, paste resume text or add core skills first.'
+                        ? t('dashboard.empty_resume_needs_text_description', 'Your resume file is saved, but matching still needs extracted or pasted resume text. TXT, PDF, and DOCX can extract locally when readable; for DOC or failed extraction, paste resume text or add core skills first.')
                         : t('dashboard.empty_description', 'Matching starts after you add a resume. Once it is ready, the app can surface jobs with overlapping keywords and skills.')"
                 >
                     <Link

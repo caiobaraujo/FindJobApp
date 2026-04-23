@@ -1,10 +1,14 @@
 <script setup>
+import { useI18n } from '@/composables/useI18n';
+
 defineProps({
     skills: {
         type: Array,
         required: true,
     },
 });
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -12,17 +16,17 @@ defineProps({
         <div class="flex flex-wrap items-start justify-between gap-4">
             <div>
                 <p class="text-xs font-semibold uppercase tracking-[0.22em] text-gold-300/80">
-                    Matching input
+                    {{ t('resume_skills.eyebrow', 'Matching input') }}
                 </p>
                 <h3 class="mt-2 text-xl font-semibold text-white">
-                    Detected resume skills
+                    {{ t('resume_skills.title', 'Detected resume skills') }}
                 </h3>
                 <p class="mt-3 max-w-2xl text-sm leading-7 text-slateglass-300">
-                    These skills are pulled from your current resume setup and power job matching across the app.
+                    {{ t('resume_skills.description', 'These skills are pulled from your current resume setup and power job matching across the app.') }}
                 </p>
             </div>
             <span class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slateglass-300">
-                {{ skills.length }} detected
+                {{ skills.length }} {{ t('resume_skills.detected', 'detected') }}
             </span>
         </div>
 
@@ -43,7 +47,7 @@ defineProps({
             v-else
             class="mt-6 rounded-3xl border border-white/10 bg-black/20 px-5 py-4 text-sm leading-6 text-slateglass-300"
         >
-            Add resume text or core skills to unlock detected resume skills.
+            {{ t('resume_skills.empty', 'Add resume text or core skills to unlock detected resume skills.') }}
         </div>
     </div>
 </template>

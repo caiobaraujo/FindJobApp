@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from '@/composables/useI18n';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -15,6 +16,7 @@ defineProps({
 const form = useForm({
     email: '',
 });
+const { t } = useI18n();
 
 const submit = () => {
     form.post(route('password.email'));
@@ -23,12 +25,10 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Forgot Password" />
+        <Head :title="t('auth.forgot_password_title', 'Forgot password')" />
 
         <div class="mb-4 text-sm text-gray-600">
-            Forgot your password? No problem. Just let us know your email
-            address and we will email you a password reset link that will allow
-            you to choose a new one.
+            {{ t('auth.forgot_password_description', 'Enter your email address and we will send you a password reset link.') }}
         </div>
 
         <div
@@ -40,7 +40,7 @@ const submit = () => {
 
         <form @submit.prevent="submit">
             <div>
-                <InputLabel for="email" value="Email" />
+                <InputLabel for="email" :value="t('auth.email', 'Email')" />
 
                 <TextInput
                     id="email"
@@ -60,7 +60,7 @@ const submit = () => {
                     :class="{ 'opacity-25': form.processing }"
                     :disabled="form.processing"
                 >
-                    Email Password Reset Link
+                    {{ t('auth.email_password_reset_link', 'Email password reset link') }}
                 </PrimaryButton>
             </div>
         </form>

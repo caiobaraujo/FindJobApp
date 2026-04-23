@@ -4,6 +4,7 @@ import AppShell from '@/Components/ui/AppShell.vue';
 import EmptyState from '@/Components/ui/EmptyState.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
+import { useI18n } from '@/composables/useI18n';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router } from '@inertiajs/vue3';
 import { reactive } from 'vue';
@@ -26,6 +27,8 @@ const props = defineProps({
         required: true,
     },
 });
+
+const { t } = useI18n();
 
 const filterForm = reactive({
     status: props.filters.status || '',
@@ -118,7 +121,7 @@ function dropOnColumn(status) {
 }
 
 function destroyApplication(id) {
-    if (! window.confirm('Delete this application?')) {
+    if (! window.confirm(t('applications.delete_confirmation', 'Delete this application?'))) {
         return;
     }
 
@@ -129,27 +132,27 @@ function destroyApplication(id) {
 </script>
 
 <template>
-    <Head title="Applications" />
+    <Head :title="t('applications.title', 'Applications')" />
 
     <AuthenticatedLayout>
         <template #header>
             <AppShell>
                 <PageHeader
-                    eyebrow="Pipeline"
-                    title="Applications"
-                    description="Track opportunities after discovery. Job Leads stays the main workspace for sourcing, enrichment, and prioritization."
+                    :eyebrow="t('applications.eyebrow', 'Pipeline')"
+                    :title="t('applications.title', 'Applications')"
+                    :description="t('applications.description', 'Track opportunities after discovery. Job Leads stays the main workspace for sourcing, enrichment, and prioritization.')"
                 >
                     <Link
                         :href="route('job-leads.index')"
                         class="premium-button-secondary"
                     >
-                        Back to job leads
+                        {{ t('buttons.back_to_job_leads', 'Back to job leads') }}
                     </Link>
                     <Link
                         :href="route('applications.create')"
                         class="premium-button-primary"
                     >
-                        New application
+                        {{ t('buttons.new_application', 'New application') }}
                     </Link>
                 </PageHeader>
             </AppShell>
@@ -157,36 +160,36 @@ function destroyApplication(id) {
 
         <AppShell>
             <SectionCard
-                title="Filter pipeline"
-                description="Narrow the list by stage or search across company and role."
+                :title="t('applications.filter_title', 'Filter pipeline')"
+                :description="t('applications.filter_description', 'Narrow the list by stage or search across company and role.')"
             >
                 <form @submit.prevent="submitFilters" class="grid gap-4 xl:grid-cols-[220px_1fr_auto]">
                     <div>
-                        <label for="status" class="premium-input-label">Status</label>
+                        <label for="status" class="premium-input-label">{{ t('applications.status', 'Status') }}</label>
                         <select
                             id="status"
                             v-model="filterForm.status"
                             class="mt-2 block w-full"
                         >
-                            <option value="">All statuses</option>
+                            <option value="">{{ t('applications.all_statuses', 'All statuses') }}</option>
                             <option
                                 v-for="status in statuses"
                                 :key="status"
                                 :value="status"
                             >
-                                {{ status }}
+                                {{ t(`applications.statuses.${status}`, status) }}
                             </option>
                         </select>
                     </div>
 
                     <div>
-                        <label for="search" class="premium-input-label">Search</label>
+                        <label for="search" class="premium-input-label">{{ t('applications.search', 'Search') }}</label>
                         <input
                             id="search"
                             v-model="filterForm.search"
                             type="text"
                             class="mt-2 block w-full"
-                            placeholder="Company or job title"
+                            :placeholder="t('applications.search_placeholder', 'Company or job title')"
                         >
                     </div>
 
@@ -195,22 +198,22 @@ function destroyApplication(id) {
                             type="submit"
                             class="premium-button-primary"
                         >
-                            Apply
+                            {{ t('matched_jobs.apply', 'Apply') }}
                         </button>
                         <button
                             type="button"
                             class="premium-button-secondary"
                             @click="resetFilters"
                         >
-                            Reset
+                            {{ t('matched_jobs.reset', 'Reset') }}
                         </button>
                     </div>
                 </form>
             </SectionCard>
 
             <SectionCard
-                title="Tracked opportunities"
-                description="A premium view of the current search pipeline."
+                :title="t('applications.tracked_title', 'Tracked opportunities')"
+                :description="t('applications.tracked_description', 'A premium view of the current search pipeline.')"
                 :padded="false"
             >
                 <template #actions>
@@ -224,7 +227,7 @@ function destroyApplication(id) {
                                     : 'text-slateglass-400 hover:text-white'"
                                 @click="switchView('list')"
                             >
-                                List view
+                                {{ t('applications.list_view', 'List view') }}
                             </button>
                             <button
                                 type="button"
@@ -234,31 +237,31 @@ function destroyApplication(id) {
                                     : 'text-slateglass-400 hover:text-white'"
                                 @click="switchView('pipeline')"
                             >
-                                Pipeline view
+                                {{ t('applications.pipeline_view', 'Pipeline view') }}
                             </button>
                         </div>
                         <span class="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-[0.2em] text-slateglass-400">
-                            {{ applications.data.length }} visible
+                            {{ applications.data.length }} {{ t('applications.visible', 'visible') }}
                         </span>
                     </div>
                 </template>
 
                 <EmptyState
                     v-if="filterForm.view === 'list' && applications.data.length === 0"
-                    title="No applications found"
-                    description="Adjust the filters or add a new opportunity to start shaping the tracker."
+                    :title="t('applications.empty_title', 'No applications found')"
+                    :description="t('applications.empty_description', 'Adjust the filters or add a new opportunity to start shaping the tracker.')"
                 >
                     <Link
                         :href="route('job-leads.index')"
                         class="premium-button-secondary"
                     >
-                        Open job leads
+                        {{ t('applications.open_job_leads', 'Open job leads') }}
                     </Link>
                     <Link
                         :href="route('applications.create')"
                         class="premium-button-primary"
                     >
-                        Create application
+                        {{ t('buttons.create_application', 'Create application') }}
                     </Link>
                 </EmptyState>
 
@@ -282,7 +285,7 @@ function destroyApplication(id) {
                                 {{ application.job_title }}
                             </p>
                             <div class="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs font-medium uppercase tracking-[0.2em] text-slateglass-400">
-                                <span>Applied at {{ application.applied_at || 'Not set' }}</span>
+                                <span>{{ t('applications.applied_at', 'Applied at') }} {{ application.applied_at || t('applications.not_set', 'Not set') }}</span>
                                 <a
                                     v-if="application.source_url"
                                     :href="application.source_url"
@@ -290,7 +293,7 @@ function destroyApplication(id) {
                                     rel="noreferrer"
                                     class="text-gold-300 transition hover:text-gold-200"
                                 >
-                                    Open source
+                                    {{ t('buttons.open_source', 'Open source') }}
                                 </a>
                             </div>
                             <p
@@ -306,14 +309,14 @@ function destroyApplication(id) {
                                 :href="route('applications.edit', application.id)"
                                 class="premium-button-secondary"
                             >
-                                Edit
+                                {{ t('buttons.edit', 'Edit') }}
                             </Link>
                             <button
                                 type="button"
                                 class="premium-button-danger"
                                 @click="destroyApplication(application.id)"
                             >
-                                Delete
+                                {{ t('buttons.delete', 'Delete') }}
                             </button>
                         </div>
                     </div>
@@ -321,20 +324,20 @@ function destroyApplication(id) {
 
                 <EmptyState
                     v-else-if="pipelineColumns.every((column) => column.count === 0)"
-                    title="No pipeline cards yet"
-                    description="Add your first opportunity or relax the filters to populate the stage-based view."
+                    :title="t('applications.empty_pipeline_title', 'No pipeline cards yet')"
+                    :description="t('applications.empty_pipeline_description', 'Add your first opportunity or relax the filters to populate the stage-based view.')"
                 >
                     <Link
                         :href="route('job-leads.index')"
                         class="premium-button-secondary"
                     >
-                        Open job leads
+                        {{ t('applications.open_job_leads', 'Open job leads') }}
                     </Link>
                     <Link
                         :href="route('applications.create')"
                         class="premium-button-primary"
                     >
-                        Create application
+                        {{ t('buttons.create_application', 'Create application') }}
                     </Link>
                 </EmptyState>
 
@@ -356,7 +359,7 @@ function destroyApplication(id) {
                     >
                         <div class="mb-4 flex items-center justify-between gap-3 border-b border-white/10 pb-4">
                             <h3 class="text-sm font-semibold uppercase tracking-[0.18em] text-white">
-                                {{ column.title }}
+                                {{ t(`applications.statuses.${column.key}`, column.title) }}
                             </h3>
                             <span class="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-semibold text-slateglass-300">
                                 {{ column.count }}
@@ -367,7 +370,7 @@ function destroyApplication(id) {
                             v-if="column.applications.length === 0"
                             class="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-6 text-center text-sm text-slateglass-400"
                         >
-                            No applications
+                            {{ t('applications.no_applications', 'No applications') }}
                         </div>
 
                         <div
@@ -398,14 +401,14 @@ function destroyApplication(id) {
                                     v-if="application.applied_at"
                                     class="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-slateglass-400"
                                 >
-                                    Applied at {{ application.applied_at }}
+                                    {{ t('applications.applied_at', 'Applied at') }} {{ application.applied_at }}
                                 </p>
                                 <div class="mt-4">
                                     <Link
                                         :href="route('applications.edit', application.id)"
                                         class="premium-link"
                                     >
-                                        Edit
+                                        {{ t('buttons.edit', 'Edit') }}
                                     </Link>
                                 </div>
                             </article>

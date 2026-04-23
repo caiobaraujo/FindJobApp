@@ -1,6 +1,7 @@
 <script setup>
 import ApplicationForm from '@/Components/ApplicationForm.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
+import { useI18n } from '@/composables/useI18n';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -16,6 +17,8 @@ const props = defineProps({
         required: true,
     },
 });
+
+const { t } = useI18n();
 
 const form = useForm({
     job_lead_id: props.prefill.job_lead_id ?? null,
@@ -33,30 +36,30 @@ function submit() {
 </script>
 
 <template>
-    <Head title="Create Application" />
+    <Head :title="t('applications.create_title', 'Create application')" />
 
     <AuthenticatedLayout>
         <template #header>
             <AppShell>
                 <PageHeader
-                    eyebrow="Pipeline"
-                    title="Create application"
+                    :eyebrow="t('applications.eyebrow', 'Pipeline')"
+                    :title="t('applications.create_title', 'Create application')"
                     :description="prefill.job_lead_id
-                        ? 'Review the prefilled details from this saved job lead before creating the application.'
-                        : 'Add a new opportunity with consistent structure from the first touchpoint.'"
+                        ? t('applications.create_from_job_lead_description', 'Review the prefilled details from this saved job lead before creating the application.')
+                        : t('applications.create_description', 'Add a new opportunity with consistent structure from the first touchpoint.')"
                 >
                     <Link
                         v-if="prefill.job_lead_edit_url"
                         :href="prefill.job_lead_edit_url"
                         class="premium-button-secondary"
                     >
-                        Back to job lead
+                        {{ t('buttons.back_to_job_leads', 'Back to job leads') }}
                     </Link>
                     <Link
                         :href="route('applications.index')"
                         class="premium-button-secondary"
                     >
-                        Back to applications
+                        {{ t('buttons.back_to_applications', 'Back to applications') }}
                     </Link>
                 </PageHeader>
             </AppShell>
@@ -64,15 +67,15 @@ function submit() {
 
         <AppShell>
             <SectionCard
-                title="Application details"
+                :title="t('applications.application_details', 'Application details')"
                 :description="prefill.job_lead_id
-                    ? 'The job lead filled the basics for you. Confirm the details and adjust anything before saving.'
-                    : 'Capture the company, role, stage, and source in one pass.'"
+                    ? t('applications.create_from_job_lead_card_description', 'The job lead filled the basics for you. Confirm the details and adjust anything before saving.')
+                    : t('applications.create_card_description', 'Capture the company, role, stage, and source in one pass.')"
             >
                 <ApplicationForm
                     :form="form"
                     :statuses="statuses"
-                    submit-label="Create application"
+                    :submit-label="t('buttons.create_application', 'Create application')"
                     @submit="submit"
                 />
             </SectionCard>

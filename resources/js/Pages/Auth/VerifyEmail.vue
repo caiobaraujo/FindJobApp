@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue';
+import { useI18n } from '@/composables/useI18n';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
@@ -11,6 +12,7 @@ const props = defineProps({
 });
 
 const form = useForm({});
+const { t } = useI18n();
 
 const submit = () => {
     form.post(route('verification.send'));
@@ -23,20 +25,17 @@ const verificationLinkSent = computed(
 
 <template>
     <GuestLayout>
-        <Head title="Email Verification" />
+        <Head :title="t('auth.verify_email_title', 'Email verification')" />
 
         <div class="mb-4 text-sm text-gray-600">
-            Thanks for signing up! Before getting started, could you verify your
-            email address by clicking on the link we just emailed to you? If you
-            didn't receive the email, we will gladly send you another.
+            {{ t('auth.verify_email_description', 'Please verify your email address by clicking the link we just sent you. If you did not receive it, we can send another.') }}
         </div>
 
         <div
             class="mb-4 text-sm font-medium text-green-600"
             v-if="verificationLinkSent"
         >
-            A new verification link has been sent to the email address you
-            provided during registration.
+            {{ t('auth.verification_sent', 'A new verification link has been sent to the email address you provided during registration.') }}
         </div>
 
         <form @submit.prevent="submit">
@@ -45,7 +44,7 @@ const verificationLinkSent = computed(
                     :class="{ 'opacity-25': form.processing }"
                     :disabled="form.processing"
                 >
-                    Resend Verification Email
+                    {{ t('auth.resend_verification_email', 'Resend verification email') }}
                 </PrimaryButton>
 
                 <Link
@@ -53,7 +52,7 @@ const verificationLinkSent = computed(
                     method="post"
                     as="button"
                     class="rounded-md text-sm text-gray-600 underline hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    >Log Out</Link
+                    >{{ t('shell.log_out', 'Log out') }}</Link
                 >
             </div>
         </form>

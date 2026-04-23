@@ -33,6 +33,8 @@ class JobLead extends Model
         'job_title',
         'source_name',
         'source_url',
+        'normalized_source_url',
+        'source_host',
         'location',
         'work_mode',
         'salary_range',

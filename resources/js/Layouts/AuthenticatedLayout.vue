@@ -1,12 +1,13 @@
 <script setup>
+import { useI18n } from '@/composables/useI18n';
 import { ref } from 'vue';
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
 import Dropdown from '@/Components/Dropdown.vue';
 import DropdownLink from '@/Components/DropdownLink.vue';
-import { Link, router, usePage } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 
 const showingNavigationDropdown = ref(false);
-const page = usePage();
+const { availableLocales, locale, t } = useI18n();
 
 const navigationItems = [
     {
@@ -28,22 +29,6 @@ const navigationItems = [
         tone: 'secondary',
     },
 ];
-
-const locales = [
-    { code: 'pt', label: 'PT' },
-    { code: 'en', label: 'EN' },
-    { code: 'es', label: 'ES' },
-];
-
-function t(path, fallback) {
-    const value = path.split('.').reduce((carry, key) => carry?.[key], page.props.translations);
-
-    return value ?? fallback ?? path;
-}
-
-function currentLocale() {
-    return page.props.locale || document.documentElement.lang.slice(0, 2) || 'en';
-}
 
 function switchLocale(locale) {
     router.post(route('locale.switch'), { locale }, {
@@ -103,16 +88,16 @@ function switchLocale(locale) {
                     <div class="hidden flex-none items-center justify-end gap-3 xl:flex">
                         <div class="flex items-center rounded-full border border-white/10 bg-white/5 p-1">
                             <button
-                                v-for="locale in locales"
-                                :key="locale.code"
+                                v-for="localeCode in availableLocales"
+                                :key="localeCode"
                                 type="button"
                                 class="rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] leading-none transition"
-                                :class="currentLocale() === locale.code
+                                :class="locale === localeCode
                                     ? 'bg-gold-400/15 text-gold-300'
                                     : 'text-slateglass-400 hover:text-white'"
-                                @click="switchLocale(locale.code)"
+                                @click="switchLocale(localeCode)"
                             >
-                                {{ locale.label }}
+                                {{ localeCode.toUpperCase() }}
                             </button>
                         </div>
 
@@ -193,16 +178,16 @@ function switchLocale(locale) {
                         </p>
                         <div class="mt-4 flex items-center rounded-full border border-white/10 bg-black/20 p-1">
                             <button
-                                v-for="locale in locales"
-                                :key="locale.code"
+                                v-for="localeCode in availableLocales"
+                                :key="localeCode"
                                 type="button"
                                 class="rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.16em] leading-none transition"
-                                :class="currentLocale() === locale.code
+                                :class="locale === localeCode
                                     ? 'bg-gold-400/15 text-gold-300'
                                     : 'text-slateglass-400 hover:text-white'"
-                                @click="switchLocale(locale.code)"
+                                @click="switchLocale(localeCode)"
                             >
-                                {{ locale.label }}
+                                {{ localeCode.toUpperCase() }}
                             </button>
                         </div>
                         <div class="mt-4 flex flex-wrap gap-3">

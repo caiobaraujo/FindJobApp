@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from '@/composables/useI18n';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -23,6 +24,7 @@ const form = useForm({
     password: '',
     password_confirmation: '',
 });
+const { t } = useI18n();
 
 const submit = () => {
     form.post(route('password.store'), {
@@ -33,11 +35,11 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Reset Password" />
+        <Head :title="t('auth.reset_password_title', 'Reset password')" />
 
         <form @submit.prevent="submit">
             <div>
-                <InputLabel for="email" value="Email" />
+                <InputLabel for="email" :value="t('auth.email', 'Email')" />
 
                 <TextInput
                     id="email"
@@ -53,7 +55,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <InputLabel for="password" value="Password" />
+                <InputLabel for="password" :value="t('auth.password', 'Password')" />
 
                 <TextInput
                     id="password"
@@ -70,7 +72,7 @@ const submit = () => {
             <div class="mt-4">
                 <InputLabel
                     for="password_confirmation"
-                    value="Confirm Password"
+                    :value="t('auth.confirm_password', 'Confirm password')"
                 />
 
                 <TextInput
@@ -93,7 +95,7 @@ const submit = () => {
                     :class="{ 'opacity-25': form.processing }"
                     :disabled="form.processing"
                 >
-                    Reset Password
+                    {{ t('auth.reset_password', 'Reset password') }}
                 </PrimaryButton>
             </div>
         </form>

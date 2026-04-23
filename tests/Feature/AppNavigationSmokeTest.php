@@ -50,4 +50,20 @@ it('renders the main authenticated pages with shared translation props', functio
             ->component('Profile/ResumeProfile')
             ->has('translations.resume')
         );
+
+    $this->actingAs($user)
+        ->get(route('applications.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Applications/Index')
+            ->has('translations.applications')
+        );
+
+    $this->actingAs($user)
+        ->get(route('profile.edit'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Profile/Edit')
+            ->has('translations.profile')
+        );
 });

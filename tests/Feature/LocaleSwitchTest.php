@@ -43,6 +43,16 @@ it('updates the locale in session and serves translated main page props', functi
             ->where('translations.matched_jobs.title', 'Vagas compatíveis')
             ->where('translations.matched_jobs.search', 'Buscar')
         );
+
+    $this->actingAs($user)
+        ->get(route('applications.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Applications/Index')
+            ->where('locale', 'pt')
+            ->where('translations.applications.title', 'Candidaturas')
+            ->where('translations.applications.filter_title', 'Filtrar pipeline')
+        );
 });
 
 it('includes locale data for authenticated navigation pages', function (): void {
@@ -57,6 +67,15 @@ it('includes locale data for authenticated navigation pages', function (): void 
             ->where('availableLocales.0', 'pt')
             ->where('availableLocales.1', 'en')
             ->where('availableLocales.2', 'es')
+        );
+
+    $this->actingAs($user)
+        ->get(route('profile.edit'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Profile/Edit')
+            ->where('locale', app()->getLocale())
+            ->where('translations.profile.title', 'Profile')
         );
 });
 
@@ -78,5 +97,15 @@ it('keeps locale switching working after header layout changes', function (): vo
             ->component('Profile/ResumeProfile')
             ->where('locale', 'es')
             ->where('translations.nav.resume', 'Currículum')
+        );
+
+    $this->actingAs($user)
+        ->get(route('applications.create'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Applications/Create')
+            ->where('locale', 'es')
+            ->where('translations.applications.title', 'Postulaciones')
+            ->where('translations.buttons.create_application', 'Crear postulación')
         );
 });

@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from '@/composables/useI18n';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import TextInput from '@/Components/TextInput.vue';
@@ -10,6 +11,7 @@ const form = useForm({
     password: '',
     password_confirmation: '',
 });
+const { t } = useI18n();
 
 const submit = () => {
     form.post(route('register'), {
@@ -20,23 +22,23 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Register" />
+        <Head :title="t('auth.register_title', 'Register')" />
 
         <div class="mb-8">
             <p class="text-xs font-semibold uppercase tracking-[0.28em] text-gold-300/80">
-                Create your workspace
+                {{ t('auth.register_eyebrow', 'Create your workspace') }}
             </p>
             <h1 class="mt-3 text-3xl font-semibold tracking-tight text-white">
-                Register
+                {{ t('auth.register_title', 'Register') }}
             </h1>
             <p class="mt-3 text-sm leading-6 text-slateglass-400">
-                Start tracking applications with a cleaner, more deliberate workflow.
+                {{ t('auth.register_description', 'Start collecting job leads and matching them against your resume in one place.') }}
             </p>
         </div>
 
         <form @submit.prevent="submit" class="space-y-5">
             <div>
-                <label for="name" class="premium-input-label">Name</label>
+                <label for="name" class="premium-input-label">{{ t('auth.name', 'Name') }}</label>
 
                 <TextInput
                     id="name"
@@ -52,7 +54,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <label for="email" class="premium-input-label">Email</label>
+                <label for="email" class="premium-input-label">{{ t('auth.email', 'Email') }}</label>
 
                 <TextInput
                     id="email"
@@ -67,7 +69,7 @@ const submit = () => {
             </div>
 
             <div class="mt-4">
-                <label for="password" class="premium-input-label">Password</label>
+                <label for="password" class="premium-input-label">{{ t('auth.password', 'Password') }}</label>
 
                 <TextInput
                     id="password"
@@ -83,7 +85,7 @@ const submit = () => {
 
             <div class="mt-4">
                 <label for="password_confirmation" class="premium-input-label">
-                    Confirm password
+                    {{ t('auth.confirm_password', 'Confirm password') }}
                 </label>
 
                 <TextInput
@@ -107,14 +109,14 @@ const submit = () => {
                     class="premium-button-primary w-full"
                     :disabled="form.processing"
                 >
-                    Register
+                    {{ t('auth.register_title', 'Register') }}
                 </button>
             </div>
 
             <div class="border-t border-white/10 pt-5 text-sm text-slateglass-400">
-                Already registered?
+                {{ t('auth.already_registered', 'Already registered?') }}
                 <Link :href="route('login')" class="premium-link ml-1">
-                    Log in
+                    {{ t('auth.login_title', 'Log in') }}
                 </Link>
             </div>
         </form>

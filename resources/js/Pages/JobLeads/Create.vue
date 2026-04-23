@@ -1,6 +1,7 @@
 <script setup>
 import AppShell from '@/Components/ui/AppShell.vue';
 import JobLeadForm from '@/Components/JobLeadForm.vue';
+import { useI18n } from '@/composables/useI18n';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
@@ -16,6 +17,8 @@ const props = defineProps({
         required: true,
     },
 });
+
+const { t } = useI18n();
 
 const form = useForm({
     company_name: '',
@@ -42,21 +45,21 @@ function submit() {
 </script>
 
 <template>
-    <Head title="Create Job Lead" />
+    <Head :title="t('job_lead_create.title', 'Add job')" />
 
     <AuthenticatedLayout>
         <template #header>
             <AppShell>
                 <PageHeader
-                    eyebrow="Discovery"
-                    title="Add job"
-                    description="URL-only intake saves the lead. Paste job text now if you want keyword analysis immediately."
+                    :eyebrow="t('job_lead_create.eyebrow', 'Discovery')"
+                    :title="t('job_lead_create.title', 'Add job')"
+                    :description="t('job_lead_create.description', 'URL-only intake saves the lead. Paste job text now if you want keyword analysis immediately.')"
                 >
                     <Link
                         :href="route('job-leads.index')"
                         class="premium-button-secondary"
                     >
-                        Back to matched jobs
+                        {{ t('buttons.back_to_matched_jobs', 'Back to matched jobs') }}
                     </Link>
                 </PageHeader>
             </AppShell>
@@ -64,15 +67,15 @@ function submit() {
 
         <AppShell>
             <SectionCard
-                title="Start with the job URL"
-                description="URL-first intake keeps discovery fast. URL-only intake saves the lead. Paste job text if you want matching signals right away."
+                :title="t('job_lead_create.card_title', 'Start with the job URL')"
+                :description="t('job_lead_create.card_description', 'URL-first intake keeps discovery fast. URL-only intake saves the lead. Paste job text if you want matching signals right away.')"
             >
                 <JobLeadForm
                     :form="form"
                     :lead-statuses="leadStatuses"
                     :work-modes="workModes"
                     mode="create"
-                    submit-label="Add job"
+                    :submit-label="t('buttons.add_job', 'Add job')"
                     @submit="submit"
                 />
             </SectionCard>

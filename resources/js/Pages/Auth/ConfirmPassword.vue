@@ -1,4 +1,5 @@
 <script setup>
+import { useI18n } from '@/composables/useI18n';
 import GuestLayout from '@/Layouts/GuestLayout.vue';
 import InputError from '@/Components/InputError.vue';
 import InputLabel from '@/Components/InputLabel.vue';
@@ -9,6 +10,7 @@ import { Head, useForm } from '@inertiajs/vue3';
 const form = useForm({
     password: '',
 });
+const { t } = useI18n();
 
 const submit = () => {
     form.post(route('password.confirm'), {
@@ -19,16 +21,15 @@ const submit = () => {
 
 <template>
     <GuestLayout>
-        <Head title="Confirm Password" />
+        <Head :title="t('auth.confirm_password_title', 'Confirm password')" />
 
         <div class="mb-4 text-sm text-gray-600">
-            This is a secure area of the application. Please confirm your
-            password before continuing.
+            {{ t('auth.confirm_password_description', 'This is a secure area of the application. Please confirm your password before continuing.') }}
         </div>
 
         <form @submit.prevent="submit">
             <div>
-                <InputLabel for="password" value="Password" />
+                <InputLabel for="password" :value="t('auth.password', 'Password')" />
                 <TextInput
                     id="password"
                     type="password"
@@ -47,7 +48,7 @@ const submit = () => {
                     :class="{ 'opacity-25': form.processing }"
                     :disabled="form.processing"
                 >
-                    Confirm
+                    {{ t('auth.confirm', 'Confirm') }}
                 </PrimaryButton>
             </div>
         </form>

@@ -36,7 +36,6 @@ class JobLeadController extends Controller
         $matchedJobs = $this->jobCards($jobLeads, $userProfile, $matchedOnly, $detectedResumeSkills);
 
         return Inertia::render('JobLeads/Index', [
-            ...$this->sharedPageProps(),
             'filters' => [
                 'search' => $filters['search'] ?? '',
             ],
@@ -60,7 +59,6 @@ class JobLeadController extends Controller
         ));
 
         return Inertia::render('Dashboard', [
-            ...$this->sharedPageProps(),
             'applications' => $user
                 ->applications()
                 ->latest()
@@ -80,7 +78,6 @@ class JobLeadController extends Controller
     public function create(): Response
     {
         return Inertia::render('JobLeads/Create', [
-            ...$this->sharedPageProps(),
             'leadStatuses' => JobLead::leadStatuses(),
             'workModes' => JobLead::workModes(),
         ]);
@@ -115,7 +112,6 @@ class JobLeadController extends Controller
         $this->authorizeOwner($jobLead, $request);
 
         return Inertia::render('JobLeads/Edit', [
-            ...$this->sharedPageProps(),
             'jobLead' => $this->jobLeadData($jobLead),
             'matchAnalysis' => $this->matchAnalysis($jobLead, $request->user()->id),
             'leadStatuses' => JobLead::leadStatuses(),
@@ -165,6 +161,7 @@ class JobLeadController extends Controller
             'user_id' => $request->user()->id,
             'source_url' => $sourceUrl,
             'source_name' => $this->nullableString($request->string('source_name')->value()),
+            ...$this->canonicalSourceMetadata($sourceUrl),
             'company_name' => $this->nullableString($request->string('company_name')->value())
                 ?? $this->importCompanyName($sourceUrl),
             'job_title' => $this->nullableString($request->string('job_title')->value())
@@ -186,6 +183,8 @@ class JobLeadController extends Controller
             'job_title' => $jobLead->job_title,
             'source_name' => $jobLead->source_name,
             'source_url' => $jobLead->source_url,
+            'normalized_source_url' => $jobLead->normalized_source_url,
+            'source_host' => $jobLead->source_host,
             'location' => $jobLead->location,
             'work_mode' => $jobLead->work_mode,
             'salary_range' => $jobLead->salary_range,
@@ -283,7 +282,9 @@ class JobLeadController extends Controller
                     'id' => $jobLead->id,
                     'company_name' => $jobLead->company_name,
                     'job_title' => $jobLead->job_title,
+                    'source_name' => $jobLead->source_name,
                     'source_url' => $jobLead->source_url,
+                    'source_host' => $jobLead->source_host,
                     'extracted_keywords' => $jobKeywords,
                     'resume_skills_used' => $detectedResumeSkills,
                     'job_keywords_used' => $jobKeywords,
@@ -438,6 +439,7 @@ class JobLeadController extends Controller
 
         $payload = [
             ...$validatedData,
+            ...$this->canonicalSourceMetadata(is_string($sourceUrl) ? $sourceUrl : null),
             'company_name' => $this->nullableDescriptionText($validatedData['company_name'] ?? null)
                 ?? $this->fallbackCompanyName(is_string($sourceUrl) ? $sourceUrl : null),
             'job_title' => $this->nullableDescriptionText($validatedData['job_title'] ?? null)
@@ -463,6 +465,69 @@ class JobLeadController extends Controller
         }
 
         return $payload;
+    }
+
+    /**
+     * @return array{normalized_source_url: string|null, source_host: string|null}
+     */
+    private function canonicalSourceMetadata(?string $sourceUrl): array
+    {
+        $normalizedSourceUrl = $this->normalizedSourceUrl($sourceUrl);
+
+        if ($normalizedSourceUrl === null) {
+            return [
+                'normalized_source_url' => null,
+                'source_host' => null,
+            ];
+        }
+
+        return [
+            'normalized_source_url' => $normalizedSourceUrl,
+            'source_host' => $this->sourceHost($normalizedSourceUrl),
+        ];
+    }
+
+    private function normalizedSourceUrl(?string $sourceUrl): ?string
+    {
+        if ($sourceUrl === null || trim($sourceUrl) === '') {
+            return null;
+        }
+
+        $parts = parse_url($sourceUrl);
+
+        if (! is_array($parts)) {
+            return null;
+        }
+
+        $scheme = strtolower($parts['scheme'] ?? '');
+        $host = strtolower($parts['host'] ?? '');
+
+        if ($scheme === '' || $host === '') {
+            return null;
+        }
+
+        $path = $parts['path'] ?? '/';
+        $path = $path === '' ? '/' : preg_replace('#/+#', '/', $path);
+        $path = is_string($path) ? $path : '/';
+
+        if ($path !== '/') {
+            $path = rtrim($path, '/');
+        }
+
+        $port = isset($parts['port']) ? ':'.$parts['port'] : '';
+
+        return "{$scheme}://{$host}{$port}{$path}";
+    }
+
+    private function sourceHost(string $normalizedSourceUrl): ?string
+    {
+        $host = parse_url($normalizedSourceUrl, PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '') {
+            return null;
+        }
+
+        return preg_replace('/^www\./', '', strtolower($host)) ?? strtolower($host);
     }
 
     /**
@@ -576,17 +641,5 @@ class JobLeadController extends Controller
         }
 
         return $counts;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function sharedPageProps(): array
-    {
-        return [
-            'availableLocales' => ['pt', 'en', 'es'],
-            'locale' => app()->getLocale(),
-            'translations' => trans('app'),
-        ];
     }
 }

@@ -15,6 +15,8 @@ it('allows an authenticated user to create a job lead with only source url', fun
     $this->assertDatabaseHas('job_leads', [
         'user_id' => $user->id,
         'source_url' => 'https://jobs.example-company.com/openings/senior-product-engineer',
+        'normalized_source_url' => 'https://jobs.example-company.com/openings/senior-product-engineer',
+        'source_host' => 'jobs.example-company.com',
         'company_name' => 'Example Company',
         'job_title' => 'Imported job',
         'lead_status' => 'saved',
@@ -51,7 +53,9 @@ it('stores a cleaner fallback company name from the url host', function (): void
     $jobLead = JobLead::query()->where('user_id', $user->id)->sole();
 
     expect($jobLead->company_name)->toBe('Acme Labs')
-        ->and($jobLead->job_title)->toBe('Imported job');
+        ->and($jobLead->job_title)->toBe('Imported job')
+        ->and($jobLead->normalized_source_url)->toBe('https://acme-labs.example.com/jobs/backend-engineer')
+        ->and($jobLead->source_host)->toBe('acme-labs.example.com');
 });
 
 it('rejects an invalid url in the reduced friction intake flow', function (): void {

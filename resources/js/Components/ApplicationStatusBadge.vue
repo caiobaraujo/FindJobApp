@@ -1,4 +1,6 @@
 <script setup>
+import { useI18n } from '@/composables/useI18n';
+
 const props = defineProps({
     status: {
         type: String,
@@ -15,8 +17,10 @@ const classesByStatus = {
 };
 
 function labelForStatus(status) {
-    return status.charAt(0).toUpperCase() + status.slice(1);
+    return t(`applications.statuses.${status}`, status);
 }
+
+const { t } = useI18n();
 </script>
 
 <template>

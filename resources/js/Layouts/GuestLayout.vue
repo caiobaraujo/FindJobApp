@@ -1,6 +1,9 @@
 <script setup>
 import ApplicationLogo from '@/Components/ApplicationLogo.vue';
+import { useI18n } from '@/composables/useI18n';
 import { Link } from '@inertiajs/vue3';
+
+const { t } = useI18n();
 </script>
 
 <template>
@@ -12,26 +15,26 @@ import { Link } from '@inertiajs/vue3';
             <div class="grid gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
                 <div class="hidden lg:block">
                     <p class="text-xs font-semibold uppercase tracking-[0.32em] text-gold-300/80">
-                        Premium pipeline workspace
+                        {{ t('guest.eyebrow', 'Resume-first matching workspace') }}
                     </p>
                     <h1 class="mt-5 max-w-xl text-5xl font-semibold tracking-tight text-white">
-                        Track every opportunity with a sharper point of view.
+                        {{ t('guest.title', 'Keep every promising role in one focused workspace.') }}
                     </h1>
                     <p class="mt-5 max-w-lg text-base leading-7 text-slateglass-300">
-                        FindJobApp keeps your job search clean, structured, and visible in one premium workspace.
+                        {{ t('guest.description', 'FindJobApp helps you collect job leads, match them against your resume, and keep the most relevant opportunities visible.') }}
                     </p>
                     <div class="mt-10 grid max-w-lg grid-cols-3 gap-4">
                         <div class="premium-panel-muted p-4">
-                            <p class="text-xs uppercase tracking-[0.22em] text-slateglass-400">Focus</p>
-                            <p class="mt-3 text-lg font-semibold text-white">Pipeline clarity</p>
+                            <p class="text-xs uppercase tracking-[0.22em] text-slateglass-400">{{ t('guest.focus', 'Focus') }}</p>
+                            <p class="mt-3 text-lg font-semibold text-white">{{ t('guest.focus_value', 'Lead clarity') }}</p>
                         </div>
                         <div class="premium-panel-muted p-4">
-                            <p class="text-xs uppercase tracking-[0.22em] text-slateglass-400">Signal</p>
-                            <p class="mt-3 text-lg font-semibold text-white">Status visibility</p>
+                            <p class="text-xs uppercase tracking-[0.22em] text-slateglass-400">{{ t('guest.signal', 'Signal') }}</p>
+                            <p class="mt-3 text-lg font-semibold text-white">{{ t('guest.signal_value', 'Resume overlap') }}</p>
                         </div>
                         <div class="premium-panel-muted p-4">
-                            <p class="text-xs uppercase tracking-[0.22em] text-slateglass-400">Rhythm</p>
-                            <p class="mt-3 text-lg font-semibold text-white">Fast follow-up</p>
+                            <p class="text-xs uppercase tracking-[0.22em] text-slateglass-400">{{ t('guest.rhythm', 'Rhythm') }}</p>
+                            <p class="mt-3 text-lg font-semibold text-white">{{ t('guest.rhythm_value', 'Fast follow-up') }}</p>
                         </div>
                     </div>
                 </div>
@@ -47,7 +50,7 @@ import { Link } from '@inertiajs/vue3';
                                     FindJobApp
                                 </p>
                                 <p class="mt-1 text-sm text-slateglass-400">
-                                    Premium application tracking
+                                    {{ t('guest.product_tagline', 'Resume-first job matching') }}
                                 </p>
                             </div>
                         </Link>

@@ -1,10 +1,11 @@
 <script setup>
 import UserProfileForm from '@/Components/UserProfileForm.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
+import { useI18n } from '@/composables/useI18n';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, useForm, usePage } from '@inertiajs/vue3';
+import { Head, Link, useForm } from '@inertiajs/vue3';
 
 const props = defineProps({
     hasResumeProfile: {
@@ -17,7 +18,7 @@ const props = defineProps({
     },
 });
 
-const page = usePage();
+const { t } = useI18n();
 
 const form = useForm({
     target_role: props.userProfile?.target_role ?? '',
@@ -40,11 +41,6 @@ function submit() {
     form.post(route('resume-profile.store'));
 }
 
-function t(path, fallback) {
-    const value = path.split('.').reduce((carry, key) => carry?.[key], page.props.translations);
-
-    return value ?? fallback ?? path;
-}
 </script>
 
 <template>

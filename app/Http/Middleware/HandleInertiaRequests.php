@@ -31,6 +31,7 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
+            'availableLocales' => fn (): array => ['pt', 'en', 'es'],
             'auth' => [
                 'user' => $request->user(),
             ],
@@ -38,6 +39,8 @@ class HandleInertiaRequests extends Middleware
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],
+            'locale' => fn (): string => app()->getLocale(),
+            'translations' => fn (): array => trans('app'),
         ];
     }
 }

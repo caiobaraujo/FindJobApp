@@ -1,5 +1,6 @@
 <script setup>
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
+import { useI18n } from '@/composables/useI18n';
 import DeleteUserForm from './Partials/DeleteUserForm.vue';
 import UpdatePasswordForm from './Partials/UpdatePasswordForm.vue';
 import UpdateProfileInformationForm from './Partials/UpdateProfileInformationForm.vue';
@@ -13,17 +14,19 @@ defineProps({
         type: String,
     },
 });
+
+const { t } = useI18n();
 </script>
 
 <template>
-    <Head title="Profile" />
+    <Head :title="t('profile.title', 'Profile')" />
 
     <AuthenticatedLayout>
         <template #header>
             <h2
                 class="text-xl font-semibold leading-tight text-gray-800"
             >
-                Profile
+                {{ t('profile.title', 'Profile') }}
             </h2>
         </template>
 
