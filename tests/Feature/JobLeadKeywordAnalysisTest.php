@@ -26,6 +26,23 @@ it('persists analysis fields when a job lead is created', function (): void {
     expect($jobLead->ats_hints)->not->toBeEmpty();
 });
 
+it('creates analysis fields immediately during url first intake when description text is provided', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('job-leads.store'), [
+            'source_url' => 'https://example.com/jobs/laravel-engineer',
+            'description_text' => 'We need a Laravel engineer with Laravel API experience, Vue ownership, and strong automated testing.',
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $jobLead = JobLead::query()->sole();
+
+    expect($jobLead->extracted_keywords)->toContain('laravel')
+        ->and($jobLead->extracted_keywords)->toContain('testing')
+        ->and($jobLead->ats_hints)->not->toBeEmpty();
+});
+
 it('updates analysis fields when a job lead changes', function (): void {
     $user = User::factory()->create();
     $jobLead = JobLead::factory()->for($user)->create([
@@ -108,4 +125,26 @@ it('keeps job lead analysis isolated to the authenticated user', function (): vo
         ->assertSee('laravel')
         ->assertDontSee('Hidden Lead Co')
         ->assertDontSee('python');
+});
+
+
+it('surfaces missing keyword analysis counts on the matched jobs page', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->create([
+        'company_name' => 'Needs Text Co',
+        'job_title' => 'Platform Engineer',
+        'source_url' => 'https://example.com/jobs/platform',
+        'description_text' => null,
+        'extracted_keywords' => [],
+        'ats_hints' => ['Paste the full job description to unlock ATS keyword analysis.'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->component('JobLeads/Index')
+            ->where('leadsMissingAnalysisCount', 1)
+        );
 });

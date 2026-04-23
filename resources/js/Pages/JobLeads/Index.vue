@@ -22,6 +22,10 @@ const props = defineProps({
         type: Boolean,
         required: true,
     },
+    leadsMissingAnalysisCount: {
+        type: Number,
+        required: true,
+    },
     matchedJobs: {
         type: Array,
         required: true,
@@ -85,7 +89,7 @@ function t(path, fallback) {
                             :href="route('job-leads.create')"
                             class="premium-button-secondary"
                         >
-                            {{ t('buttons.add_job_source', 'Add job source') }}
+                            Add job
                         </Link>
                     </div>
                 </template>
@@ -110,7 +114,7 @@ function t(path, fallback) {
                     :href="route('job-leads.create')"
                     class="premium-button-secondary"
                 >
-                    {{ t('buttons.add_job_source', 'Add job source') }}
+                    Add job
                 </Link>
             </PageHeader>
 
@@ -118,6 +122,21 @@ function t(path, fallback) {
                 :title="t('matched_jobs.filter_title', 'Find a match faster')"
                 :description="t('matched_jobs.filter_description', 'Search by company or role. The list is already narrowed to jobs with at least one detected match when your resume is ready.')"
             >
+                <div
+                    v-if="leadsMissingAnalysisCount > 0"
+                    class="mb-5 rounded-3xl border border-gold-300/15 bg-gold-300/[0.06] px-5 py-4 text-sm leading-7 text-slateglass-200"
+                >
+                    {{ leadsMissingAnalysisCount === 1
+                        ? '1 saved lead does not have keyword analysis yet.'
+                        : `${leadsMissingAnalysisCount} saved leads do not have keyword analysis yet.` }}
+                    <Link
+                        :href="route('job-leads.create')"
+                        class="ml-2 font-semibold text-gold-200 underline decoration-gold-300/40 underline-offset-4"
+                    >
+                        Paste job text on intake
+                    </Link>
+                </div>
+
                 <form @submit.prevent="submitFilters" class="grid gap-4 xl:grid-cols-[1fr_auto]">
                     <div>
                         <label for="search" class="premium-input-label">{{ t('matched_jobs.search', 'Search') }}</label>
@@ -183,7 +202,7 @@ function t(path, fallback) {
                         :href="route('job-leads.create')"
                         class="premium-button-secondary"
                     >
-                        {{ t('buttons.add_job_source', 'Add job source') }}
+                        Add job
                     </Link>
                     <Link
                         :href="route('job-leads.create')"
@@ -273,6 +292,13 @@ function t(path, fallback) {
                                 >
                                     {{ t('matched_jobs.review_match', 'Review match') }}
                                 </Link>
+                            </div>
+
+                            <div
+                                v-if="jobLead.job_keywords_used.length === 0"
+                                class="mt-5 rounded-3xl border border-gold-300/15 bg-gold-300/[0.06] px-4 py-3 text-sm text-slateglass-200"
+                            >
+                                Keyword analysis is not available yet for this lead. Paste the job description to unlock keyword analysis.
                             </div>
 
                             <MatchWhyDrawer

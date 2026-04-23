@@ -33,7 +33,11 @@ const form = useForm({
 });
 
 function submit() {
-    form.post(route('job-leads.store'));
+    form.transform((data) => Object.fromEntries(
+        Object.entries(data).filter(([, value]) => value !== ''),
+    )).post(route('job-leads.store'), {
+        onFinish: () => form.transform((data) => data),
+    });
 }
 </script>
 
@@ -45,20 +49,14 @@ function submit() {
             <AppShell>
                 <PageHeader
                     eyebrow="Discovery"
-                    title="Create job lead"
-                    description="Capture a promising opportunity and paste the full job description early so ATS analysis can guide resume tailoring from the start."
+                    title="Add job"
+                    description="URL-only intake saves the lead. Paste job text now if you want keyword analysis immediately."
                 >
-                    <Link
-                        :href="route('job-leads.import.entry')"
-                        class="premium-button-secondary"
-                    >
-                        Import job
-                    </Link>
                     <Link
                         :href="route('job-leads.index')"
                         class="premium-button-secondary"
                     >
-                        Back to job leads
+                        Back to matched jobs
                     </Link>
                 </PageHeader>
             </AppShell>
@@ -66,14 +64,15 @@ function submit() {
 
         <AppShell>
             <SectionCard
-                title="Lead details"
-                description="Store the source context, add the full job description for ATS analysis, and keep personal notes separate."
+                title="Start with the job URL"
+                description="URL-first intake keeps discovery fast. URL-only intake saves the lead. Paste job text if you want matching signals right away."
             >
                 <JobLeadForm
                     :form="form"
                     :lead-statuses="leadStatuses"
                     :work-modes="workModes"
-                    submit-label="Create job lead"
+                    mode="create"
+                    submit-label="Add job"
                     @submit="submit"
                 />
             </SectionCard>

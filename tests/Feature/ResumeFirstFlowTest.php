@@ -148,6 +148,7 @@ it('keeps match explanation data secondary when prerequisites are missing', func
         ->assertInertia(fn (Assert $page) => $page
             ->component('JobLeads/Index')
             ->where('detectedResumeSkills.0', 'laravel')
+            ->where('leadsMissingAnalysisCount', 1)
             ->has('matchedJobs', 0)
         );
 });

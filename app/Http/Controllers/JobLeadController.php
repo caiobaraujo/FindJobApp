@@ -42,6 +42,7 @@ class JobLeadController extends Controller
             ],
             'detectedResumeSkills' => $detectedResumeSkills,
             'hasResumeProfile' => $userProfile !== null,
+            'leadsMissingAnalysisCount' => $this->leadsMissingAnalysisCount($jobLeads),
             'matchedOnly' => $matchedOnly,
             'resumeReady' => $this->resumeReady($userProfile),
             'resumeNeedsTextInput' => $this->resumeNeedsTextInput($userProfile),
@@ -231,6 +232,16 @@ class JobLeadController extends Controller
 
     /**
      * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     */
+    private function leadsMissingAnalysisCount($jobLeads): int
+    {
+        return $jobLeads
+            ->filter(fn (JobLead $jobLead): bool => ($jobLead->extracted_keywords ?? []) === [])
+            ->count();
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
      * @return list<array<string, mixed>>
      */
     private function jobCards($jobLeads, ?UserProfile $userProfile, bool $matchedOnly, array $detectedResumeSkills): array
@@ -368,10 +379,17 @@ class JobLeadController extends Controller
     {
         $descriptionText = $this->nullableDescriptionText($validatedData['description_text'] ?? null);
         $analysis = app(JobLeadKeywordExtractor::class)->analyze($descriptionText);
+        $sourceUrl = $validatedData['source_url'] ?? null;
 
         return array_filter([
             ...$validatedData,
             'user_id' => $userId,
+            'company_name' => $this->nullableDescriptionText($validatedData['company_name'] ?? null)
+                ?? $this->fallbackCompanyName(is_string($sourceUrl) ? $sourceUrl : null),
+            'job_title' => $this->nullableDescriptionText($validatedData['job_title'] ?? null)
+                ?? $this->fallbackJobTitle(),
+            'lead_status' => $validatedData['lead_status'] ?? JobLead::STATUS_SAVED,
+            'discovered_at' => $validatedData['discovered_at'] ?? today()->toDateString(),
             'description_text' => $descriptionText,
             'extracted_keywords' => $analysis['extracted_keywords'],
             'ats_hints' => $analysis['ats_hints'],
@@ -396,6 +414,46 @@ class JobLeadController extends Controller
         }
 
         return $this->nullableString($value);
+    }
+
+    private function fallbackCompanyName(?string $sourceUrl): string
+    {
+        if ($sourceUrl === null || $sourceUrl === '') {
+            return 'Imported company';
+        }
+
+        $host = parse_url($sourceUrl, PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '') {
+            return 'Imported company';
+        }
+
+        $segments = explode('.', preg_replace('/^www\./', '', strtolower($host)) ?? strtolower($host));
+        $primarySegment = $segments[0] ?? '';
+
+        if (in_array($primarySegment, ['jobs', 'careers', 'boards', 'apply'], true) && count($segments) >= 2) {
+            $primarySegment = $segments[count($segments) - 2];
+        }
+
+        $words = preg_split('/[-_]+/', $primarySegment) ?: [];
+        $words = array_filter(array_map(
+            fn (string $word): ?string => $this->nullableString($word),
+            $words,
+        ));
+
+        if ($words === []) {
+            return 'Imported company';
+        }
+
+        return implode(' ', array_map(
+            fn (string $word): string => ucfirst(strtolower($word)),
+            $words,
+        ));
+    }
+
+    private function fallbackJobTitle(): string
+    {
+        return 'Imported job';
     }
 
     private function importCompanyName(string $sourceUrl): string
