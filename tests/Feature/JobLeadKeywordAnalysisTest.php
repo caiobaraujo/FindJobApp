@@ -78,6 +78,40 @@ it('updates analysis fields when a job lead changes', function (): void {
     expect($jobLead->ats_hints)->not->toBeEmpty();
 });
 
+it('clears stale analysis fields when job description text is removed', function (): void {
+    $user = User::factory()->create();
+    $jobLead = JobLead::factory()->for($user)->create([
+        'description_text' => 'Laravel Vue role with testing ownership.',
+        'extracted_keywords' => ['laravel', 'vue', 'testing'],
+        'ats_hints' => ['Likely ATS terms to reflect in your resume: laravel, vue, testing.'],
+    ]);
+
+    $this->actingAs($user)
+        ->patch(route('job-leads.update', $jobLead), [
+            'company_name' => $jobLead->company_name,
+            'job_title' => $jobLead->job_title,
+            'source_name' => $jobLead->source_name,
+            'source_url' => $jobLead->source_url,
+            'location' => $jobLead->location,
+            'work_mode' => $jobLead->work_mode,
+            'salary_range' => $jobLead->salary_range,
+            'description_excerpt' => $jobLead->description_excerpt,
+            'description_text' => '',
+            'relevance_score' => $jobLead->relevance_score,
+            'lead_status' => $jobLead->lead_status,
+            'discovered_at' => optional($jobLead->discovered_at)->toDateString(),
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $jobLead->refresh();
+
+    expect($jobLead->description_text)->toBeNull();
+    expect($jobLead->extracted_keywords)->toBe([]);
+    expect($jobLead->ats_hints)->toBe([
+        'Paste the full job description to unlock ATS keyword analysis.',
+    ]);
+});
+
 it('handles empty description text safely', function (): void {
     $user = User::factory()->create();
 

@@ -27,6 +27,11 @@ it('allows an authenticated user to import a job lead from a valid url', functio
     expect($jobLead->job_title)->toBe('Staff Engineer');
     expect($jobLead->lead_status)->toBe('saved');
     expect($jobLead->discovered_at?->toDateString())->toBe('2026-04-22');
+    expect($jobLead->description_text)->toBeNull();
+    expect($jobLead->extracted_keywords)->toBe([]);
+    expect($jobLead->ats_hints)->toBe([
+        'Paste the full job description to unlock ATS keyword analysis.',
+    ]);
 
     Carbon::setTestNow();
 });

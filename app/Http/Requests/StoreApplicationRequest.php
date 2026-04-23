@@ -19,6 +19,7 @@ class StoreApplicationRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'job_lead_id' => ['nullable', 'integer'],
             'company_name' => ['required', 'string', 'max:255'],
             'job_title' => ['required', 'string', 'max:255'],
             'source_url' => ['nullable', 'url', 'max:2048'],

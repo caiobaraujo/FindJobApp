@@ -62,7 +62,7 @@ function formattedFileSize(size) {
         >
             <label for="resume_file" class="premium-input-label">{{ t('resume.upload_primary_title', 'Upload your resume') }}</label>
             <p class="mt-3 text-sm leading-7 text-slateglass-300">
-                {{ t('resume.upload_primary_description', 'Upload your resume file to start matching jobs automatically. TXT files can be read immediately. PDF, DOC, and DOCX are stored now and ready for future parsing.') }}
+                {{ t('resume.upload_primary_description', 'Upload your resume file to start matching jobs automatically when text can be extracted locally. TXT, PDF, and DOCX can power matching now; DOC is saved with the manual text fallback available.') }}
             </p>
 
             <div

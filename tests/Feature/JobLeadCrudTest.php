@@ -45,7 +45,11 @@ it('allows an authenticated user to manage job leads', function (): void {
 
     $this->actingAs($user)
         ->get(route('job-leads.edit', $jobLead))
-        ->assertOk();
+        ->assertOk()
+        ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->component('JobLeads/Edit')
+            ->where('jobLead.id', $jobLead->id)
+        );
 
     $this->actingAs($user)
         ->patch(route('job-leads.update', $jobLead), [
@@ -72,7 +76,8 @@ it('allows an authenticated user to manage job leads', function (): void {
 
     $this->actingAs($user)
         ->delete(route('job-leads.destroy', $jobLead))
-        ->assertRedirect(route('job-leads.index'));
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.job_lead_edit.delete_success'));
 
     $this->assertDatabaseMissing('job_leads', [
         'id' => $jobLead->id,

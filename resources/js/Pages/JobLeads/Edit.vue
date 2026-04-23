@@ -40,11 +40,20 @@ const form = useForm({
     lead_status: props.jobLead.lead_status,
     discovered_at: props.jobLead.discovered_at ?? '',
 });
+const deleteForm = useForm({});
 
 const page = usePage();
 
 function submit() {
     form.put(route('job-leads.update', props.jobLead.id));
+}
+
+function deleteJobLead() {
+    if (! window.confirm(t('job_lead_edit.delete_confirmation', 'Delete this saved job lead? This cannot be undone.'))) {
+        return;
+    }
+
+    deleteForm.delete(route('job-leads.destroy', props.jobLead.id));
 }
 
 function t(path, fallback) {
@@ -65,6 +74,12 @@ function t(path, fallback) {
                     :title="t('job_lead_edit.title', 'Edit job lead')"
                     :description="t('job_lead_edit.description', 'Keep the lead accurate, update the full job description, and use ATS insights to decide how your resume should adapt.')"
                 >
+                    <Link
+                        :href="route('applications.create', { job_lead: jobLead.id })"
+                        class="premium-button-primary"
+                    >
+                        {{ t('job_lead_edit.convert_to_application', 'Convert to application') }}
+                    </Link>
                     <Link
                         :href="route('job-leads.index')"
                         class="premium-button-secondary"
@@ -174,6 +189,25 @@ function t(path, fallback) {
                 :description="t('job_lead_edit.resume_match_description', 'Compare this job lead against your resume profile to see what your current base resume already covers and what is still missing.')"
             >
                 <JobLeadMatchCard :analysis="matchAnalysis" />
+            </SectionCard>
+
+            <SectionCard
+                :title="t('job_lead_edit.delete_title', 'Delete saved lead')"
+                :description="t('job_lead_edit.delete_description', 'Remove this job lead from your saved jobs when it is no longer useful for matching or follow-up.')"
+            >
+                <div class="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-red-400/15 bg-red-400/[0.06] p-5">
+                    <p class="max-w-2xl text-sm leading-7 text-slateglass-200">
+                        {{ t('job_lead_edit.delete_warning', 'Deleting this lead removes it from matched jobs and cannot be undone.') }}
+                    </p>
+                    <button
+                        type="button"
+                        class="rounded-full border border-red-300/30 bg-red-400/10 px-5 py-3 text-sm font-semibold text-red-100 transition hover:border-red-200/60 hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="deleteForm.processing"
+                        @click="deleteJobLead"
+                    >
+                        {{ t('job_lead_edit.delete_button', 'Delete job lead') }}
+                    </button>
+                </div>
             </SectionCard>
         </AppShell>
     </AuthenticatedLayout>

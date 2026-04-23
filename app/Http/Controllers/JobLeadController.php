@@ -92,6 +92,7 @@ class JobLeadController extends Controller
             $this->jobLeadPayload(
                 $request->validated(),
                 $request->user()->id,
+                true,
             ),
         );
 
@@ -124,7 +125,14 @@ class JobLeadController extends Controller
 
     public function update(UpdateJobLeadRequest $request, JobLead $jobLead): RedirectResponse
     {
-        $jobLead->update($this->jobLeadPayload($request->validated()));
+        $validatedData = $request->validated();
+
+        $jobLead->update(
+            $this->jobLeadPayload(
+                $validatedData,
+                syncAnalysis: array_key_exists('description_text', $validatedData),
+            ),
+        );
 
         return redirect()
             ->route('job-leads.index')
@@ -163,6 +171,7 @@ class JobLeadController extends Controller
                 ?? 'Imported job lead',
             'lead_status' => JobLead::STATUS_SAVED,
             'discovered_at' => today()->toDateString(),
+            ...$this->missingJobAnalysisPayload(),
         ], fn (mixed $value): bool => $value !== null);
     }
 
@@ -252,9 +261,11 @@ class JobLeadController extends Controller
             return [];
         }
 
-        $jobCards = [];
+        $rankedJobCards = [];
+        $position = 0;
 
         foreach ($jobLeads as $jobLead) {
+            $jobKeywords = $jobLead->extracted_keywords ?? [];
             $analysis = $resumeReady && ($jobLead->extracted_keywords ?? []) !== []
                 ? $this->analyzeMatch($jobLead, $userProfile)
                 : [
@@ -267,23 +278,69 @@ class JobLeadController extends Controller
                 continue;
             }
 
-            $jobCards[] = [
-                'id' => $jobLead->id,
-                'company_name' => $jobLead->company_name,
-                'job_title' => $jobLead->job_title,
-                'source_url' => $jobLead->source_url,
-                'extracted_keywords' => $jobLead->extracted_keywords ?? [],
-                'resume_skills_used' => $detectedResumeSkills,
-                'job_keywords_used' => $jobLead->extracted_keywords ?? [],
-                'matched_keywords' => $analysis['matched_keywords'],
-                'missing_keywords' => $analysis['missing_keywords'],
-                'match_summary' => $analysis['match_summary'],
-                'can_explain_match' => $detectedResumeSkills !== [] && ($jobLead->extracted_keywords ?? []) !== [],
-                'ats_hint' => $jobLead->ats_hints[0] ?? null,
+            $rankedJobCards[] = [
+                'card' => [
+                    'id' => $jobLead->id,
+                    'company_name' => $jobLead->company_name,
+                    'job_title' => $jobLead->job_title,
+                    'source_url' => $jobLead->source_url,
+                    'extracted_keywords' => $jobKeywords,
+                    'resume_skills_used' => $detectedResumeSkills,
+                    'job_keywords_used' => $jobKeywords,
+                    'matched_keywords' => $analysis['matched_keywords'],
+                    'missing_keywords' => $analysis['missing_keywords'],
+                    'match_summary' => $analysis['match_summary'],
+                    'can_explain_match' => $detectedResumeSkills !== [] && $jobKeywords !== [],
+                    'ats_hint' => $jobLead->ats_hints[0] ?? null,
+                ],
+                'has_job_analysis' => $jobKeywords !== [],
+                'matched_keyword_count' => count($analysis['matched_keywords']),
+                'missing_keyword_count' => count($analysis['missing_keywords']),
+                'relevance_score' => $jobLead->relevance_score,
+                'position' => $position,
             ];
+
+            $position++;
         }
 
-        return $jobCards;
+        return $this->rankedJobCards($rankedJobCards);
+    }
+
+    /**
+     * @param list<array{card: array<string, mixed>, has_job_analysis: bool, matched_keyword_count: int, missing_keyword_count: int, relevance_score: int|null, position: int}> $rankedJobCards
+     * @return list<array<string, mixed>>
+     */
+    private function rankedJobCards(array $rankedJobCards): array
+    {
+        usort($rankedJobCards, fn (array $left, array $right): int => $this->compareRankedJobCards($left, $right));
+
+        return array_map(
+            fn (array $rankedJobCard): array => $rankedJobCard['card'],
+            $rankedJobCards,
+        );
+    }
+
+    /**
+     * @param array{has_job_analysis: bool, matched_keyword_count: int, missing_keyword_count: int, relevance_score: int|null, position: int} $left
+     * @param array{has_job_analysis: bool, matched_keyword_count: int, missing_keyword_count: int, relevance_score: int|null, position: int} $right
+     */
+    private function compareRankedJobCards(array $left, array $right): int
+    {
+        return $this->compareDesc((int) $left['has_job_analysis'], (int) $right['has_job_analysis'])
+            ?: $this->compareDesc($left['matched_keyword_count'], $right['matched_keyword_count'])
+            ?: $this->compareAsc($left['missing_keyword_count'], $right['missing_keyword_count'])
+            ?: $this->compareDesc($left['relevance_score'] ?? -1, $right['relevance_score'] ?? -1)
+            ?: $this->compareAsc($left['position'], $right['position']);
+    }
+
+    private function compareDesc(int $left, int $right): int
+    {
+        return $right <=> $left;
+    }
+
+    private function compareAsc(int $left, int $right): int
+    {
+        return $left <=> $right;
     }
 
     /**
@@ -375,25 +432,45 @@ class JobLeadController extends Controller
      * @param array<string, mixed> $validatedData
      * @return array<string, mixed>
      */
-    private function jobLeadPayload(array $validatedData, ?int $userId = null): array
+    private function jobLeadPayload(array $validatedData, ?int $userId = null, bool $syncAnalysis = false): array
     {
-        $descriptionText = $this->nullableDescriptionText($validatedData['description_text'] ?? null);
-        $analysis = app(JobLeadKeywordExtractor::class)->analyze($descriptionText);
         $sourceUrl = $validatedData['source_url'] ?? null;
 
-        return array_filter([
+        $payload = [
             ...$validatedData,
-            'user_id' => $userId,
             'company_name' => $this->nullableDescriptionText($validatedData['company_name'] ?? null)
                 ?? $this->fallbackCompanyName(is_string($sourceUrl) ? $sourceUrl : null),
             'job_title' => $this->nullableDescriptionText($validatedData['job_title'] ?? null)
                 ?? $this->fallbackJobTitle(),
             'lead_status' => $validatedData['lead_status'] ?? JobLead::STATUS_SAVED,
             'discovered_at' => $validatedData['discovered_at'] ?? today()->toDateString(),
-            'description_text' => $descriptionText,
-            'extracted_keywords' => $analysis['extracted_keywords'],
-            'ats_hints' => $analysis['ats_hints'],
-        ], fn (mixed $value): bool => $value !== null);
+        ];
+
+        if ($syncAnalysis) {
+            $descriptionText = $this->nullableDescriptionText($validatedData['description_text'] ?? null);
+            $analysis = app(JobLeadKeywordExtractor::class)->analyze($descriptionText);
+
+            $payload = [
+                ...$payload,
+                'description_text' => $descriptionText,
+                'extracted_keywords' => $analysis['extracted_keywords'],
+                'ats_hints' => $analysis['ats_hints'],
+            ];
+        }
+
+        if ($userId !== null) {
+            $payload['user_id'] = $userId;
+        }
+
+        return $payload;
+    }
+
+    /**
+     * @return array{extracted_keywords: list<string>, ats_hints: list<string>}
+     */
+    private function missingJobAnalysisPayload(): array
+    {
+        return app(JobLeadKeywordExtractor::class)->analyze(null);
     }
 
     private function nullableString(string $value): ?string

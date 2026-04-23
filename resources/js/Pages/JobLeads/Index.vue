@@ -182,7 +182,7 @@ function t(path, fallback) {
                     v-if="!resumeReady"
                     :title="t('matched_jobs.empty_resume_title', 'Matching starts after resume upload')"
                     :description="resumeNeedsTextInput
-                        ? 'Your resume file is saved, but matching still needs plain resume text. TXT uploads work immediately. For PDF, DOC, or DOCX, paste resume text or add core skills first.'
+                        ? t('matched_jobs.empty_resume_needs_text_description', 'Your resume file is saved, but matching still needs extracted or pasted resume text. TXT, PDF, and DOCX can extract locally when readable; for DOC or failed extraction, paste resume text or add core skills first.')
                         : t('matched_jobs.empty_resume_description', 'Upload your resume first. Once it is ready, this page will surface only jobs with detected overlap.')"
                 >
                     <Link

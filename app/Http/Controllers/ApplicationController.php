@@ -6,6 +6,7 @@ use App\Http\Requests\StoreApplicationRequest;
 use App\Http\Requests\UpdateApplicationRequest;
 use App\Http\Requests\UpdateApplicationStatusRequest;
 use App\Models\Application;
+use App\Models\JobLead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -71,18 +72,49 @@ class ApplicationController extends Controller
         ]);
     }
 
-    public function create(): Response
+    public function create(Request $request): Response|RedirectResponse
     {
         $this->authorize('create', Application::class);
+        $jobLead = $this->conversionJobLead(
+            $request->filled('job_lead') ? $request->integer('job_lead') : null,
+            $request->user()->id,
+        );
+
+        if ($jobLead !== null) {
+            $existingApplication = $this->existingApplicationForJobLead($request->user()->id, $jobLead);
+
+            if ($existingApplication !== null) {
+                return redirect()
+                    ->route('applications.edit', $existingApplication)
+                    ->with('success', 'Application already exists for this job lead.');
+            }
+        }
 
         return Inertia::render('Applications/Create', [
+            'prefill' => $this->applicationPrefill($jobLead),
             'statuses' => Application::statuses(),
         ]);
     }
 
     public function store(StoreApplicationRequest $request): RedirectResponse
     {
-        $request->user()->applications()->create($request->validated());
+        $validated = $request->validated();
+        $jobLead = $this->conversionJobLead(
+            $validated['job_lead_id'] ?? null,
+            $request->user()->id,
+        );
+
+        if ($jobLead !== null) {
+            $existingApplication = $this->existingApplicationForJobLead($request->user()->id, $jobLead);
+
+            if ($existingApplication !== null) {
+                return redirect()
+                    ->route('applications.edit', $existingApplication)
+                    ->with('success', 'Application already exists for this job lead.');
+            }
+        }
+
+        $request->user()->applications()->create($this->applicationPayload($validated));
 
         return redirect()
             ->route('applications.index')
@@ -157,6 +189,69 @@ class ApplicationController extends Controller
             'applied_at' => $application->applied_at?->toDateString(),
             'notes' => $application->notes,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $validated
+     * @return array<string, mixed>
+     */
+    private function applicationPayload(array $validated): array
+    {
+        unset($validated['job_lead_id']);
+
+        return $validated;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function applicationPrefill(?JobLead $jobLead): array
+    {
+        if ($jobLead === null) {
+            return [
+                'company_name' => '',
+                'job_title' => '',
+                'source_url' => '',
+                'status' => Application::STATUS_WISHLIST,
+                'applied_at' => '',
+                'notes' => '',
+                'job_lead_id' => null,
+                'job_lead_edit_url' => null,
+            ];
+        }
+
+        return [
+            'company_name' => $jobLead->company_name,
+            'job_title' => $jobLead->job_title,
+            'source_url' => $jobLead->source_url,
+            'status' => Application::STATUS_WISHLIST,
+            'applied_at' => '',
+            'notes' => '',
+            'job_lead_id' => $jobLead->id,
+            'job_lead_edit_url' => route('job-leads.edit', $jobLead),
+        ];
+    }
+
+    private function conversionJobLead(?int $jobLeadId, int $userId): ?JobLead
+    {
+        if ($jobLeadId === null) {
+            return null;
+        }
+
+        $jobLead = JobLead::query()->findOrFail($jobLeadId);
+        abort_unless($jobLead->user_id === $userId, 403);
+
+        return $jobLead;
+    }
+
+    private function existingApplicationForJobLead(int $userId, JobLead $jobLead): ?Application
+    {
+        return Application::query()
+            ->where('user_id', $userId)
+            ->where('company_name', $jobLead->company_name)
+            ->where('job_title', $jobLead->job_title)
+            ->where('source_url', $jobLead->source_url)
+            ->first();
     }
 
     /**

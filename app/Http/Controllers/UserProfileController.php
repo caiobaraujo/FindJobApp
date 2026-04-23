@@ -6,6 +6,7 @@ use App\Http\Requests\StoreUserProfileRequest;
 use App\Http\Requests\UpdateUserProfileRequest;
 use App\Models\UserProfile;
 use App\Services\JobLeadKeywordExtractor;
+use App\Services\ResumeTextExtractor;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -188,17 +189,13 @@ class UserProfileController extends Controller
             return $this->nullableString($fallbackResumeText);
         }
 
-        if ($uploadedResumeFile->getClientOriginalExtension() !== 'txt') {
+        $extractedText = app(ResumeTextExtractor::class)->extract($uploadedResumeFile);
+
+        if ($extractedText === null) {
             return $this->nullableString($fallbackResumeText);
         }
 
-        $contents = file_get_contents($uploadedResumeFile->getRealPath());
-
-        if ($contents === false) {
-            return $this->nullableString($fallbackResumeText);
-        }
-
-        return $this->nullableString($contents);
+        return $extractedText;
     }
 
     private function storeResumeFile(UploadedFile $uploadedResumeFile, string $path): void
