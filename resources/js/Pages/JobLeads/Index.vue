@@ -31,6 +31,10 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    leadStatusCounts: {
+        type: Object,
+        required: true,
+    },
     leadsMissingAnalysisCount: {
         type: Number,
         required: true,
@@ -59,6 +63,7 @@ const filterForm = reactive({
     analysis_state: props.filters.analysis_state || '',
     lead_status: props.filters.lead_status || '',
     search: props.filters.search || '',
+    show_ignored: Boolean(props.filters.show_ignored),
     work_mode: props.filters.work_mode || '',
 });
 
@@ -85,6 +90,7 @@ function resetFilters() {
     filterForm.analysis_state = '';
     filterForm.lead_status = '';
     filterForm.search = '';
+    filterForm.show_ignored = false;
     filterForm.work_mode = '';
     submitFilters();
 }
@@ -231,6 +237,33 @@ function setLeadStatus(jobLead, leadStatus) {
                 :title="t('matched_jobs.filter_title', 'Find a match faster')"
                 :description="t('matched_jobs.filter_description', 'Search by company or role. The list is already narrowed to jobs with at least one detected match when your resume is ready.')"
             >
+                <div class="mb-5 grid gap-3 md:grid-cols-3">
+                    <div class="rounded-3xl border border-white/10 bg-black/20 px-5 py-4">
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slateglass-400">
+                            {{ t('matched_jobs.active_leads', 'Active leads') }}
+                        </p>
+                        <p class="mt-2 text-2xl font-semibold text-white">
+                            {{ leadStatusCounts.active }}
+                        </p>
+                    </div>
+                    <div class="rounded-3xl border border-white/10 bg-black/20 px-5 py-4">
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slateglass-400">
+                            {{ t('matched_jobs.ignored_leads', 'Ignored leads') }}
+                        </p>
+                        <p class="mt-2 text-2xl font-semibold text-white">
+                            {{ leadStatusCounts.ignored }}
+                        </p>
+                    </div>
+                    <div class="rounded-3xl border border-white/10 bg-black/20 px-5 py-4">
+                        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slateglass-400">
+                            {{ t('matched_jobs.applied_leads', 'Applied leads') }}
+                        </p>
+                        <p class="mt-2 text-2xl font-semibold text-white">
+                            {{ leadStatusCounts.applied }}
+                        </p>
+                    </div>
+                </div>
+
                 <div
                     v-if="leadsMissingAnalysisCount > 0"
                     class="mb-5 rounded-3xl border border-gold-300/15 bg-gold-300/[0.06] px-5 py-4 text-sm leading-7 text-slateglass-200"
@@ -312,7 +345,17 @@ function setLeadStatus(jobLead, leadStatus) {
                         </select>
                     </div>
 
-                    <div class="xl:col-span-4 flex items-end gap-3">
+                    <div class="xl:col-span-4 flex flex-wrap items-center justify-between gap-3">
+                        <label class="flex items-center gap-3 text-sm text-slateglass-300">
+                            <input
+                                v-model="filterForm.show_ignored"
+                                type="checkbox"
+                                class="h-4 w-4 rounded border-white/20 bg-black/20 text-gold-300 focus:ring-gold-300/40"
+                            >
+                            <span>{{ t('matched_jobs.show_ignored', 'Show ignored leads') }}</span>
+                        </label>
+
+                        <div class="flex items-end gap-3">
                         <button
                             type="submit"
                             class="premium-button-primary"
@@ -326,6 +369,7 @@ function setLeadStatus(jobLead, leadStatus) {
                         >
                             {{ t('matched_jobs.reset', 'Reset') }}
                         </button>
+                        </div>
                     </div>
                 </form>
             </SectionCard>
@@ -425,6 +469,12 @@ function setLeadStatus(jobLead, leadStatus) {
                                         : 'border-gold-300/20 bg-gold-300/10 text-gold-200'"
                                 >
                                     {{ analysisStateLabel(analysisStateFor(jobLead)) }}
+                                </span>
+                                <span
+                                    v-if="jobLead.has_limited_analysis"
+                                    class="rounded-full border border-gold-300/20 bg-gold-300/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-200"
+                                >
+                                    {{ t('matched_jobs.limited_analysis', 'Limited analysis') }}
                                 </span>
                                 <span
                                     class="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
@@ -527,10 +577,15 @@ function setLeadStatus(jobLead, leadStatus) {
                             </div>
 
                             <div
-                                v-if="jobLead.job_keywords_used.length === 0"
+                                v-if="jobLead.has_limited_analysis"
                                 class="mt-5 rounded-3xl border border-gold-300/15 bg-gold-300/[0.06] px-4 py-3 text-sm text-slateglass-200"
                             >
-                                {{ t('matched_jobs.analysis_unavailable', 'Keyword analysis is not available yet for this lead. Paste the job description to unlock keyword analysis.') }}
+                                <p class="font-semibold text-gold-200">
+                                    {{ t('matched_jobs.limited_analysis', 'Limited analysis') }}
+                                </p>
+                                <p class="mt-1">
+                                    {{ t('matched_jobs.analysis_unavailable', 'Add a job description to improve matching. Keyword analysis is not available yet for this lead.') }}
+                                </p>
                             </div>
 
                             <MatchWhyDrawer

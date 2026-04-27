@@ -110,7 +110,7 @@ it('keeps jobs without a source url from exposing a go to job button payload', f
         'base_resume_text' => 'Python developer with API experience.',
     ]);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'No Link Co',
         'job_title' => 'Python Developer',
         'source_url' => '',

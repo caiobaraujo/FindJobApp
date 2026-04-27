@@ -9,14 +9,14 @@ it('ranks jobs with more matched keywords above weaker matches', function (): vo
     $user = User::factory()->create();
     createRankingProfile($user);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Weak Match Co',
         'job_title' => 'Backend Engineer',
         'extracted_keywords' => ['laravel', 'python'],
         'relevance_score' => 99,
     ]);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Strong Match Co',
         'job_title' => 'Full Stack Engineer',
         'extracted_keywords' => ['laravel', 'vue', 'sql', 'python'],
@@ -38,14 +38,14 @@ it('ranks jobs with fewer missing keywords above broader weaker fits', function 
     $user = User::factory()->create();
     createRankingProfile($user);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Broad Gap Co',
         'job_title' => 'Platform Engineer',
         'extracted_keywords' => ['laravel', 'vue', 'python', 'go', 'rust'],
         'relevance_score' => 95,
     ]);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Tight Fit Co',
         'job_title' => 'Laravel Engineer',
         'extracted_keywords' => ['laravel', 'vue'],
@@ -68,14 +68,14 @@ it('does not rank leads missing keyword analysis above analyzed leads', function
     $user = User::factory()->create();
     createRankingProfile($user);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Missing Analysis Co',
         'job_title' => 'Saved Lead',
         'extracted_keywords' => [],
         'relevance_score' => 100,
     ]);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Analyzed Lead Co',
         'job_title' => 'Laravel Engineer',
         'extracted_keywords' => ['laravel'],
@@ -97,14 +97,14 @@ it('uses relevance score as a tie breaker after match quality', function (): voi
     $user = User::factory()->create();
     createRankingProfile($user);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Lower Relevance Co',
         'job_title' => 'Laravel Engineer',
         'extracted_keywords' => ['laravel', 'vue', 'python'],
         'relevance_score' => 40,
     ]);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Higher Relevance Co',
         'job_title' => 'Product Engineer',
         'extracted_keywords' => ['laravel', 'vue', 'python'],

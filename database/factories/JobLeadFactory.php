@@ -24,8 +24,36 @@ class JobLeadFactory extends Factory
             'salary_range' => fake()->optional()->randomElement(['$90k-$110k', '$120k-$150k']),
             'description_excerpt' => fake()->optional()->paragraph(),
             'relevance_score' => fake()->optional()->numberBetween(40, 95),
-            'lead_status' => fake()->randomElement(JobLead::leadStatuses()),
+            'lead_status' => JobLead::STATUS_SAVED,
             'discovered_at' => fake()->optional()->date(),
         ];
+    }
+
+    public function saved(): static
+    {
+        return $this->state(fn (): array => [
+            'lead_status' => JobLead::STATUS_SAVED,
+        ]);
+    }
+
+    public function shortlisted(): static
+    {
+        return $this->state(fn (): array => [
+            'lead_status' => JobLead::STATUS_SHORTLISTED,
+        ]);
+    }
+
+    public function applied(): static
+    {
+        return $this->state(fn (): array => [
+            'lead_status' => JobLead::STATUS_APPLIED,
+        ]);
+    }
+
+    public function ignored(): static
+    {
+        return $this->state(fn (): array => [
+            'lead_status' => JobLead::STATUS_IGNORED,
+        ]);
     }
 }

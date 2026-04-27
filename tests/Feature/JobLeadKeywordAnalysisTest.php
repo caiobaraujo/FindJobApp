@@ -138,7 +138,7 @@ it('keeps job lead analysis isolated to the authenticated user', function (): vo
     $user = User::factory()->create();
     $otherUser = User::factory()->create();
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Visible Lead Co',
         'job_title' => 'Visible Role',
         'extracted_keywords' => ['laravel', 'testing'],

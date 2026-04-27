@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Str;
 
 class JobLead extends Model
 {
@@ -105,6 +106,17 @@ class JobLead extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function hasMeaningfulAnalysis(): bool
+    {
+        return Str::of((string) $this->description_text)->trim()->isNotEmpty()
+            && ($this->extracted_keywords ?? []) !== [];
+    }
+
+    public function hasLimitedAnalysis(): bool
+    {
+        return ! $this->hasMeaningfulAnalysis();
+    }
+
     public function scopeSearch(Builder $query, ?string $search): Builder
     {
         if (blank($search)) {
@@ -125,6 +137,15 @@ class JobLead extends Model
         }
 
         return $query->where('lead_status', $leadStatus);
+    }
+
+    public function scopeVisibleInWorkspace(Builder $query, bool $showIgnored, ?string $leadStatus): Builder
+    {
+        if ($showIgnored || $leadStatus === self::STATUS_IGNORED) {
+            return $query;
+        }
+
+        return $query->where('lead_status', '!=', self::STATUS_IGNORED);
     }
 
     public function scopeWorkMode(Builder $query, ?string $workMode): Builder

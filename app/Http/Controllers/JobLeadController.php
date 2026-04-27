@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Application;
+use App\Http\Requests\BulkImportJobLeadsRequest;
 use App\Http\Requests\ImportJobLeadFromUrlRequest;
 use App\Http\Requests\StoreJobLeadRequest;
 use App\Http\Requests\UpdateJobLeadRequest;
@@ -18,6 +19,8 @@ use Inertia\Response;
 
 class JobLeadController extends Controller
 {
+    private const BULK_IMPORT_LIMIT = 50;
+
     public function index(Request $request): Response
     {
         $filters = $this->filters($request);
@@ -27,6 +30,7 @@ class JobLeadController extends Controller
         $detectedResumeSkills = $this->detectedResumeSkills($userProfile);
         $jobLeads = JobLead::query()
             ->where('user_id', $request->user()->id)
+            ->visibleInWorkspace($filters['show_ignored'], $filters['lead_status'] ?? null)
             ->leadStatus($filters['lead_status'] ?? null)
             ->workMode($filters['work_mode'] ?? null)
             ->analysisState($filters['analysis_state'] ?? null)
@@ -43,10 +47,12 @@ class JobLeadController extends Controller
                 'analysis_state' => $filters['analysis_state'] ?? '',
                 'lead_status' => $filters['lead_status'] ?? '',
                 'search' => $filters['search'] ?? '',
+                'show_ignored' => $filters['show_ignored'],
                 'work_mode' => $filters['work_mode'] ?? '',
             ],
             'hasResumeProfile' => $userProfile !== null,
             'leadStatuses' => JobLead::leadStatuses(),
+            'leadStatusCounts' => $this->leadStatusCounts($request->user()->id),
             'leadsMissingAnalysisCount' => $this->leadsMissingAnalysisCount($jobLeads),
             'matchedOnly' => $matchedOnly,
             'resumeReady' => $this->resumeReady($userProfile),
@@ -133,6 +139,47 @@ class JobLeadController extends Controller
             ->with('success', __('app.matched_jobs.import_success'));
     }
 
+    public function bulkImportFromUrls(BulkImportJobLeadsRequest $request): RedirectResponse
+    {
+        $urls = $this->bulkImportUrls($request->string('source_urls')->value());
+        $createdCount = 0;
+        $duplicateCount = 0;
+        $invalidCount = 0;
+
+        foreach (array_slice($urls, 0, self::BULK_IMPORT_LIMIT) as $sourceUrl) {
+            if (! $this->isImportableUrl($sourceUrl)) {
+                $invalidCount++;
+
+                continue;
+            }
+
+            $payload = $this->importedJobLeadPayload($request->user()->id, $sourceUrl);
+            $duplicateJobLead = $this->duplicateJobLead(
+                $request->user()->id,
+                $payload['normalized_source_url'] ?? null,
+            );
+
+            if ($duplicateJobLead !== null) {
+                $duplicateCount++;
+
+                continue;
+            }
+
+            JobLead::query()->create($payload);
+            $createdCount++;
+        }
+
+        $invalidCount += max(0, count($urls) - self::BULK_IMPORT_LIMIT);
+
+        return redirect()
+            ->route('job-leads.index')
+            ->with('success', __('app.job_lead_bulk_import.summary', [
+                'created' => $createdCount,
+                'duplicates' => $duplicateCount,
+                'invalid' => $invalidCount,
+            ]));
+    }
+
     public function edit(JobLead $jobLead, Request $request): Response
     {
         $this->authorizeOwner($jobLead, $request);
@@ -182,12 +229,42 @@ class JobLeadController extends Controller
      */
     private function filters(Request $request): array
     {
-        return $request->validate([
+        $filters = $request->validate([
             'analysis_state' => ['nullable', 'string', Rule::in(JobLead::analysisStates())],
             'lead_status' => ['nullable', 'string', Rule::in(JobLead::leadStatuses())],
             'search' => ['nullable', 'string', 'max:255'],
+            'show_ignored' => ['nullable', 'boolean'],
             'work_mode' => ['nullable', 'string', Rule::in(JobLead::workModes())],
         ]);
+
+        $filters['show_ignored'] = $request->boolean('show_ignored');
+
+        return $filters;
+    }
+
+    /**
+     * @return array{active: int, ignored: int, applied: int}
+     */
+    private function leadStatusCounts(int $userId): array
+    {
+        $jobLeads = JobLead::query()
+            ->where('user_id', $userId)
+            ->get(['lead_status']);
+
+        return [
+            'active' => $jobLeads
+                ->filter(fn (JobLead $jobLead): bool => ! in_array($jobLead->lead_status, [
+                    JobLead::STATUS_IGNORED,
+                    JobLead::STATUS_APPLIED,
+                ], true))
+                ->count(),
+            'ignored' => $jobLeads
+                ->where('lead_status', JobLead::STATUS_IGNORED)
+                ->count(),
+            'applied' => $jobLeads
+                ->where('lead_status', JobLead::STATUS_APPLIED)
+                ->count(),
+        ];
     }
 
     private function duplicateJobLead(int $userId, mixed $normalizedSourceUrl): ?JobLead
@@ -216,15 +293,32 @@ class JobLeadController extends Controller
     {
         $sourceUrl = $request->string('source_url')->value();
 
+        return $this->importedJobLeadPayload(
+            $request->user()->id,
+            $sourceUrl,
+            $this->nullableString($request->string('source_name')->value()),
+            $this->nullableString($request->string('company_name')->value()),
+            $this->nullableString($request->string('job_title')->value()) ?? 'Imported job lead',
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function importedJobLeadPayload(
+        int $userId,
+        string $sourceUrl,
+        ?string $sourceName = null,
+        ?string $companyName = null,
+        ?string $jobTitle = null,
+    ): array {
         return array_filter([
-            'user_id' => $request->user()->id,
+            'user_id' => $userId,
             'source_url' => $sourceUrl,
-            'source_name' => $this->nullableString($request->string('source_name')->value()),
+            'source_name' => $sourceName,
             ...$this->canonicalSourceMetadata($sourceUrl),
-            'company_name' => $this->nullableString($request->string('company_name')->value())
-                ?? $this->importCompanyName($sourceUrl),
-            'job_title' => $this->nullableString($request->string('job_title')->value())
-                ?? 'Imported job lead',
+            'company_name' => $companyName ?? $this->importCompanyName($sourceUrl),
+            'job_title' => $jobTitle ?? 'Imported job lead',
             'lead_status' => JobLead::STATUS_SAVED,
             'discovered_at' => today()->toDateString(),
             ...$this->missingJobAnalysisPayload(),
@@ -251,6 +345,7 @@ class JobLeadController extends Controller
             'description_text' => $jobLead->description_text,
             'extracted_keywords' => $jobLead->extracted_keywords ?? [],
             'ats_hints' => $jobLead->ats_hints ?? [],
+            'has_limited_analysis' => $jobLead->hasLimitedAnalysis(),
             'relevance_score' => $jobLead->relevance_score,
             'lead_status' => $jobLead->lead_status,
             'discovered_at' => $jobLead->discovered_at?->toDateString(),
@@ -347,6 +442,7 @@ class JobLeadController extends Controller
                     'source_host' => $jobLead->source_host,
                     'work_mode' => $jobLead->work_mode,
                     'extracted_keywords' => $jobKeywords,
+                    'has_limited_analysis' => $jobLead->hasLimitedAnalysis(),
                     'resume_skills_used' => $detectedResumeSkills,
                     'job_keywords_used' => $jobKeywords,
                     'matched_keywords' => $analysis['matched_keywords'],
@@ -635,6 +731,30 @@ class JobLeadController extends Controller
     private function missingJobAnalysisPayload(): array
     {
         return app(JobLeadKeywordExtractor::class)->analyze(null);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function bulkImportUrls(string $sourceUrls): array
+    {
+        $items = preg_split('/[\s,]+/', trim($sourceUrls)) ?: [];
+
+        return array_values(array_filter(array_map(
+            fn (string $item): ?string => $this->nullableString($item),
+            $items,
+        )));
+    }
+
+    private function isImportableUrl(string $sourceUrl): bool
+    {
+        if (! filter_var($sourceUrl, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+
+        $scheme = parse_url($sourceUrl, PHP_URL_SCHEME);
+
+        return in_array(strtolower((string) $scheme), ['http', 'https'], true);
     }
 
     private function nullableString(string $value): ?string

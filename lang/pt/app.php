@@ -71,6 +71,10 @@ return [
         'all_analysis_states' => 'Todos os estados de análise',
         'work_mode_filter' => 'Modelo de trabalho',
         'all_work_modes' => 'Todos os modelos',
+        'show_ignored' => 'Mostrar vagas ignoradas',
+        'active_leads' => 'Vagas ativas',
+        'ignored_leads' => 'Vagas ignoradas',
+        'applied_leads' => 'Vagas com candidatura',
         'analysis_states' => [
             'analyzed' => 'Com análise de palavras-chave',
             'missing' => 'Sem análise de palavras-chave',
@@ -99,7 +103,8 @@ return [
         'missing_analysis_single' => '1 vaga salva ainda não tem análise de palavras-chave.',
         'missing_analysis_multiple' => ':count vagas salvas ainda não têm análise de palavras-chave.',
         'paste_job_text' => 'Cole o texto da vaga na entrada',
-        'analysis_unavailable' => 'A análise de palavras-chave ainda não está disponível para esta vaga. Cole a descrição para liberar essa análise.',
+        'limited_analysis' => 'Análise limitada',
+        'analysis_unavailable' => 'Adicione a descrição da vaga para melhorar a correspondência. A análise de palavras-chave ainda não está disponível para esta vaga.',
         'quick_actions' => 'Ações rápidas',
     ],
     'job_lead_create' => [
@@ -117,6 +122,18 @@ return [
         'source_name_placeholder' => 'LinkedIn, site da empresa etc.',
         'import_hint' => 'A importação salva a URL agora com status salvo. Análise e enriquecimento podem ser conectados a este fluxo depois.',
         'metadata_hint' => 'Metadados opcionais ajudam na triagem antes de existir uma extração mais profunda.',
+    ],
+    'job_lead_bulk_import' => [
+        'title' => 'Colar várias URLs de vagas',
+        'description' => 'A entrada em massa por URL é uma ponte mais rápida para a descoberta futura. Você fornece as URLs e o app salva cada uma válida como uma vaga honesta, somente por URL.',
+        'source_urls' => 'URLs das vagas',
+        'source_urls_placeholder' => 'https://company.com/jobs/role-one
+https://company.com/jobs/role-two',
+        'separator_hint' => 'Cole até 50 URLs. Separe por quebras de linha, espaços ou vírgulas.',
+        'honesty_hint' => 'A importação em massa salva apenas as URLs como vagas honestas. Ela não busca páginas da vaga nem inventa detalhes ausentes.',
+        'limited_analysis_hint' => 'As vagas importadas apenas por URL continuam clicáveis e mostrarão a mensagem de análise limitada até você adicionar o texto da vaga.',
+        'import_button' => 'Importar URLs',
+        'summary' => 'Importação em massa concluída: :created criadas, :duplicates ignoradas por duplicidade, :invalid ignoradas por serem inválidas.',
     ],
     'job_lead_form' => [
         'source_url' => 'URL da vaga',

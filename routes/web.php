@@ -34,6 +34,7 @@ Route::middleware('auth')->group(function () {
         return redirect()->route('job-leads.create');
     })->name('job-leads.import.entry');
     Route::post('/job-leads/import', [JobLeadController::class, 'importFromUrl'])->name('job-leads.import');
+    Route::post('/job-leads/import/bulk', [JobLeadController::class, 'bulkImportFromUrls'])->name('job-leads.bulk-import');
     Route::resource('job-leads', JobLeadController::class)->except(['show']);
     Route::patch('/applications/{application}/status', [ApplicationController::class, 'updateStatus'])
         ->name('applications.status.update');

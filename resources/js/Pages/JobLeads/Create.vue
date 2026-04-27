@@ -1,5 +1,6 @@
 <script setup>
 import AppShell from '@/Components/ui/AppShell.vue';
+import BulkJobLeadImportForm from '@/Components/BulkJobLeadImportForm.vue';
 import JobLeadForm from '@/Components/JobLeadForm.vue';
 import { useI18n } from '@/composables/useI18n';
 import PageHeader from '@/Components/ui/PageHeader.vue';
@@ -66,19 +67,28 @@ function submit() {
         </template>
 
         <AppShell>
-            <SectionCard
-                :title="t('job_lead_create.card_title', 'Start with the job URL')"
-                :description="t('job_lead_create.card_description', 'URL-first intake keeps discovery fast. URL-only intake saves the lead. Paste job text if you want matching signals right away.')"
-            >
-                <JobLeadForm
-                    :form="form"
-                    :lead-statuses="leadStatuses"
-                    :work-modes="workModes"
-                    mode="create"
-                    :submit-label="t('buttons.add_job', 'Add job')"
-                    @submit="submit"
-                />
-            </SectionCard>
+            <div class="grid gap-6 xl:grid-cols-2">
+                <SectionCard
+                    :title="t('job_lead_create.card_title', 'Start with the job URL')"
+                    :description="t('job_lead_create.card_description', 'URL-first intake keeps discovery fast. URL-only intake saves the lead. Paste job text if you want matching signals right away.')"
+                >
+                    <JobLeadForm
+                        :form="form"
+                        :lead-statuses="leadStatuses"
+                        :work-modes="workModes"
+                        mode="create"
+                        :submit-label="t('buttons.add_job', 'Add job')"
+                        @submit="submit"
+                    />
+                </SectionCard>
+
+                <SectionCard
+                    :title="t('job_lead_bulk_import.title', 'Paste multiple job URLs')"
+                    :description="t('job_lead_bulk_import.description', 'Bulk URL intake is a faster bridge to future discovery. You provide the URLs and the app saves each valid one as an honest, URL-only lead.')"
+                >
+                    <BulkJobLeadImportForm />
+                </SectionCard>
+            </div>
         </AppShell>
     </AuthenticatedLayout>
 </template>

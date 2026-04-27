@@ -113,7 +113,7 @@ it('matches jobs from extracted uploaded resume text', function (): void {
     Storage::fake('local');
     $user = User::factory()->create();
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Extracted Match Co',
         'job_title' => 'Laravel Engineer',
         'source_url' => 'https://example.com/jobs/extracted-match',

@@ -71,6 +71,10 @@ return [
         'all_analysis_states' => 'Todos los estados de análisis',
         'work_mode_filter' => 'Modalidad de trabajo',
         'all_work_modes' => 'Todas las modalidades',
+        'show_ignored' => 'Mostrar empleos ignorados',
+        'active_leads' => 'Empleos activos',
+        'ignored_leads' => 'Empleos ignorados',
+        'applied_leads' => 'Empleos postulados',
         'analysis_states' => [
             'analyzed' => 'Con análisis de palabras clave',
             'missing' => 'Sin análisis de palabras clave',
@@ -99,7 +103,8 @@ return [
         'missing_analysis_single' => '1 empleo guardado todavía no tiene análisis de palabras clave.',
         'missing_analysis_multiple' => ':count empleos guardados todavía no tienen análisis de palabras clave.',
         'paste_job_text' => 'Pega el texto del empleo al registrarlo',
-        'analysis_unavailable' => 'El análisis de palabras clave todavía no está disponible para este empleo. Pega la descripción para desbloquearlo.',
+        'limited_analysis' => 'Análisis limitado',
+        'analysis_unavailable' => 'Agrega una descripción del empleo para mejorar la coincidencia. El análisis de palabras clave todavía no está disponible para este empleo.',
         'quick_actions' => 'Acciones rápidas',
     ],
     'job_lead_create' => [
@@ -117,6 +122,18 @@ return [
         'source_name_placeholder' => 'LinkedIn, sitio de la empresa, etc.',
         'import_hint' => 'La importación guarda ahora la URL con estado guardado. El análisis y el enriquecimiento podrán conectarse a este flujo después.',
         'metadata_hint' => 'Los metadatos opcionales ayudan a priorizar antes de que exista una extracción más profunda.',
+    ],
+    'job_lead_bulk_import' => [
+        'title' => 'Pegar varias URLs de empleos',
+        'description' => 'La carga masiva por URL es un puente más rápido hacia el descubrimiento futuro. Tú proporcionas las URLs y la app guarda cada una válida como un empleo honesto, solo con URL.',
+        'source_urls' => 'URLs de empleos',
+        'source_urls_placeholder' => 'https://company.com/jobs/role-one
+https://company.com/jobs/role-two',
+        'separator_hint' => 'Pega hasta 50 URLs. Sepáralas con saltos de línea, espacios o comas.',
+        'honesty_hint' => 'La importación masiva solo guarda las URLs como empleos honestos. No consulta páginas del empleo ni inventa detalles faltantes.',
+        'limited_analysis_hint' => 'Los empleos importados solo con URL siguen siendo clicables y mostrarán el mensaje de análisis limitado hasta que agregues el texto de la vacante.',
+        'import_button' => 'Importar URLs',
+        'summary' => 'Importación masiva completa: :created creados, :duplicates omitidos por duplicados, :invalid omitidos por inválidos.',
     ],
     'job_lead_form' => [
         'source_url' => 'URL del empleo',

@@ -71,6 +71,10 @@ return [
         'all_analysis_states' => 'All analysis states',
         'work_mode_filter' => 'Work mode',
         'all_work_modes' => 'All work modes',
+        'show_ignored' => 'Show ignored leads',
+        'active_leads' => 'Active leads',
+        'ignored_leads' => 'Ignored leads',
+        'applied_leads' => 'Applied leads',
         'analysis_states' => [
             'analyzed' => 'Has keyword analysis',
             'missing' => 'Missing keyword analysis',
@@ -99,7 +103,8 @@ return [
         'missing_analysis_single' => '1 saved lead does not have keyword analysis yet.',
         'missing_analysis_multiple' => ':count saved leads do not have keyword analysis yet.',
         'paste_job_text' => 'Paste job text on intake',
-        'analysis_unavailable' => 'Keyword analysis is not available yet for this lead. Paste the job description to unlock keyword analysis.',
+        'limited_analysis' => 'Limited analysis',
+        'analysis_unavailable' => 'Add a job description to improve matching. Keyword analysis is not available yet for this lead.',
         'quick_actions' => 'Quick actions',
     ],
     'job_lead_create' => [
@@ -117,6 +122,18 @@ return [
         'source_name_placeholder' => 'LinkedIn, company site, etc.',
         'import_hint' => 'Import stores the URL now with a saved status. Parsing and enrichment can plug into this flow later.',
         'metadata_hint' => 'Optional metadata helps triage before deeper extraction exists.',
+    ],
+    'job_lead_bulk_import' => [
+        'title' => 'Paste multiple job URLs',
+        'description' => 'Bulk URL intake is a faster bridge to future discovery. You provide the URLs and the app saves each valid one as an honest, URL-only lead.',
+        'source_urls' => 'Job URLs',
+        'source_urls_placeholder' => 'https://company.com/jobs/role-one
+https://company.com/jobs/role-two',
+        'separator_hint' => 'Paste up to 50 URLs. Separate them with new lines, spaces, or commas.',
+        'honesty_hint' => 'Bulk import only saves the URLs as honest leads. It does not fetch job pages or invent missing job details.',
+        'limited_analysis_hint' => 'Imported URL-only leads stay clickable and will show limited-analysis messaging until you add job description text.',
+        'import_button' => 'Import URLs',
+        'summary' => 'Bulk import complete: :created created, :duplicates skipped as duplicates, :invalid skipped as invalid.',
     ],
     'job_lead_form' => [
         'source_url' => 'Job URL',

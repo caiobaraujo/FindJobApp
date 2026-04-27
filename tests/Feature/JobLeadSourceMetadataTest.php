@@ -7,13 +7,12 @@ use Inertia\Testing\AssertableInertia as Assert;
 
 it('refreshes canonical source metadata when a job lead source url changes', function (): void {
     $user = User::factory()->create();
-    $jobLead = JobLead::factory()->for($user)->create([
+    $jobLead = JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Northwind',
         'job_title' => 'Platform Engineer',
         'source_url' => 'https://www.example.com/jobs/platform-engineer?ref=feed',
         'normalized_source_url' => 'https://example.com/jobs/platform-engineer',
         'source_host' => 'example.com',
-        'lead_status' => 'saved',
     ]);
 
     $this->actingAs($user)
@@ -48,7 +47,7 @@ it('includes source metadata in matched job cards', function (): void {
         'core_skills' => ['Laravel', 'Vue'],
     ]);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Northwind',
         'job_title' => 'Senior Laravel Engineer',
         'source_name' => 'Company Site',

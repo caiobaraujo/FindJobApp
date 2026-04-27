@@ -59,19 +59,19 @@ it('rejects invalid relevance scores', function (): void {
 it('orders job leads by highest relevance score first', function (): void {
     $user = User::factory()->create();
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Lower Score Co',
         'job_title' => 'Backend Engineer',
         'relevance_score' => 40,
     ]);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Highest Score Co',
         'job_title' => 'Staff Engineer',
         'relevance_score' => 95,
     ]);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Middle Score Co',
         'job_title' => 'Product Engineer',
         'relevance_score' => 75,
@@ -91,13 +91,13 @@ it('orders null relevance scores after scored leads and keeps user isolation', f
     $user = User::factory()->create();
     $otherUser = User::factory()->create();
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Scored Lead Co',
         'job_title' => 'Growth Engineer',
         'relevance_score' => 82,
     ]);
 
-    JobLead::factory()->for($user)->create([
+    JobLead::factory()->for($user)->saved()->create([
         'company_name' => 'Unscored Lead Co',
         'job_title' => 'Operations Analyst',
         'relevance_score' => null,
