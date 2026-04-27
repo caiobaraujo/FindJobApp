@@ -22,6 +22,10 @@ const props = defineProps({
         type: String,
         required: true,
     },
+    workModes: {
+        type: Array,
+        default: () => [],
+    },
 });
 
 const { t } = useI18n();
@@ -175,6 +179,90 @@ function formattedFileSize(size) {
                         {{ t('resume.core_skills_helper', 'Separate skills with commas or new lines.') }}
                     </p>
                     <InputError class="mt-2" :message="form.errors.core_skills" />
+                </div>
+
+                <div class="md:col-span-2 rounded-3xl border border-white/10 bg-black/20 p-5">
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slateglass-400">
+                                {{ t('resume.job_search_preferences', 'Job search preferences') }}
+                            </p>
+                            <p class="mt-2 text-sm leading-7 text-slateglass-300">
+                                {{ t('resume.job_search_preferences_description', 'Save the roles, locations, and work modes you want so future discovery can rank jobs more usefully without guessing.') }}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-5 grid gap-6 md:grid-cols-2">
+                        <div>
+                            <label for="target_roles" class="premium-input-label">{{ t('resume.target_roles', 'Target roles') }}</label>
+                            <textarea
+                                id="target_roles"
+                                v-model="form.target_roles"
+                                rows="4"
+                                class="mt-2 block w-full"
+                                :placeholder="t('resume.target_roles_placeholder', 'Product Engineer, Platform Engineer, Software Engineer')"
+                            />
+                            <p class="mt-2 text-xs uppercase tracking-[0.18em] text-slateglass-400">
+                                {{ t('resume.target_roles_helper', 'Separate roles with commas or new lines.') }}
+                            </p>
+                            <InputError class="mt-2" :message="form.errors.target_roles" />
+                        </div>
+
+                        <div>
+                            <label for="preferred_locations" class="premium-input-label">{{ t('resume.preferred_locations', 'Preferred locations') }}</label>
+                            <textarea
+                                id="preferred_locations"
+                                v-model="form.preferred_locations"
+                                rows="4"
+                                class="mt-2 block w-full"
+                                :placeholder="t('resume.preferred_locations_placeholder', 'Remote\nSao Paulo, Brazil\nLisbon, Portugal')"
+                            />
+                            <p class="mt-2 text-xs uppercase tracking-[0.18em] text-slateglass-400">
+                                {{ t('resume.preferred_locations_helper', 'Add one location per line.') }}
+                            </p>
+                            <InputError class="mt-2" :message="form.errors.preferred_locations" />
+                        </div>
+
+                        <div class="md:col-span-2">
+                            <p class="premium-input-label">{{ t('resume.preferred_work_modes', 'Preferred work modes') }}</p>
+                            <div class="mt-3 flex flex-wrap gap-3">
+                                <label
+                                    v-for="workMode in workModes"
+                                    :key="workMode"
+                                    class="inline-flex items-center gap-3 rounded-full border border-white/10 bg-black/20 px-4 py-2 text-sm text-slateglass-200"
+                                >
+                                    <input
+                                        v-model="form.preferred_work_modes"
+                                        type="checkbox"
+                                        :value="workMode"
+                                        class="rounded border-white/20 bg-transparent text-gold-400 focus:ring-gold-400/40"
+                                    >
+                                    <span>{{ t(`job_lead_form.work_modes.${workMode}`, workMode) }}</span>
+                                </label>
+                            </div>
+                            <InputError class="mt-2" :message="form.errors.preferred_work_modes" />
+                        </div>
+
+                        <div class="md:col-span-2 rounded-3xl border border-white/10 bg-white/[0.03] p-4">
+                            <label class="inline-flex items-start gap-3 text-sm text-slateglass-200">
+                                <input
+                                    v-model="form.auto_discover_jobs"
+                                    type="checkbox"
+                                    class="mt-1 rounded border-white/20 bg-transparent text-gold-400 focus:ring-gold-400/40"
+                                >
+                                <span>
+                                    <span class="block font-medium text-white">
+                                        {{ t('resume.auto_discover_jobs', 'Automatically find new jobs for me') }}
+                                    </span>
+                                    <span class="mt-1 block leading-6 text-slateglass-300">
+                                        {{ t('resume.auto_discover_jobs_helper', 'When enabled, scheduled discovery will add new public job leads to your workspace automatically.') }}
+                                    </span>
+                                </span>
+                            </label>
+                            <InputError class="mt-2" :message="form.errors.auto_discover_jobs" />
+                        </div>
+                    </div>
                 </div>
 
                 <div class="md:col-span-2">

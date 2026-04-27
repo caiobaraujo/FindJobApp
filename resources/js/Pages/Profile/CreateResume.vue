@@ -16,12 +16,20 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    workModes: {
+        type: Array,
+        required: true,
+    },
 });
 
 const { t } = useI18n();
 
 const form = useForm({
     target_role: props.userProfile?.target_role ?? '',
+    target_roles: props.userProfile?.target_roles?.join(', ') ?? '',
+    preferred_locations: props.userProfile?.preferred_locations?.join('\n') ?? '',
+    preferred_work_modes: props.userProfile?.preferred_work_modes ?? [],
+    auto_discover_jobs: Boolean(props.userProfile?.auto_discover_jobs),
     professional_summary: props.userProfile?.professional_summary ?? '',
     core_skills: props.userProfile?.core_skills?.join(', ') ?? '',
     work_experience_text: props.userProfile?.work_experience_text ?? '',
@@ -71,6 +79,7 @@ function submit() {
             >
                 <UserProfileForm
                     :form="form"
+                    :work-modes="props.workModes"
                     mode="create"
                     :submit-label="props.hasResumeProfile
                         ? t('resume.update_setup', 'Update resume setup')

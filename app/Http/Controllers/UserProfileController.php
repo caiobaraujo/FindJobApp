@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreUserProfileRequest;
 use App\Http\Requests\UpdateUserProfileRequest;
+use App\Models\JobLead;
 use App\Models\UserProfile;
 use App\Services\JobLeadKeywordExtractor;
 use App\Services\ResumeTextExtractor;
@@ -26,6 +27,7 @@ class UserProfileController extends Controller
             'hasResumeProfile' => $userProfile !== null,
             'detectedResumeSkills' => $this->detectedResumeSkills($userProfile),
             'userProfile' => $this->userProfileData($userProfile),
+            'workModes' => JobLead::workModes(),
         ]);
     }
 
@@ -39,6 +41,7 @@ class UserProfileController extends Controller
             'hasResumeProfile' => $userProfile !== null,
             'detectedResumeSkills' => $this->detectedResumeSkills($userProfile),
             'userProfile' => $this->userProfileData($userProfile),
+            'workModes' => JobLead::workModes(),
         ]);
     }
 
@@ -91,6 +94,10 @@ class UserProfileController extends Controller
         $payload = [
             'user_id' => $userId,
             'target_role' => $this->nullableString($validatedData['target_role'] ?? null),
+            'target_roles' => $this->stringList($validatedData['target_roles'] ?? null),
+            'preferred_locations' => $this->lineList($validatedData['preferred_locations'] ?? null),
+            'preferred_work_modes' => $this->workModes($validatedData['preferred_work_modes'] ?? null),
+            'auto_discover_jobs' => (bool) ($validatedData['auto_discover_jobs'] ?? false),
             'professional_summary' => $this->nullableString($validatedData['professional_summary'] ?? null),
             'core_skills' => $this->coreSkills($validatedData['core_skills'] ?? null),
             'work_experience_text' => $this->nullableString($validatedData['work_experience_text'] ?? null),
@@ -121,6 +128,10 @@ class UserProfileController extends Controller
 
         return [
             'target_role' => $userProfile->target_role,
+            'target_roles' => $userProfile->target_roles ?? [],
+            'preferred_locations' => $userProfile->preferred_locations ?? [],
+            'preferred_work_modes' => $userProfile->preferred_work_modes ?? [],
+            'auto_discover_jobs' => (bool) $userProfile->auto_discover_jobs,
             'professional_summary' => $userProfile->professional_summary,
             'core_skills' => $userProfile->core_skills ?? [],
             'work_experience_text' => $userProfile->work_experience_text,
@@ -149,21 +160,71 @@ class UserProfileController extends Controller
      */
     private function coreSkills(mixed $value): ?array
     {
+        return $this->stringList($value);
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    private function stringList(mixed $value): ?array
+    {
         if (! is_string($value)) {
             return null;
         }
 
-        $skills = preg_split('/[\n,]+/', $value) ?: [];
-        $skills = array_values(array_unique(array_filter(array_map(
-            fn (string $skill): ?string => $this->nullableString($skill),
-            $skills,
+        $items = preg_split('/[\n,]+/', $value) ?: [];
+        $items = array_values(array_unique(array_filter(array_map(
+            fn (string $item): ?string => $this->nullableString($item),
+            $items,
         ))));
 
-        if ($skills === []) {
+        if ($items === []) {
             return null;
         }
 
-        return $skills;
+        return $items;
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    private function lineList(mixed $value): ?array
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $items = preg_split('/[\n]+/', $value) ?: [];
+        $items = array_values(array_unique(array_filter(array_map(
+            fn (string $item): ?string => $this->nullableString($item),
+            $items,
+        ))));
+
+        if ($items === []) {
+            return null;
+        }
+
+        return $items;
+    }
+
+    /**
+     * @return list<string>|null
+     */
+    private function workModes(mixed $value): ?array
+    {
+        if (! is_array($value)) {
+            return null;
+        }
+
+        $workModes = array_values(array_unique(array_filter($value, function (mixed $workMode): bool {
+            return is_string($workMode) && in_array($workMode, JobLead::workModes(), true);
+        })));
+
+        if ($workModes === []) {
+            return null;
+        }
+
+        return $workModes;
     }
 
     private function nullableString(mixed $value): ?string

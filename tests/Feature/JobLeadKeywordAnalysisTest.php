@@ -2,6 +2,7 @@
 
 use App\Models\JobLead;
 use App\Models\User;
+use Inertia\Testing\AssertableInertia as Assert;
 
 it('persists analysis fields when a job lead is created', function (): void {
     $user = User::factory()->create();
@@ -158,7 +159,12 @@ it('keeps job lead analysis isolated to the authenticated user', function (): vo
         ->assertSee('Visible Lead Co')
         ->assertSee('laravel')
         ->assertDontSee('Hidden Lead Co')
-        ->assertDontSee('python');
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Visible Lead Co')
+            ->where('matchedJobs.0.job_keywords_used.0', 'laravel')
+        );
 });
 
 

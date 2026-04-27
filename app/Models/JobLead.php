@@ -32,6 +32,10 @@ class JobLead extends Model
 
     public const ANALYSIS_STATE_MISSING = 'missing';
 
+    public const ANALYSIS_READINESS_READY = 'ready';
+
+    public const ANALYSIS_READINESS_NEEDS_DESCRIPTION = 'needs_description';
+
     protected $fillable = [
         'user_id',
         'company_name',
@@ -85,6 +89,17 @@ class JobLead extends Model
         return [
             self::ANALYSIS_STATE_ANALYZED,
             self::ANALYSIS_STATE_MISSING,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function analysisReadinessOptions(): array
+    {
+        return [
+            self::ANALYSIS_READINESS_READY,
+            self::ANALYSIS_READINESS_NEEDS_DESCRIPTION,
         ];
     }
 
@@ -181,6 +196,30 @@ class JobLead extends Model
         });
     }
 
+    public function scopeAnalysisReadiness(Builder $query, ?string $analysisReadiness): Builder
+    {
+        if (blank($analysisReadiness)) {
+            return $query;
+        }
+
+        if ($analysisReadiness === self::ANALYSIS_READINESS_READY) {
+            return $query
+                ->whereNotNull('description_text')
+                ->whereJsonLength('extracted_keywords', '>', 0);
+        }
+
+        if ($analysisReadiness !== self::ANALYSIS_READINESS_NEEDS_DESCRIPTION) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $builder): void {
+            $builder
+                ->whereNull('description_text')
+                ->orWhereNull('extracted_keywords')
+                ->orWhereJsonLength('extracted_keywords', 0);
+        });
+    }
+
     public function scopeMinimumRelevanceScore(Builder $query, ?int $minimumRelevanceScore): Builder
     {
         if ($minimumRelevanceScore === null) {
@@ -194,6 +233,14 @@ class JobLead extends Model
     public function scopeOrderByPriority(Builder $query): Builder
     {
         return $query
+            ->orderByRaw(
+                "case
+                    when lead_status = ? then 1
+                    when lead_status = ? then 2
+                    else 0
+                end",
+                [self::STATUS_APPLIED, self::STATUS_IGNORED],
+            )
             ->orderByRaw('relevance_score IS NULL')
             ->orderByDesc('relevance_score')
             ->latest();

@@ -6,7 +6,7 @@ import { nextTick, onMounted, ref } from 'vue';
 
 defineEmits(['submit']);
 
-defineProps({
+const props = defineProps({
     form: {
         type: Object,
         required: true,

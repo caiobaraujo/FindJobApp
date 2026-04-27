@@ -72,6 +72,122 @@ it('does not mark analyzed leads as limited analysis', function (): void {
         );
 });
 
+it('orders ready to evaluate leads ahead of limited analysis leads by default', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Needs Description Co',
+        'description_text' => null,
+        'extracted_keywords' => [],
+        'relevance_score' => 99,
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Ready Lead Co',
+        'description_text' => 'Laravel and Vue role.',
+        'extracted_keywords' => ['laravel', 'vue'],
+        'relevance_score' => 10,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 2)
+            ->where('matchedJobs.0.company_name', 'Ready Lead Co')
+            ->where('matchedJobs.1.company_name', 'Needs Description Co')
+        );
+});
+
+it('orders higher relevance leads ahead of lower relevance leads when analysis quality is tied', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Lower Score Co',
+        'description_text' => 'Laravel and Vue role.',
+        'extracted_keywords' => ['laravel', 'vue'],
+        'relevance_score' => 40,
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Higher Score Co',
+        'description_text' => 'Laravel and Vue role.',
+        'extracted_keywords' => ['laravel', 'vue'],
+        'relevance_score' => 90,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 2)
+            ->where('matchedJobs.0.company_name', 'Higher Score Co')
+            ->where('matchedJobs.1.company_name', 'Lower Score Co')
+        );
+});
+
+it('orders active leads ahead of applied leads in the default workspace', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->applied()->create([
+        'company_name' => 'Applied Lead Co',
+        'description_text' => 'Laravel and Vue role.',
+        'extracted_keywords' => ['laravel', 'vue'],
+        'relevance_score' => 95,
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Active Lead Co',
+        'description_text' => 'Laravel and Vue role.',
+        'extracted_keywords' => ['laravel', 'vue'],
+        'relevance_score' => 20,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 2)
+            ->where('matchedJobs.0.company_name', 'Active Lead Co')
+            ->where('matchedJobs.1.company_name', 'Applied Lead Co')
+        );
+});
+
+it('uses newest leads as the fallback order when usefulness signals are tied', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Older Lead Co',
+        'description_text' => 'Laravel and Vue role.',
+        'extracted_keywords' => ['laravel', 'vue'],
+        'relevance_score' => 70,
+        'created_at' => now()->subDays(2),
+        'updated_at' => now()->subDays(2),
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Newer Lead Co',
+        'description_text' => 'Laravel and Vue role.',
+        'extracted_keywords' => ['laravel', 'vue'],
+        'relevance_score' => 70,
+        'created_at' => now()->subHour(),
+        'updated_at' => now()->subHour(),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 2)
+            ->where('matchedJobs.0.company_name', 'Newer Lead Co')
+            ->where('matchedJobs.1.company_name', 'Older Lead Co')
+        );
+});
+
 it('shows ignored leads when explicitly requested in the saved job workspace', function (): void {
     $user = User::factory()->create();
 
@@ -167,6 +283,85 @@ it('filters the saved job workspace by analysis state', function (): void {
         );
 });
 
+it('filters the saved job workspace by analysis readiness needs description', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Needs Description Co',
+        'description_text' => null,
+        'extracted_keywords' => [],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Ready Lead Co',
+        'description_text' => 'Full job description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', ['analysis_readiness' => JobLead::ANALYSIS_READINESS_NEEDS_DESCRIPTION]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.analysis_readiness', JobLead::ANALYSIS_READINESS_NEEDS_DESCRIPTION)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Needs Description Co')
+            ->where('matchedJobs.0.has_limited_analysis', true)
+        );
+});
+
+it('filters the saved job workspace by analysis readiness ready to evaluate', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Needs Description Co',
+        'description_text' => null,
+        'extracted_keywords' => [],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Ready Lead Co',
+        'description_text' => 'Full job description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', ['analysis_readiness' => JobLead::ANALYSIS_READINESS_READY]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.analysis_readiness', JobLead::ANALYSIS_READINESS_READY)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Ready Lead Co')
+            ->where('matchedJobs.0.has_limited_analysis', false)
+        );
+});
+
+it('returns both readiness states when analysis readiness is all', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Needs Description Co',
+        'description_text' => null,
+        'extracted_keywords' => [],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Ready Lead Co',
+        'description_text' => 'Full job description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', ['analysis_readiness' => 'all']))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.analysis_readiness', '')
+            ->has('matchedJobs', 2)
+        );
+});
+
 it('filters the saved job workspace by work mode and keeps user scoping intact', function (): void {
     $user = User::factory()->create();
     $otherUser = User::factory()->create();
@@ -196,6 +391,48 @@ it('filters the saved job workspace by work mode and keeps user scoping intact',
             ->where('matchedJobs.0.company_name', 'Remote Lead Co')
         )
         ->assertDontSee('Other User Remote Co');
+});
+
+it('composes analysis readiness with work mode filters and keeps user scoping intact', function (): void {
+    $user = User::factory()->create();
+    $otherUser = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Remote Needs Description Co',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => null,
+        'extracted_keywords' => [],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Remote Ready Co',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => 'Full job description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    JobLead::factory()->for($otherUser)->saved()->create([
+        'company_name' => 'Other User Remote Needs Description Co',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => null,
+        'extracted_keywords' => [],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'analysis_readiness' => JobLead::ANALYSIS_READINESS_NEEDS_DESCRIPTION,
+            'work_mode' => JobLead::WORK_MODE_REMOTE,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.analysis_readiness', JobLead::ANALYSIS_READINESS_NEEDS_DESCRIPTION)
+            ->where('filters.work_mode', JobLead::WORK_MODE_REMOTE)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Remote Needs Description Co')
+        )
+        ->assertDontSee('Remote Ready Co')
+        ->assertDontSee('Other User Remote Needs Description Co');
 });
 
 it('keeps matched only mode active when lead status filters are applied', function (): void {

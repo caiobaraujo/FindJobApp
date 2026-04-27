@@ -16,7 +16,8 @@ it('allows an authenticated user to import a job lead from a valid url', functio
             'company_name' => 'Northwind',
             'job_title' => 'Staff Engineer',
         ])
-        ->assertRedirect(route('job-leads.index'));
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.matched_jobs.import_success'));
 
     $jobLead = JobLead::query()->sole();
 
@@ -59,7 +60,8 @@ it('sets default import values for new job leads', function (): void {
         ->post(route('job-leads.import'), [
             'source_url' => 'https://example.com/jobs/design-lead',
         ])
-        ->assertRedirect(route('job-leads.index'));
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.matched_jobs.import_success'));
 
     $jobLead = JobLead::query()->sole();
 

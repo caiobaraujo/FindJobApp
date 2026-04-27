@@ -23,6 +23,12 @@ const navigationItems = [
         tone: 'primary',
     },
     {
+        label: 'nav.job_leads',
+        routeName: 'job-leads.index',
+        active: 'job-leads.*',
+        tone: 'secondary',
+    },
+    {
         label: 'nav.resume',
         routeName: 'resume-profile.show',
         active: 'resume-profile.*',

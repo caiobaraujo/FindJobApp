@@ -10,6 +10,12 @@ class UserProfile extends Model
     protected $fillable = [
         'user_id',
         'target_role',
+        'target_roles',
+        'preferred_locations',
+        'preferred_work_modes',
+        'auto_discover_jobs',
+        'last_discovered_at',
+        'last_discovered_new_count',
         'professional_summary',
         'core_skills',
         'work_experience_text',
@@ -26,6 +32,12 @@ class UserProfile extends Model
     {
         return [
             'core_skills' => 'array',
+            'target_roles' => 'array',
+            'preferred_locations' => 'array',
+            'preferred_work_modes' => 'array',
+            'auto_discover_jobs' => 'boolean',
+            'last_discovered_at' => 'datetime',
+            'last_discovered_new_count' => 'integer',
         ];
     }
 

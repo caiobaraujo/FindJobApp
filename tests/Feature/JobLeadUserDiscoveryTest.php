@@ -1,0 +1,189 @@
+<?php
+
+use App\Models\JobLead;
+use App\Models\User;
+use App\Models\UserProfile;
+use Illuminate\Support\Facades\Http;
+use Inertia\Testing\AssertableInertia as Assert;
+
+it('does not allow guests to trigger job discovery', function (): void {
+    $this->post(route('job-leads.discover'))
+        ->assertRedirect(route('login'));
+});
+
+it('allows an authenticated user to trigger discovery for their own workspace', function (): void {
+    $user = User::factory()->create();
+    $otherUser = User::factory()->create();
+
+    $userProfile = UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Resume text',
+        'auto_discover_jobs' => false,
+    ]);
+
+    $otherUserProfile = UserProfile::query()->create([
+        'user_id' => $otherUser->id,
+        'base_resume_text' => 'Other resume text',
+        'auto_discover_jobs' => false,
+    ]);
+
+    Http::fake([
+        'https://www.python.org/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_listing.html')), 200),
+        'https://www.python.org/jobs/1001/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_ready.html')), 200),
+        'https://www.python.org/jobs/1002/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_limited.html')), 200),
+        'https://www.djangoproject.com/community/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/django_community_jobs_listing.html')), 200),
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('job-leads.discover'))
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.job_discovery.summary', [
+            'fetched' => 6,
+            'created' => 4,
+            'duplicates' => 0,
+            'invalid' => 2,
+            'failed' => 0,
+        ]));
+
+    expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(4)
+        ->and(JobLead::query()->where('user_id', $otherUser->id)->count())->toBe(0);
+
+    $userProfile->refresh();
+    $otherUserProfile->refresh();
+
+    expect($userProfile->last_discovered_at)->not->toBeNull()
+        ->and($userProfile->last_discovered_new_count)->toBe(4)
+        ->and($otherUserProfile->last_discovered_at)->toBeNull()
+        ->and($otherUserProfile->last_discovered_new_count)->toBeNull();
+});
+
+it('shares source level discovery results through flash after redirect', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Resume text',
+        'auto_discover_jobs' => false,
+    ]);
+
+    Http::fake([
+        'https://www.python.org/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_listing.html')), 200),
+        'https://www.python.org/jobs/1001/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_ready.html')), 200),
+        'https://www.python.org/jobs/1002/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_limited.html')), 200),
+        'https://www.djangoproject.com/community/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/django_community_jobs_listing.html')), 200),
+    ]);
+
+    $this->actingAs($user)
+        ->followingRedirects()
+        ->post(route('job-leads.discover'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('discoveryStatus.last_discovered_new_count', 4)
+            ->has('flash.discovery', 2)
+            ->where('flash.discovery.0.source', 'python-job-board')
+            ->where('flash.discovery.0.fetched', 3)
+            ->where('flash.discovery.0.created', 2)
+            ->where('flash.discovery.0.duplicates', 0)
+            ->where('flash.discovery.0.invalid', 1)
+            ->where('flash.discovery.0.failed', 0)
+            ->where('flash.discovery.1.source', 'django-community-jobs')
+            ->where('flash.discovery.1.fetched', 3)
+            ->where('flash.discovery.1.created', 2)
+            ->where('flash.discovery.1.duplicates', 0)
+            ->where('flash.discovery.1.invalid', 1)
+            ->where('flash.discovery.1.failed', 0)
+        );
+});
+
+it('skips duplicates when the user triggers discovery again', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Resume text',
+        'auto_discover_jobs' => false,
+    ]);
+
+    Http::fake([
+        'https://www.python.org/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_listing.html')), 200),
+        'https://www.python.org/jobs/1001/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_ready.html')), 200),
+        'https://www.python.org/jobs/1002/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_limited.html')), 200),
+        'https://www.djangoproject.com/community/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/django_community_jobs_listing.html')), 200),
+    ]);
+
+    $this->actingAs($user)->post(route('job-leads.discover'))->assertRedirect(route('job-leads.index'));
+
+    Http::fake([
+        'https://www.python.org/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_listing.html')), 200),
+        'https://www.python.org/jobs/1001/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_ready.html')), 200),
+        'https://www.python.org/jobs/1002/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_limited.html')), 200),
+        'https://www.djangoproject.com/community/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/django_community_jobs_listing.html')), 200),
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('job-leads.discover'))
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.job_discovery.summary', [
+            'fetched' => 6,
+            'created' => 0,
+            'duplicates' => 4,
+            'invalid' => 2,
+            'failed' => 0,
+        ]));
+
+    $userProfile = UserProfile::query()->where('user_id', $user->id)->sole();
+
+    expect($userProfile->last_discovered_at)->not->toBeNull()
+        ->and($userProfile->last_discovered_new_count)->toBe(0);
+});
+
+it('returns a summary even when one discovery source fails', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Resume text',
+        'auto_discover_jobs' => false,
+    ]);
+
+    Http::fake([
+        'https://www.python.org/jobs/' => Http::response('Upstream error', 500),
+        'https://www.djangoproject.com/community/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/django_community_jobs_listing.html')), 200),
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('job-leads.discover'))
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.job_discovery.summary', [
+            'fetched' => 3,
+            'created' => 2,
+            'duplicates' => 0,
+            'invalid' => 1,
+            'failed' => 1,
+        ]))
+        ->assertSessionHas('discovery', [
+            [
+                'source' => 'python-job-board',
+                'fetched' => 0,
+                'created' => 0,
+                'duplicates' => 0,
+                'invalid' => 0,
+                'failed' => 1,
+            ],
+            [
+                'source' => 'django-community-jobs',
+                'fetched' => 3,
+                'created' => 2,
+                'duplicates' => 0,
+                'invalid' => 1,
+                'failed' => 0,
+            ],
+        ]);
+
+    $userProfile = UserProfile::query()->where('user_id', $user->id)->sole();
+
+    expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(2)
+        ->and($userProfile->last_discovered_at)->not->toBeNull()
+        ->and($userProfile->last_discovered_new_count)->toBe(2);
+});

@@ -18,6 +18,11 @@ class UpdateUserProfileRequest extends FormRequest
     {
         return [
             'target_role' => ['nullable', 'string', 'max:255'],
+            'target_roles' => ['nullable', 'string', 'max:2000'],
+            'preferred_locations' => ['nullable', 'string', 'max:2000'],
+            'preferred_work_modes' => ['nullable', 'array'],
+            'preferred_work_modes.*' => ['string', 'in:remote,hybrid,onsite'],
+            'auto_discover_jobs' => ['nullable', 'boolean'],
             'professional_summary' => ['nullable', 'string', 'max:5000'],
             'core_skills' => ['nullable', 'string', 'max:5000'],
             'work_experience_text' => ['nullable', 'string', 'max:10000'],

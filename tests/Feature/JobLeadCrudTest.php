@@ -30,7 +30,8 @@ it('allows an authenticated user to manage job leads', function (): void {
 
     $this->actingAs($user)
         ->post(route('job-leads.store'), $payload)
-        ->assertRedirect(route('job-leads.index'));
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.job_lead_edit.create_success'));
 
     $jobLead = JobLead::query()->firstOrFail();
 
@@ -65,7 +66,8 @@ it('allows an authenticated user to manage job leads', function (): void {
             'lead_status' => 'shortlisted',
             'discovered_at' => '2026-04-23',
         ])
-        ->assertRedirect(route('job-leads.index'));
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.job_lead_edit.update_success'));
 
     $this->assertDatabaseHas('job_leads', [
         'id' => $jobLead->id,

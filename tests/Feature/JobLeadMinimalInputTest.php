@@ -10,7 +10,8 @@ it('allows an authenticated user to create a job lead with only source url', fun
         ->post(route('job-leads.store'), [
             'source_url' => 'https://jobs.example-company.com/openings/senior-product-engineer',
         ])
-        ->assertRedirect(route('job-leads.index'));
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.job_lead_edit.create_success'));
 
     $this->assertDatabaseHas('job_leads', [
         'user_id' => $user->id,

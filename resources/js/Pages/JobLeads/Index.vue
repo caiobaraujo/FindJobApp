@@ -7,13 +7,21 @@ import EmptyState from '@/Components/ui/EmptyState.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
-import { Head, Link, router } from '@inertiajs/vue3';
-import { reactive } from 'vue';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
+import { computed, reactive } from 'vue';
 
 const props = defineProps({
+    analysisReadinessOptions: {
+        type: Array,
+        required: true,
+    },
     analysisStates: {
         type: Array,
         required: true,
+    },
+    discoveryStatus: {
+        type: Object,
+        default: null,
     },
     filters: {
         type: Object,
@@ -58,8 +66,12 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
+const discoveryForm = useForm({});
+const page = usePage();
+const discoveryResults = computed(() => page.props.flash?.discovery || []);
 
 const filterForm = reactive({
+    analysis_readiness: props.filters.analysis_readiness || '',
     analysis_state: props.filters.analysis_state || '',
     lead_status: props.filters.lead_status || '',
     search: props.filters.search || '',
@@ -86,7 +98,16 @@ function submitFilters() {
     });
 }
 
+function runDiscovery() {
+    if (discoveryForm.processing) {
+        return;
+    }
+
+    discoveryForm.post(route('job-leads.discover'));
+}
+
 function resetFilters() {
+    filterForm.analysis_readiness = '';
     filterForm.analysis_state = '';
     filterForm.lead_status = '';
     filterForm.search = '';
@@ -105,6 +126,22 @@ function workModeLabel(workMode) {
 
 function analysisStateLabel(analysisState) {
     return t(`matched_jobs.analysis_states.${analysisState}`, analysisState);
+}
+
+function analysisReadinessLabel(analysisReadiness) {
+    return t(`matched_jobs.analysis_readiness.${analysisReadiness}`, analysisReadiness);
+}
+
+function discoverySourceLabel(source) {
+    return t(`job_discovery.sources.${source.replaceAll('-', '_')}`, source);
+}
+
+function discoverySourceStatusClasses(sourceResult) {
+    if ((sourceResult.failed || 0) > 0) {
+        return 'border-amber-400/20 bg-amber-400/10 text-amber-100';
+    }
+
+    return 'border-white/10 bg-black/20 text-white';
 }
 
 function analysisStateFor(jobLead) {
@@ -141,6 +178,52 @@ function matchQualityFor(jobLead) {
 
 function matchQualityLabel(jobLead) {
     return t(`matched_jobs.match_quality.${matchQualityFor(jobLead)}`, 'Match quality');
+}
+
+function preferenceFitLabel(preferenceFit) {
+    if (!preferenceFit?.status) {
+        return null;
+    }
+
+    return t(`matched_jobs.preference_fit.${preferenceFit.status}`, preferenceFit.status);
+}
+
+function preferenceFitReasons(jobLead) {
+    const preferenceFit = jobLead.preference_fit;
+
+    if (!preferenceFit) {
+        return [];
+    }
+
+    const matchedReasons = (preferenceFit.matched || []).map((reason) => ({
+        key: `${reason}-match`,
+        label: t(`matched_jobs.preference_fit.reasons.${reason}_match`, reason),
+        tone: 'match',
+    }));
+
+    const mismatchedReasons = (preferenceFit.mismatched || []).map((reason) => ({
+        key: `${reason}-mismatch`,
+        label: t(`matched_jobs.preference_fit.reasons.${reason}_mismatch`, reason),
+        tone: 'mismatch',
+    }));
+
+    return [...matchedReasons, ...mismatchedReasons].slice(0, 2);
+}
+
+function preferenceFitClasses(preferenceFit) {
+    if (!preferenceFit?.status) {
+        return '';
+    }
+
+    if (preferenceFit.status === 'match') {
+        return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200';
+    }
+
+    if (preferenceFit.status === 'partial') {
+        return 'border-gold-300/20 bg-gold-300/10 text-gold-200';
+    }
+
+    return 'border-red-400/20 bg-red-400/10 text-red-200';
 }
 
 function visibleMatchedKeywords(jobLead) {
@@ -225,6 +308,21 @@ function setLeadStatus(jobLead, leadStatus) {
                 >
                     {{ t('buttons.resume_setup', 'Resume setup') }}
                 </Link>
+                <div class="max-w-sm">
+                    <button
+                        type="button"
+                        class="premium-button-secondary w-full justify-center disabled:cursor-not-allowed disabled:opacity-60"
+                        :disabled="discoveryForm.processing"
+                        @click="runDiscovery"
+                    >
+                        {{ discoveryForm.processing
+                            ? t('job_discovery.finding_jobs', 'Finding jobs...')
+                            : t('job_discovery.find_jobs', 'Find jobs') }}
+                    </button>
+                    <p class="mt-2 text-sm leading-6 text-slateglass-300">
+                        {{ t('job_discovery.helper', 'Search supported public sources and add new matching leads to your workspace.') }}
+                    </p>
+                </div>
                 <Link
                     :href="route('job-leads.create')"
                     class="premium-button-secondary"
@@ -237,6 +335,49 @@ function setLeadStatus(jobLead, leadStatus) {
                 :title="t('matched_jobs.filter_title', 'Find a match faster')"
                 :description="t('matched_jobs.filter_description', 'Search by company or role. The list is already narrowed to jobs with at least one detected match when your resume is ready.')"
             >
+                <div
+                    v-if="discoveryStatus"
+                    class="mb-5 text-sm leading-6 text-slateglass-300"
+                >
+                    <p>
+                        {{ t('job_discovery.last_update', 'Last update: :time', { time: discoveryStatus.last_discovered_at_human }) }}
+                    </p>
+                    <p>
+                        {{ discoveryStatus.last_discovered_new_count > 0
+                            ? t('job_discovery.new_jobs_found', ':count new jobs found', { count: discoveryStatus.last_discovered_new_count })
+                            : t('job_discovery.no_new_jobs_found', 'No new jobs found') }}
+                    </p>
+                </div>
+
+                <div
+                    v-if="discoveryResults.length"
+                    class="mb-5 grid gap-3 lg:grid-cols-2"
+                >
+                    <div
+                        v-for="sourceResult in discoveryResults"
+                        :key="sourceResult.source"
+                        class="rounded-3xl border px-5 py-4"
+                        :class="discoverySourceStatusClasses(sourceResult)"
+                    >
+                        <div class="flex items-start justify-between gap-3">
+                            <div>
+                                <p class="text-sm font-semibold text-white">
+                                    {{ discoverySourceLabel(sourceResult.source) }}
+                                </p>
+                                <p class="mt-1 text-xs text-slateglass-300">
+                                    {{ t('job_discovery.source_summary', 'Fetched :fetched, created :created, duplicates :duplicates, invalid :invalid, failed :failed.', sourceResult) }}
+                                </p>
+                            </div>
+                            <span
+                                v-if="sourceResult.failed > 0"
+                                class="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100"
+                            >
+                                {{ t('job_discovery.partial_failure', 'Some failures') }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="mb-5 grid gap-3 md:grid-cols-3">
                     <div class="rounded-3xl border border-white/10 bg-black/20 px-5 py-4">
                         <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slateglass-400">
@@ -279,7 +420,7 @@ function setLeadStatus(jobLead, leadStatus) {
                     </Link>
                 </div>
 
-                <form @submit.prevent="submitFilters" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,180px))]">
+                <form @submit.prevent="submitFilters" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_repeat(4,minmax(0,180px))]">
                     <div>
                         <label for="search" class="premium-input-label">{{ t('matched_jobs.search', 'Search') }}</label>
                         <input
@@ -305,6 +446,24 @@ function setLeadStatus(jobLead, leadStatus) {
                                 :value="leadStatus"
                             >
                                 {{ leadStatusLabel(leadStatus) }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="analysis_readiness" class="premium-input-label">{{ t('matched_jobs.analysis_readiness_filter', 'Analysis readiness') }}</label>
+                        <select
+                            id="analysis_readiness"
+                            v-model="filterForm.analysis_readiness"
+                            class="mt-2 block w-full"
+                        >
+                            <option value="">{{ t('matched_jobs.all_analysis_readiness', 'All leads') }}</option>
+                            <option
+                                v-for="analysisReadiness in analysisReadinessOptions"
+                                :key="analysisReadiness"
+                                :value="analysisReadiness"
+                            >
+                                {{ analysisReadinessLabel(analysisReadiness) }}
                             </option>
                         </select>
                     </div>
@@ -345,7 +504,7 @@ function setLeadStatus(jobLead, leadStatus) {
                         </select>
                     </div>
 
-                    <div class="xl:col-span-4 flex flex-wrap items-center justify-between gap-3">
+                    <div class="xl:col-span-5 flex flex-wrap items-center justify-between gap-3">
                         <label class="flex items-center gap-3 text-sm text-slateglass-300">
                             <input
                                 v-model="filterForm.show_ignored"
@@ -488,6 +647,13 @@ function setLeadStatus(jobLead, leadStatus) {
                                 >
                                     {{ matchQualityLabel(jobLead) }}
                                 </span>
+                                <span
+                                    v-if="jobLead.preference_fit"
+                                    class="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                                    :class="preferenceFitClasses(jobLead.preference_fit)"
+                                >
+                                    {{ preferenceFitLabel(jobLead.preference_fit) }}
+                                </span>
                             </div>
                             <div class="mt-6 grid gap-4 xl:grid-cols-2">
                                 <div class="rounded-3xl border border-emerald-400/12 bg-emerald-400/[0.05] p-5">
@@ -539,6 +705,22 @@ function setLeadStatus(jobLead, leadStatus) {
                             >
                                 {{ jobLead.ats_hint }}
                             </p>
+
+                            <div
+                                v-if="jobLead.preference_fit"
+                                class="mt-5 flex flex-wrap gap-2"
+                            >
+                                <span
+                                    v-for="reason in preferenceFitReasons(jobLead)"
+                                    :key="reason.key"
+                                    class="rounded-full border px-3 py-1 text-xs font-medium"
+                                    :class="reason.tone === 'match'
+                                        ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+                                        : 'border-red-400/20 bg-red-400/10 text-red-200'"
+                                >
+                                    {{ reason.label }}
+                                </span>
+                            </div>
 
                             <div class="mt-6 flex flex-wrap items-center gap-3">
                                 <a
