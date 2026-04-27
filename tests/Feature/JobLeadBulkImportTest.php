@@ -110,6 +110,166 @@ it('bulk imported leads are saved active visible and limited analysis', function
         );
 });
 
+it('re analyzes a bulk imported url only lead when a meaningful description is added', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('job-leads.bulk-import'), [
+            'source_urls' => 'https://example.com/jobs/enrich-me',
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $jobLead = JobLead::query()->where('user_id', $user->id)->sole();
+    $descriptionText = 'We need a Laravel engineer with Vue, SQL, and API testing experience.';
+
+    $this->actingAs($user)
+        ->patch(route('job-leads.update', $jobLead), [
+            'company_name' => $jobLead->company_name,
+            'job_title' => $jobLead->job_title,
+            'source_name' => $jobLead->source_name,
+            'source_url' => $jobLead->source_url,
+            'location' => $jobLead->location,
+            'work_mode' => $jobLead->work_mode,
+            'salary_range' => $jobLead->salary_range,
+            'description_excerpt' => $jobLead->description_excerpt,
+            'description_text' => $descriptionText,
+            'relevance_score' => $jobLead->relevance_score,
+            'lead_status' => $jobLead->lead_status,
+            'discovered_at' => optional($jobLead->discovered_at)->toDateString(),
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $jobLead->refresh();
+
+    expect($jobLead->description_text)->toBe($descriptionText)
+        ->and($jobLead->extracted_keywords)->toContain('laravel')
+        ->and($jobLead->extracted_keywords)->toContain('vue')
+        ->and($jobLead->ats_hints)->not->toBeEmpty();
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('matchedJobs.0.has_limited_analysis', false)
+        );
+});
+
+it('replaces extracted keywords when a job description is replaced', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('job-leads.bulk-import'), [
+            'source_urls' => 'https://example.com/jobs/replace-description',
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $jobLead = JobLead::query()->where('user_id', $user->id)->sole();
+
+    $this->actingAs($user)
+        ->patch(route('job-leads.update', $jobLead), [
+            'company_name' => $jobLead->company_name,
+            'job_title' => $jobLead->job_title,
+            'source_name' => $jobLead->source_name,
+            'source_url' => $jobLead->source_url,
+            'location' => $jobLead->location,
+            'work_mode' => $jobLead->work_mode,
+            'salary_range' => $jobLead->salary_range,
+            'description_excerpt' => $jobLead->description_excerpt,
+            'description_text' => 'Laravel engineer with Vue and SQL ownership.',
+            'relevance_score' => $jobLead->relevance_score,
+            'lead_status' => $jobLead->lead_status,
+            'discovered_at' => optional($jobLead->discovered_at)->toDateString(),
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $this->actingAs($user)
+        ->patch(route('job-leads.update', $jobLead), [
+            'company_name' => $jobLead->company_name,
+            'job_title' => $jobLead->job_title,
+            'source_name' => $jobLead->source_name,
+            'source_url' => $jobLead->source_url,
+            'location' => $jobLead->location,
+            'work_mode' => $jobLead->work_mode,
+            'salary_range' => $jobLead->salary_range,
+            'description_excerpt' => $jobLead->description_excerpt,
+            'description_text' => 'Python backend role with FastAPI, PostgreSQL, and automation experience.',
+            'relevance_score' => $jobLead->relevance_score,
+            'lead_status' => $jobLead->lead_status,
+            'discovered_at' => optional($jobLead->discovered_at)->toDateString(),
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $jobLead->refresh();
+
+    expect($jobLead->extracted_keywords)->toContain('python')
+        ->and($jobLead->extracted_keywords)->toContain('postgresql')
+        ->and($jobLead->extracted_keywords)->not->toContain('laravel')
+        ->and($jobLead->extracted_keywords)->not->toContain('vue');
+});
+
+it('returns a bulk imported lead to limited analysis when the description is cleared', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('job-leads.bulk-import'), [
+            'source_urls' => 'https://example.com/jobs/clear-description',
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $jobLead = JobLead::query()->where('user_id', $user->id)->sole();
+
+    $this->actingAs($user)
+        ->patch(route('job-leads.update', $jobLead), [
+            'company_name' => $jobLead->company_name,
+            'job_title' => $jobLead->job_title,
+            'source_name' => $jobLead->source_name,
+            'source_url' => $jobLead->source_url,
+            'location' => $jobLead->location,
+            'work_mode' => $jobLead->work_mode,
+            'salary_range' => $jobLead->salary_range,
+            'description_excerpt' => $jobLead->description_excerpt,
+            'description_text' => 'Laravel engineer with Vue and SQL ownership.',
+            'relevance_score' => $jobLead->relevance_score,
+            'lead_status' => $jobLead->lead_status,
+            'discovered_at' => optional($jobLead->discovered_at)->toDateString(),
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $this->actingAs($user)
+        ->patch(route('job-leads.update', $jobLead), [
+            'company_name' => $jobLead->company_name,
+            'job_title' => $jobLead->job_title,
+            'source_name' => $jobLead->source_name,
+            'source_url' => $jobLead->source_url,
+            'location' => $jobLead->location,
+            'work_mode' => $jobLead->work_mode,
+            'salary_range' => $jobLead->salary_range,
+            'description_excerpt' => $jobLead->description_excerpt,
+            'description_text' => '',
+            'relevance_score' => $jobLead->relevance_score,
+            'lead_status' => $jobLead->lead_status,
+            'discovered_at' => optional($jobLead->discovered_at)->toDateString(),
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $jobLead->refresh();
+
+    expect($jobLead->description_text)->toBeNull()
+        ->and($jobLead->extracted_keywords)->toBe([])
+        ->and($jobLead->ats_hints)->toBe([
+            'Paste the full job description to unlock ATS keyword analysis.',
+        ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('matchedJobs.0.has_limited_analysis', true)
+        );
+});
+
 it('does not allow guests to bulk import job urls', function (): void {
     $this->post(route('job-leads.bulk-import'), [
         'source_urls' => 'https://example.com/jobs/guest-blocked',

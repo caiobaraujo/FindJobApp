@@ -556,6 +556,13 @@ function setLeadStatus(jobLead, leadStatus) {
                                 >
                                     {{ t('matched_jobs.review_match', 'Review match') }}
                                 </Link>
+                                <Link
+                                    v-if="jobLead.has_limited_analysis"
+                                    :href="`${route('job-leads.edit', jobLead.id)}?focus=description#job-description`"
+                                    class="premium-button-secondary"
+                                >
+                                    {{ t('matched_jobs.add_description', 'Add description') }}
+                                </Link>
                             </div>
 
                             <div class="mt-5 flex flex-wrap items-center gap-2">

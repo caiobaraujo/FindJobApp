@@ -7,6 +7,7 @@ import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
+import { onMounted, ref } from 'vue';
 
 const props = defineProps({
     jobLead: {
@@ -43,6 +44,14 @@ const form = useForm({
 });
 const deleteForm = useForm({});
 const { t } = useI18n();
+const focusDescription = ref(false);
+
+onMounted(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+
+    focusDescription.value = searchParams.get('focus') === 'description'
+        || window.location.hash === '#job-description';
+});
 
 function submit() {
     form.put(route('job-leads.update', props.jobLead.id));
@@ -94,6 +103,7 @@ function deleteJobLead() {
                     :form="form"
                     :lead-statuses="leadStatuses"
                     :work-modes="workModes"
+                    :focus-description="focusDescription"
                     :submit-label="t('job_lead_edit.save_changes', 'Save changes')"
                     @submit="submit"
                 />

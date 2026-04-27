@@ -2,6 +2,7 @@
 import InputError from '@/Components/InputError.vue';
 import TextInput from '@/Components/TextInput.vue';
 import { useI18n } from '@/composables/useI18n';
+import { nextTick, onMounted, ref } from 'vue';
 
 defineEmits(['submit']);
 
@@ -22,6 +23,10 @@ defineProps({
         type: String,
         default: 'edit',
     },
+    focusDescription: {
+        type: Boolean,
+        default: false,
+    },
     workModes: {
         type: Array,
         required: true,
@@ -29,6 +34,21 @@ defineProps({
 });
 
 const { t } = useI18n();
+const descriptionTextarea = ref(null);
+
+onMounted(() => {
+    if (! props.focusDescription) {
+        return;
+    }
+
+    nextTick(() => {
+        descriptionTextarea.value?.focus();
+        descriptionTextarea.value?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+        });
+    });
+});
 
 function workModeLabel(workMode) {
     return t(`job_lead_form.work_modes.${workMode}`, workMode);
@@ -230,14 +250,23 @@ function leadStatusLabel(leadStatus) {
 
             <div
                 v-if="mode !== 'create'"
+                id="job-description"
                 class="mt-6 rounded-3xl border border-gold-300/15 bg-gradient-to-br from-gold-400/8 via-white/[0.03] to-transparent p-6"
+                :class="focusDescription ? 'ring-1 ring-gold-300/40' : ''"
             >
+                <div
+                    v-if="focusDescription"
+                    class="mb-4 rounded-2xl border border-gold-300/20 bg-gold-300/10 px-4 py-3 text-sm text-gold-100"
+                >
+                    {{ t('job_lead_edit.focus_description_hint', 'Paste the full job description here to improve deterministic matching for this lead.') }}
+                </div>
                 <label for="description_text" class="premium-input-label">{{ t('job_lead_form.description_text_edit', 'Job description (ATS analysis)') }}</label>
                 <p class="mt-2 text-sm text-slateglass-300">
                     {{ t('job_lead_form.description_text_edit_description', 'Optional. Paste the full job description to extract keywords and optimize your resume.') }}
                 </p>
                 <textarea
                     id="description_text"
+                    ref="descriptionTextarea"
                     v-model="form.description_text"
                     rows="10"
                     class="mt-4 block w-full"
