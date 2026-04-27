@@ -11,6 +11,10 @@ import { Head, Link, router } from '@inertiajs/vue3';
 import { reactive } from 'vue';
 
 const props = defineProps({
+    analysisStates: {
+        type: Array,
+        required: true,
+    },
     filters: {
         type: Object,
         required: true,
@@ -21,6 +25,10 @@ const props = defineProps({
     },
     hasResumeProfile: {
         type: Boolean,
+        required: true,
+    },
+    leadStatuses: {
+        type: Array,
         required: true,
     },
     leadsMissingAnalysisCount: {
@@ -39,16 +47,34 @@ const props = defineProps({
         type: Boolean,
         required: true,
     },
+    workModes: {
+        type: Array,
+        required: true,
+    },
 });
 
 const { t } = useI18n();
 
 const filterForm = reactive({
+    analysis_state: props.filters.analysis_state || '',
+    lead_status: props.filters.lead_status || '',
     search: props.filters.search || '',
+    work_mode: props.filters.work_mode || '',
 });
 
+const leadStatusActions = ['saved', 'shortlisted', 'applied', 'ignored'];
+const leadStatusUpdates = reactive({});
+
+function workspaceRoute() {
+    if (route().current('job-leads.index')) {
+        return route('job-leads.index');
+    }
+
+    return route('matched-jobs.index');
+}
+
 function submitFilters() {
-    router.get(route('matched-jobs.index'), filterForm, {
+    router.get(workspaceRoute(), filterForm, {
         preserveState: true,
         preserveScroll: true,
         replace: true,
@@ -56,8 +82,95 @@ function submitFilters() {
 }
 
 function resetFilters() {
+    filterForm.analysis_state = '';
+    filterForm.lead_status = '';
     filterForm.search = '';
+    filterForm.work_mode = '';
     submitFilters();
+}
+
+function leadStatusLabel(leadStatus) {
+    return t(`job_lead_form.statuses.${leadStatus}`, leadStatus);
+}
+
+function workModeLabel(workMode) {
+    return t(`job_lead_form.work_modes.${workMode}`, workMode);
+}
+
+function analysisStateLabel(analysisState) {
+    return t(`matched_jobs.analysis_states.${analysisState}`, analysisState);
+}
+
+function analysisStateFor(jobLead) {
+    return jobLead.job_keywords_used.length > 0
+        ? 'analyzed'
+        : 'missing';
+}
+
+function matchQualityFor(jobLead) {
+    const matchedCount = jobLead.matched_keywords.length;
+    const missingCount = jobLead.missing_keywords.length;
+    const totalCount = matchedCount + missingCount;
+
+    if (totalCount === 0) {
+        return 'missing';
+    }
+
+    const matchRatio = matchedCount / totalCount;
+
+    if (matchedCount >= 4 && matchRatio >= 0.8) {
+        return 'strong';
+    }
+
+    if (matchedCount >= 2 && matchRatio >= 0.5) {
+        return 'good';
+    }
+
+    if (matchedCount >= 1) {
+        return 'fair';
+    }
+
+    return 'missing';
+}
+
+function matchQualityLabel(jobLead) {
+    return t(`matched_jobs.match_quality.${matchQualityFor(jobLead)}`, 'Match quality');
+}
+
+function visibleMatchedKeywords(jobLead) {
+    return jobLead.matched_keywords.slice(0, 5);
+}
+
+function hiddenMatchedKeywordCount(jobLead) {
+    return Math.max(0, jobLead.matched_keywords.length - 5);
+}
+
+function leadStatusActionClasses(jobLead, leadStatus) {
+    if (jobLead.lead_status === leadStatus) {
+        return 'border-gold-300/20 bg-gold-300/10 text-gold-100';
+    }
+
+    return 'border-white/10 bg-black/20 text-slateglass-300 hover:border-white/20 hover:bg-white/10 hover:text-white';
+}
+
+function setLeadStatus(jobLead, leadStatus) {
+    if (jobLead.lead_status === leadStatus || leadStatusUpdates[jobLead.id]) {
+        return;
+    }
+
+    leadStatusUpdates[jobLead.id] = leadStatus;
+
+    router.patch(route('job-leads.update', jobLead.id), {
+        lead_status: leadStatus,
+        stay_on_page: true,
+    }, {
+        preserveScroll: true,
+        preserveState: true,
+        replace: true,
+        onFinish: () => {
+            delete leadStatusUpdates[jobLead.id];
+        },
+    });
 }
 
 </script>
@@ -133,7 +246,7 @@ function resetFilters() {
                     </Link>
                 </div>
 
-                <form @submit.prevent="submitFilters" class="grid gap-4 xl:grid-cols-[1fr_auto]">
+                <form @submit.prevent="submitFilters" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,180px))]">
                     <div>
                         <label for="search" class="premium-input-label">{{ t('matched_jobs.search', 'Search') }}</label>
                         <input
@@ -145,7 +258,61 @@ function resetFilters() {
                         >
                     </div>
 
-                    <div class="flex items-end gap-3">
+                    <div>
+                        <label for="lead_status" class="premium-input-label">{{ t('matched_jobs.lead_status_filter', 'Lead status') }}</label>
+                        <select
+                            id="lead_status"
+                            v-model="filterForm.lead_status"
+                            class="mt-2 block w-full"
+                        >
+                            <option value="">{{ t('matched_jobs.all_lead_statuses', 'All statuses') }}</option>
+                            <option
+                                v-for="leadStatus in leadStatuses"
+                                :key="leadStatus"
+                                :value="leadStatus"
+                            >
+                                {{ leadStatusLabel(leadStatus) }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="analysis_state" class="premium-input-label">{{ t('matched_jobs.analysis_state_filter', 'Analysis state') }}</label>
+                        <select
+                            id="analysis_state"
+                            v-model="filterForm.analysis_state"
+                            class="mt-2 block w-full"
+                        >
+                            <option value="">{{ t('matched_jobs.all_analysis_states', 'All analysis states') }}</option>
+                            <option
+                                v-for="analysisState in analysisStates"
+                                :key="analysisState"
+                                :value="analysisState"
+                            >
+                                {{ analysisStateLabel(analysisState) }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label for="work_mode" class="premium-input-label">{{ t('matched_jobs.work_mode_filter', 'Work mode') }}</label>
+                        <select
+                            id="work_mode"
+                            v-model="filterForm.work_mode"
+                            class="mt-2 block w-full"
+                        >
+                            <option value="">{{ t('matched_jobs.all_work_modes', 'All work modes') }}</option>
+                            <option
+                                v-for="workMode in workModes"
+                                :key="workMode"
+                                :value="workMode"
+                            >
+                                {{ workModeLabel(workMode) }}
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="xl:col-span-4 flex items-end gap-3">
                         <button
                             type="submit"
                             class="premium-button-primary"
@@ -239,6 +406,39 @@ function resetFilters() {
                             <p class="mt-2 text-sm text-slateglass-300">
                                 {{ jobLead.job_title }}
                             </p>
+                            <div class="mt-4 flex flex-wrap items-center gap-2">
+                                <span
+                                    class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slateglass-300"
+                                >
+                                    {{ leadStatusLabel(jobLead.lead_status) }}
+                                </span>
+                                <span
+                                    v-if="jobLead.work_mode"
+                                    class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slateglass-400"
+                                >
+                                    {{ workModeLabel(jobLead.work_mode) }}
+                                </span>
+                                <span
+                                    class="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                                    :class="analysisStateFor(jobLead) === 'analyzed'
+                                        ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+                                        : 'border-gold-300/20 bg-gold-300/10 text-gold-200'"
+                                >
+                                    {{ analysisStateLabel(analysisStateFor(jobLead)) }}
+                                </span>
+                                <span
+                                    class="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                                    :class="matchQualityFor(jobLead) === 'strong'
+                                        ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+                                        : matchQualityFor(jobLead) === 'good'
+                                            ? 'border-gold-300/20 bg-gold-300/10 text-gold-200'
+                                            : matchQualityFor(jobLead) === 'fair'
+                                                ? 'border-white/10 bg-white/5 text-slateglass-200'
+                                                : 'border-red-400/20 bg-red-400/10 text-red-200'"
+                                >
+                                    {{ matchQualityLabel(jobLead) }}
+                                </span>
+                            </div>
                             <div class="mt-6 grid gap-4 xl:grid-cols-2">
                                 <div class="rounded-3xl border border-emerald-400/12 bg-emerald-400/[0.05] p-5">
                                     <p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300/90">
@@ -246,11 +446,17 @@ function resetFilters() {
                                     </p>
                                     <div class="mt-3 flex flex-wrap gap-2">
                                         <span
-                                            v-for="keyword in jobLead.matched_keywords"
+                                            v-for="keyword in visibleMatchedKeywords(jobLead)"
                                             :key="keyword"
                                             class="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-200"
                                         >
                                             {{ keyword }}
+                                        </span>
+                                        <span
+                                            v-if="hiddenMatchedKeywordCount(jobLead) > 0"
+                                            class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs font-medium text-slateglass-300"
+                                        >
+                                            +{{ hiddenMatchedKeywordCount(jobLead) }} {{ t('matched_jobs.more_keywords', 'more') }}
                                         </span>
                                     </div>
                                 </div>
@@ -300,6 +506,24 @@ function resetFilters() {
                                 >
                                     {{ t('matched_jobs.review_match', 'Review match') }}
                                 </Link>
+                            </div>
+
+                            <div class="mt-5 flex flex-wrap items-center gap-2">
+                                <span class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slateglass-400">
+                                    {{ t('matched_jobs.quick_actions', 'Quick actions') }}
+                                </span>
+                                <button
+                                    v-for="leadStatus in leadStatusActions"
+                                    :key="leadStatus"
+                                    type="button"
+                                    class="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] transition"
+                                    :class="leadStatusActionClasses(jobLead, leadStatus)"
+                                    :disabled="Boolean(leadStatusUpdates[jobLead.id])"
+                                    :aria-pressed="jobLead.lead_status === leadStatus"
+                                    @click="setLeadStatus(jobLead, leadStatus)"
+                                >
+                                    {{ leadStatusLabel(leadStatus) }}
+                                </button>
                             </div>
 
                             <div

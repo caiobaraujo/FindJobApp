@@ -27,6 +27,10 @@ class JobLead extends Model
 
     public const WORK_MODE_ONSITE = 'onsite';
 
+    public const ANALYSIS_STATE_ANALYZED = 'analyzed';
+
+    public const ANALYSIS_STATE_MISSING = 'missing';
+
     protected $fillable = [
         'user_id',
         'company_name',
@@ -73,6 +77,17 @@ class JobLead extends Model
     }
 
     /**
+     * @return list<string>
+     */
+    public static function analysisStates(): array
+    {
+        return [
+            self::ANALYSIS_STATE_ANALYZED,
+            self::ANALYSIS_STATE_MISSING,
+        ];
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -100,6 +115,48 @@ class JobLead extends Model
             $builder
                 ->where('company_name', 'like', "%{$search}%")
                 ->orWhere('job_title', 'like', "%{$search}%");
+        });
+    }
+
+    public function scopeLeadStatus(Builder $query, ?string $leadStatus): Builder
+    {
+        if (blank($leadStatus)) {
+            return $query;
+        }
+
+        return $query->where('lead_status', $leadStatus);
+    }
+
+    public function scopeWorkMode(Builder $query, ?string $workMode): Builder
+    {
+        if (blank($workMode)) {
+            return $query;
+        }
+
+        return $query->where('work_mode', $workMode);
+    }
+
+    public function scopeAnalysisState(Builder $query, ?string $analysisState): Builder
+    {
+        if (blank($analysisState)) {
+            return $query;
+        }
+
+        if ($analysisState === self::ANALYSIS_STATE_ANALYZED) {
+            return $query
+                ->whereNotNull('description_text')
+                ->whereJsonLength('extracted_keywords', '>', 0);
+        }
+
+        if ($analysisState !== self::ANALYSIS_STATE_MISSING) {
+            return $query;
+        }
+
+        return $query->where(function (Builder $builder): void {
+            $builder
+                ->whereNull('description_text')
+                ->orWhereNull('extracted_keywords')
+                ->orWhereJsonLength('extracted_keywords', 0);
         });
     }
 

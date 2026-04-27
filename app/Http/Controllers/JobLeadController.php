@@ -20,15 +20,16 @@ class JobLeadController extends Controller
 {
     public function index(Request $request): Response
     {
-        $filters = $request->validate([
-            'search' => ['nullable', 'string', 'max:255'],
-        ]);
+        $filters = $this->filters($request);
 
         $userProfile = $this->userProfile($request->user()->id);
         $matchedOnly = $request->routeIs('matched-jobs.index');
         $detectedResumeSkills = $this->detectedResumeSkills($userProfile);
         $jobLeads = JobLead::query()
             ->where('user_id', $request->user()->id)
+            ->leadStatus($filters['lead_status'] ?? null)
+            ->workMode($filters['work_mode'] ?? null)
+            ->analysisState($filters['analysis_state'] ?? null)
             ->orderByPriority()
             ->search($filters['search'] ?? null)
             ->get();
@@ -36,16 +37,22 @@ class JobLeadController extends Controller
         $matchedJobs = $this->jobCards($jobLeads, $userProfile, $matchedOnly, $detectedResumeSkills);
 
         return Inertia::render('JobLeads/Index', [
-            'filters' => [
-                'search' => $filters['search'] ?? '',
-            ],
+            'analysisStates' => JobLead::analysisStates(),
             'detectedResumeSkills' => $detectedResumeSkills,
+            'filters' => [
+                'analysis_state' => $filters['analysis_state'] ?? '',
+                'lead_status' => $filters['lead_status'] ?? '',
+                'search' => $filters['search'] ?? '',
+                'work_mode' => $filters['work_mode'] ?? '',
+            ],
             'hasResumeProfile' => $userProfile !== null,
+            'leadStatuses' => JobLead::leadStatuses(),
             'leadsMissingAnalysisCount' => $this->leadsMissingAnalysisCount($jobLeads),
             'matchedOnly' => $matchedOnly,
             'resumeReady' => $this->resumeReady($userProfile),
             'resumeNeedsTextInput' => $this->resumeNeedsTextInput($userProfile),
             'matchedJobs' => $matchedJobs,
+            'workModes' => JobLead::workModes(),
         ]);
     }
 
@@ -85,13 +92,22 @@ class JobLeadController extends Controller
 
     public function store(StoreJobLeadRequest $request): RedirectResponse
     {
-        JobLead::query()->create(
-            $this->jobLeadPayload(
-                $request->validated(),
-                $request->user()->id,
-                true,
-            ),
+        $payload = $this->jobLeadPayload(
+            $request->validated(),
+            $request->user()->id,
+            true,
         );
+
+        $duplicateJobLead = $this->duplicateJobLead(
+            $request->user()->id,
+            $payload['normalized_source_url'] ?? null,
+        );
+
+        if ($duplicateJobLead !== null) {
+            return $this->duplicateJobLeadRedirect($duplicateJobLead);
+        }
+
+        JobLead::query()->create($payload);
 
         return redirect()
             ->route('job-leads.index')
@@ -100,7 +116,17 @@ class JobLeadController extends Controller
 
     public function importFromUrl(ImportJobLeadFromUrlRequest $request): RedirectResponse
     {
-        JobLead::query()->create($this->importedJobLeadData($request));
+        $payload = $this->importedJobLeadData($request);
+        $duplicateJobLead = $this->duplicateJobLead(
+            $request->user()->id,
+            $payload['normalized_source_url'] ?? null,
+        );
+
+        if ($duplicateJobLead !== null) {
+            return $this->duplicateJobLeadRedirect($duplicateJobLead);
+        }
+
+        JobLead::query()->create($payload);
 
         return redirect()
             ->route('job-leads.index')
@@ -124,11 +150,12 @@ class JobLeadController extends Controller
         $validatedData = $request->validated();
 
         $jobLead->update(
-            $this->jobLeadPayload(
-                $validatedData,
-                syncAnalysis: array_key_exists('description_text', $validatedData),
-            ),
+            $this->jobLeadUpdatePayload($jobLead, $validatedData),
         );
+
+        if ($request->boolean('stay_on_page')) {
+            return back()->with('success', __('app.job_lead_edit.update_success'));
+        }
 
         return redirect()
             ->route('job-leads.index')
@@ -148,6 +175,38 @@ class JobLeadController extends Controller
     private function authorizeOwner(JobLead $jobLead, Request $request): void
     {
         abort_unless($request->user()->id === $jobLead->user_id, 403);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function filters(Request $request): array
+    {
+        return $request->validate([
+            'analysis_state' => ['nullable', 'string', Rule::in(JobLead::analysisStates())],
+            'lead_status' => ['nullable', 'string', Rule::in(JobLead::leadStatuses())],
+            'search' => ['nullable', 'string', 'max:255'],
+            'work_mode' => ['nullable', 'string', Rule::in(JobLead::workModes())],
+        ]);
+    }
+
+    private function duplicateJobLead(int $userId, mixed $normalizedSourceUrl): ?JobLead
+    {
+        if (! is_string($normalizedSourceUrl) || $normalizedSourceUrl === '') {
+            return null;
+        }
+
+        return JobLead::query()
+            ->where('user_id', $userId)
+            ->where('normalized_source_url', $normalizedSourceUrl)
+            ->first();
+    }
+
+    private function duplicateJobLeadRedirect(JobLead $jobLead): RedirectResponse
+    {
+        return redirect()
+            ->route('job-leads.edit', $jobLead)
+            ->with('error', __('app.job_lead_create.duplicate_error'));
     }
 
     /**
@@ -282,9 +341,11 @@ class JobLeadController extends Controller
                     'id' => $jobLead->id,
                     'company_name' => $jobLead->company_name,
                     'job_title' => $jobLead->job_title,
+                    'lead_status' => $jobLead->lead_status,
                     'source_name' => $jobLead->source_name,
                     'source_url' => $jobLead->source_url,
                     'source_host' => $jobLead->source_host,
+                    'work_mode' => $jobLead->work_mode,
                     'extracted_keywords' => $jobKeywords,
                     'resume_skills_used' => $detectedResumeSkills,
                     'job_keywords_used' => $jobKeywords,
@@ -465,6 +526,44 @@ class JobLeadController extends Controller
         }
 
         return $payload;
+    }
+
+    /**
+     * @param array<string, mixed> $validatedData
+     * @return array<string, mixed>
+     */
+    private function jobLeadUpdatePayload(JobLead $jobLead, array $validatedData): array
+    {
+        return $this->jobLeadPayload([
+            'company_name' => $validatedData['company_name'] ?? $jobLead->company_name,
+            'job_title' => $validatedData['job_title'] ?? $jobLead->job_title,
+            'source_name' => array_key_exists('source_name', $validatedData)
+                ? $validatedData['source_name']
+                : $jobLead->source_name,
+            'source_url' => $validatedData['source_url'] ?? $jobLead->source_url,
+            'location' => array_key_exists('location', $validatedData)
+                ? $validatedData['location']
+                : $jobLead->location,
+            'work_mode' => array_key_exists('work_mode', $validatedData)
+                ? $validatedData['work_mode']
+                : $jobLead->work_mode,
+            'salary_range' => array_key_exists('salary_range', $validatedData)
+                ? $validatedData['salary_range']
+                : $jobLead->salary_range,
+            'description_excerpt' => array_key_exists('description_excerpt', $validatedData)
+                ? $validatedData['description_excerpt']
+                : $jobLead->description_excerpt,
+            'description_text' => array_key_exists('description_text', $validatedData)
+                ? $validatedData['description_text']
+                : $jobLead->description_text,
+            'relevance_score' => array_key_exists('relevance_score', $validatedData)
+                ? $validatedData['relevance_score']
+                : $jobLead->relevance_score,
+            'lead_status' => $validatedData['lead_status'] ?? $jobLead->lead_status,
+            'discovered_at' => array_key_exists('discovered_at', $validatedData)
+                ? $validatedData['discovered_at']
+                : $jobLead->discovered_at?->toDateString(),
+        ], syncAnalysis: array_key_exists('description_text', $validatedData));
     }
 
     /**
