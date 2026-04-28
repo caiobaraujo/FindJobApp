@@ -131,10 +131,14 @@ class LaraJobsDiscoverySource extends AbstractHtmlJobDiscoverySource
                 continue;
             }
 
+            if (! $this->isPotentialCandidateLink($href, $text)) {
+                continue;
+            }
+
             $candidateCount++;
             $detailUrl = $this->absoluteUrl($href);
 
-            if (! $this->isValidListingLink($detailUrl, $text)) {
+            if (! $this->isValidListingLink($detailUrl)) {
                 $invalidCount++;
 
                 continue;
@@ -163,7 +167,20 @@ class LaraJobsDiscoverySource extends AbstractHtmlJobDiscoverySource
         ];
     }
 
-    private function isValidListingLink(?string $detailUrl, string $text): bool
+    private function isPotentialCandidateLink(string $href, string $text): bool
+    {
+        if (! $this->isJobPath($href)) {
+            return false;
+        }
+
+        if (! $this->softwareTextMatches($text)) {
+            return false;
+        }
+
+        return preg_match('/\b\d+\s?(?:h|d|w)\b/i', $text) === 1;
+    }
+
+    private function isValidListingLink(?string $detailUrl): bool
     {
         if (! is_string($detailUrl) || ! filter_var($detailUrl, FILTER_VALIDATE_URL)) {
             return false;
@@ -184,11 +201,18 @@ class LaraJobsDiscoverySource extends AbstractHtmlJobDiscoverySource
             return false;
         }
 
-        if (! $this->softwareTextMatches($text)) {
-            return false;
+        return str_starts_with($path, '/jobs/');
+    }
+
+    private function isJobPath(string $href): bool
+    {
+        if (str_starts_with($href, '/jobs/')) {
+            return true;
         }
 
-        return preg_match('/\b\d+\s?(?:h|d|w)\b/i', $text) === 1;
+        $path = parse_url($href, PHP_URL_PATH);
+
+        return is_string($path) && str_starts_with($path, '/jobs/');
     }
 
     /**

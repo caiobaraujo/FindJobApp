@@ -81,10 +81,10 @@ it('discovers larajobs leads for laravel and javascript coverage', function (): 
         'user_id' => $user->id,
         'source' => 'larajobs',
     ])
-        ->expectsOutput('Fetched: 4')
+        ->expectsOutput('Fetched: 2')
         ->expectsOutput('Created: 2')
         ->expectsOutput('Duplicates skipped: 0')
-        ->expectsOutput('Invalid skipped: 2')
+        ->expectsOutput('Invalid skipped: 0')
         ->expectsOutput('Failed: 0')
         ->assertExitCode(0);
 
@@ -115,11 +115,11 @@ it('imports only matching laravel jobs from larajobs when a laravel query is use
         'source' => 'larajobs',
         '--query' => 'laravel',
     ])
-        ->expectsOutput('Fetched: 4')
+        ->expectsOutput('Fetched: 2')
         ->expectsOutput('Created: 1')
         ->expectsOutput('Duplicates skipped: 0')
         ->expectsOutput('Skipped not matching query: 1')
-        ->expectsOutput('Invalid skipped: 2')
+        ->expectsOutput('Invalid skipped: 0')
         ->expectsOutput('Failed: 0')
         ->assertExitCode(0);
 
@@ -144,11 +144,11 @@ it('imports only matching javascript jobs from larajobs when a javascript query 
         'source' => 'larajobs',
         '--query' => 'javascript',
     ])
-        ->expectsOutput('Fetched: 4')
+        ->expectsOutput('Fetched: 2')
         ->expectsOutput('Created: 1')
         ->expectsOutput('Duplicates skipped: 0')
         ->expectsOutput('Skipped not matching query: 1')
-        ->expectsOutput('Invalid skipped: 2')
+        ->expectsOutput('Invalid skipped: 0')
         ->expectsOutput('Failed: 0')
         ->assertExitCode(0);
 
@@ -227,7 +227,7 @@ it('does not import generic company career pages without software role signals',
         'source' => 'company-career-pages',
     ])
         ->expectsOutput('No valid jobs were parsed from the listing page.')
-        ->expectsOutput('Fetched: 2')
+        ->expectsOutput('Fetched: 0')
         ->expectsOutput('Created: 0')
         ->expectsOutput('Duplicates skipped: 0')
         ->expectsOutput('Invalid skipped: 0')
@@ -235,6 +235,49 @@ it('does not import generic company career pages without software role signals',
         ->assertExitCode(0);
 
     expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(0);
+});
+
+it('imports a visible gupy style software job link from curated company career pages', function (): void {
+    $user = User::factory()->create();
+
+    config()->set('job_discovery.company_career_targets', [
+        [
+            'name' => 'Example BH Tech',
+            'website_url' => 'https://example.com',
+            'region' => 'Belo Horizonte',
+            'career_urls' => [
+                'https://example.com/carreiras',
+            ],
+        ],
+    ]);
+
+    Http::fake([
+        'https://example.com/carreiras' => Http::response(
+            file_get_contents(base_path('tests/Fixtures/company_career_page_gupy.html')),
+            200,
+        ),
+    ]);
+
+    $this->artisan('job-leads:discover', [
+        'user_id' => $user->id,
+        'source' => 'company-career-pages',
+    ])
+        ->expectsOutput('Fetched: 1')
+        ->expectsOutput('Created: 1')
+        ->expectsOutput('Duplicates skipped: 0')
+        ->expectsOutput('Invalid skipped: 0')
+        ->expectsOutput('Failed: 0')
+        ->assertExitCode(0);
+
+    $lead = JobLead::query()
+        ->where('user_id', $user->id)
+        ->where('source_url', 'https://example.gupy.io/jobs/1234567')
+        ->sole();
+
+    expect($lead->company_name)->toBe('Example BH Tech')
+        ->and($lead->location)->toBe('Belo Horizonte')
+        ->and($lead->job_title)->toBe('Desenvolvedor(a) Full Stack PHP e Laravel')
+        ->and($lead->work_mode)->toBe(JobLead::WORK_MODE_HYBRID);
 });
 
 it('uses the new configured sources when discovery runs with a search query', function (): void {

@@ -17,6 +17,7 @@ use App\Services\JobLeadMatchAnalyzer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
@@ -29,9 +30,8 @@ class JobLeadController extends Controller
 
     public function index(Request $request): Response
     {
-        $filters = $this->filters($request);
-
         $userProfile = $this->userProfile($request->user()->id);
+        $filters = $this->normalizedFilters($this->filters($request), $userProfile);
         $matchedOnly = $request->routeIs('matched-jobs.index');
         $detectedResumeSkills = $this->detectedResumeSkills($userProfile);
         $jobLeads = JobLead::query()
@@ -46,6 +46,15 @@ class JobLeadController extends Controller
             ->search($filters['search'] ?? null)
             ->get();
         $jobLeads = $this->filterJobLeadsByLocationScope($jobLeads, $filters['location_scope']);
+
+        if ($filters['is_latest_discovery_view']) {
+            Log::info('job lead workspace latest discovery view', [
+                'user_id' => $request->user()->id,
+                'resolved_discovery_batch_id' => $this->resolvedDiscoveryBatchId($filters['discovery_batch'] ?? null, $userProfile),
+                'filters' => $this->workspaceLogFilters($filters),
+                'visible_job_lead_ids' => $jobLeads->pluck('id')->all(),
+            ]);
+        }
 
         $matchedJobs = $this->jobCards($jobLeads, $userProfile, $matchedOnly, $detectedResumeSkills);
 
@@ -64,6 +73,7 @@ class JobLeadController extends Controller
                 'show_ignored' => $filters['show_ignored'],
                 'work_mode' => $filters['work_mode'] ?? '',
             ],
+            'isLatestDiscoveryView' => $filters['is_latest_discovery_view'],
             'hasResumeProfile' => $userProfile !== null,
             'leadStatuses' => JobLead::leadStatuses(),
             'leadStatusCounts' => $this->leadStatusCounts($request->user()->id),
@@ -281,6 +291,26 @@ class JobLeadController extends Controller
 
         $jobLeadDiscoveryRunner->recordDiscoveryRun($request->user()->id, $summary['created'], $discoveryBatchId);
 
+        $createdJobLeads = JobLead::query()
+            ->where('user_id', $request->user()->id)
+            ->where('discovery_batch_id', $discoveryBatchId)
+            ->get(['id', 'lead_status', 'location', 'source_name']);
+
+        Log::info('job discovery completed', [
+            'user_id' => $request->user()->id,
+            'search_query' => $searchQuery,
+            'discovery_batch_id' => $discoveryBatchId,
+            'summary' => $summary,
+            'created_job_leads' => $createdJobLeads
+                ->map(fn (JobLead $jobLead): array => [
+                    'id' => $jobLead->id,
+                    'location_classification' => $jobLead->locationClassification(),
+                    'lead_status' => $jobLead->lead_status,
+                    'source_name' => $jobLead->source_name,
+                ])
+                ->all(),
+        ]);
+
         return redirect()
             ->route('job-leads.index')
             ->with('discovery', $sourceResults)
@@ -387,6 +417,34 @@ class JobLeadController extends Controller
     }
 
     /**
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function normalizedFilters(array $filters, ?UserProfile $userProfile): array
+    {
+        $isLatestDiscoveryView = ($filters['discovery_batch'] ?? null) === 'latest'
+            && filled($userProfile?->last_discovery_batch_id);
+
+        if (! $isLatestDiscoveryView) {
+            $filters['is_latest_discovery_view'] = false;
+
+            return $filters;
+        }
+
+        return [
+            ...$filters,
+            'analysis_readiness' => '',
+            'analysis_state' => '',
+            'lead_status' => '',
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+            'search' => '',
+            'show_ignored' => true,
+            'work_mode' => '',
+            'is_latest_discovery_view' => true,
+        ];
+    }
+
+    /**
      * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
      * @return \Illuminate\Support\Collection<int, JobLead>
      */
@@ -412,6 +470,25 @@ class JobLeadController extends Controller
         }
 
         return $requestedDiscoveryBatch;
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function workspaceLogFilters(array $filters): array
+    {
+        return [
+            'analysis_readiness' => $filters['analysis_readiness'] ?? '',
+            'analysis_state' => $filters['analysis_state'] ?? '',
+            'discovery_batch' => $filters['discovery_batch'] ?? '',
+            'lead_status' => $filters['lead_status'] ?? '',
+            'location_scope' => $filters['location_scope'] ?? '',
+            'search' => $filters['search'] ?? '',
+            'show_ignored' => $filters['show_ignored'] ?? false,
+            'work_mode' => $filters['work_mode'] ?? '',
+            'is_latest_discovery_view' => $filters['is_latest_discovery_view'] ?? false,
+        ];
     }
 
     /**

@@ -46,3 +46,18 @@ it('rejects jobs that only match the work mode but not the main query terms', fu
 
     expect($matches)->toBeFalse();
 });
+
+it('matches php queries against laravel jobs and normalizes brasil to brazil', function (): void {
+    $matcher = app(JobDiscoveryQueryMatcher::class);
+
+    $matches = $matcher->matches('php laravel remoto brasil', [
+        'job_title' => 'Senior Laravel Engineer',
+        'company_name' => 'Acme Labs',
+        'location' => 'Remote / Brazil',
+        'work_mode' => null,
+        'description_text' => 'Laravel backend role for distributed teams in Brazil.',
+        'extracted_keywords' => ['laravel', 'mysql'],
+    ]);
+
+    expect($matches)->toBeTrue();
+});

@@ -100,18 +100,21 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
                     continue;
                 }
 
-                $response = Http::timeout(8)
-                    ->accept('text/html')
-                    ->withUserAgent('FindJobApp/1.0')
-                    ->get($careerUrl);
+                $pageFetch = $this->fetchCareerPageHtml($careerUrl);
 
-                if (! $response->successful()) {
-                    $statusCode = max($statusCode, $response->status());
+                if ($pageFetch === null) {
+                    $statusCode = max($statusCode, 500);
 
                     continue;
                 }
 
-                $parsed = $this->parseCareerPageHtmlWithDiagnostics($response->body(), [
+                $statusCode = max($statusCode, $pageFetch['status_code']);
+
+                if (! $pageFetch['successful']) {
+                    continue;
+                }
+
+                $parsed = $this->parseCareerPageHtmlWithDiagnostics($pageFetch['body'], [
                     'career_url' => $careerUrl,
                     'company_name' => $this->nullableString($target['name'] ?? null),
                     'region' => $this->nullableString($target['region'] ?? null),
@@ -188,12 +191,13 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
                 continue;
             }
 
-            $candidateCount++;
             $entry = $this->entryFromLink($xpath, $link, $target);
 
             if ($entry === null) {
                 continue;
             }
+
+            $candidateCount++;
 
             if (! filter_var($entry['detail_url'], FILTER_VALIDATE_URL)) {
                 $invalidCount++;
@@ -240,11 +244,7 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
             return null;
         }
 
-        if (! $this->hasSoftwareSignal($normalizedContext)) {
-            return null;
-        }
-
-        if (! $this->hasJobPageSignal($normalizedContext) && ! $this->hasJobPageSignal($detailUrl)) {
+        if (! $this->isPotentialJobLink($detailUrl, $normalizedContext, $link->textContent)) {
             return null;
         }
 
@@ -331,10 +331,54 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
         return $text;
     }
 
+    /**
+     * @return array{successful: bool, status_code: int, body: string}|null
+     */
+    private function fetchCareerPageHtml(string $careerUrl): ?array
+    {
+        if (config('job_discovery.use_fixture_responses')) {
+            $fixtureResponses = config('job_discovery.fixture_responses.company_career_pages', []);
+            $fixturePath = is_array($fixtureResponses) ? ($fixtureResponses[$careerUrl] ?? null) : null;
+
+            if (is_string($fixturePath) && $fixturePath !== '' && is_file($fixturePath)) {
+                $contents = file_get_contents($fixturePath);
+
+                if (is_string($contents)) {
+                    return [
+                        'successful' => true,
+                        'status_code' => 200,
+                        'body' => $contents,
+                    ];
+                }
+            }
+        }
+
+        $response = Http::timeout(8)
+            ->accept('text/html')
+            ->withUserAgent('FindJobApp/1.0')
+            ->get($careerUrl);
+
+        return [
+            'successful' => $response->successful(),
+            'status_code' => $response->status(),
+            'body' => $response->body(),
+        ];
+    }
+
     private function absoluteUrl(string $href, string $baseUrl): ?string
     {
         if (filter_var($href, FILTER_VALIDATE_URL)) {
             return $href;
+        }
+
+        if (str_starts_with($href, '//')) {
+            $scheme = parse_url($baseUrl, PHP_URL_SCHEME);
+
+            if (! is_string($scheme) || $scheme === '') {
+                return null;
+            }
+
+            return "{$scheme}:{$href}";
         }
 
         if (! str_starts_with($href, '/')) {
@@ -349,6 +393,68 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
         }
 
         return "{$scheme}://{$host}{$href}";
+    }
+
+    private function isPotentialJobLink(string $detailUrl, string $normalizedContext, string $linkText): bool
+    {
+        $normalizedUrl = $this->normalizeText($detailUrl) ?? '';
+        $normalizedLinkText = $this->normalizeText($linkText) ?? '';
+
+        if (! $this->hasSoftwareSignal($normalizedContext) && ! $this->hasSoftwareSignal($normalizedLinkText)) {
+            return false;
+        }
+
+        if ($this->knownApplicantTrackingSystemUrl($detailUrl)) {
+            return true;
+        }
+
+        if ($this->hasJobPageSignal($normalizedContext) || $this->hasJobPageSignal($normalizedLinkText)) {
+            return true;
+        }
+
+        foreach ([
+            '/jobs/',
+            '/job/',
+            '/careers/',
+            '/carreiras/',
+            '/trabalhe-conosco/',
+            '/vaga/',
+            '/vagas/',
+            '/opportunities/',
+            '/positions/',
+        ] as $signal) {
+            if (str_contains($normalizedUrl, $signal)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function knownApplicantTrackingSystemUrl(string $detailUrl): bool
+    {
+        $host = parse_url($detailUrl, PHP_URL_HOST);
+
+        if (! is_string($host) || $host === '') {
+            return false;
+        }
+
+        $normalizedHost = strtolower($host);
+
+        foreach ([
+            'gupy.io',
+            'greenhouse.io',
+            'lever.co',
+            'workable.com',
+            'solides.com.br',
+            'kenoby.com',
+        ] as $signal) {
+            if (str_contains($normalizedHost, $signal)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function hasJobPageSignal(string $text): bool

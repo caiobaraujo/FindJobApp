@@ -403,13 +403,15 @@ it('shows only leads from the latest discovery batch when requested', function (
     $this->actingAs($user)
         ->get(route('job-leads.index', [
             'discovery_batch' => 'latest',
-            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+            'location_scope' => JobLead::LOCATION_SCOPE_BRAZIL,
         ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('JobLeads/Index')
+            ->where('isLatestDiscoveryView', true)
             ->where('filters.discovery_batch', 'latest')
             ->where('filters.location_scope', JobLead::LOCATION_SCOPE_ALL)
+            ->where('filters.show_ignored', true)
             ->has('matchedJobs', 1)
             ->where('matchedJobs.0.company_name', 'Latest Batch Lead')
             ->where('latestDiscoveryBatchId', 'batch-latest')
@@ -453,7 +455,7 @@ it('keeps the default workspace list when no discovery batch filter is applied',
         );
 });
 
-it('composes location scope with discovery batch and lead status filters', function (): void {
+it('shows all jobs from the latest discovery batch regardless of conflicting workspace filters', function (): void {
     $user = User::factory()->create();
 
     UserProfile::query()->create([
@@ -474,9 +476,20 @@ it('composes location scope with discovery batch and lead status filters', funct
         'discovery_batch_id' => 'batch-latest',
     ]);
 
-    JobLead::factory()->for($user)->saved()->create([
+    JobLead::factory()->for($user)->applied()->create([
         'company_name' => 'Latest Brazil Lead',
         'location' => 'Belo Horizonte, Brazil',
+        'description_text' => null,
+        'extracted_keywords' => [],
+        'discovery_batch_id' => 'batch-latest',
+    ]);
+
+    JobLead::factory()->for($user)->ignored()->create([
+        'company_name' => 'Latest Ignored Lead',
+        'location' => 'Remote, Brazil',
+        'job_title' => 'Frontend Engineer',
+        'description_text' => 'Frontend and JavaScript role.',
+        'extracted_keywords' => ['javascript', 'frontend'],
         'discovery_batch_id' => 'batch-latest',
     ]);
 
@@ -484,20 +497,31 @@ it('composes location scope with discovery batch and lead status filters', funct
         ->get(route('job-leads.index', [
             'discovery_batch' => 'latest',
             'lead_status' => JobLead::STATUS_SHORTLISTED,
-            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+            'location_scope' => JobLead::LOCATION_SCOPE_BRAZIL,
+            'search' => 'No matching lead title',
+            'analysis_readiness' => JobLead::ANALYSIS_READINESS_READY,
+            'analysis_state' => JobLead::ANALYSIS_STATE_ANALYZED,
+            'show_ignored' => 0,
+            'work_mode' => JobLead::WORK_MODE_ONSITE,
         ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('JobLeads/Index')
+            ->where('isLatestDiscoveryView', true)
             ->where('filters.discovery_batch', 'latest')
-            ->where('filters.lead_status', JobLead::STATUS_SHORTLISTED)
+            ->where('filters.lead_status', '')
             ->where('filters.location_scope', JobLead::LOCATION_SCOPE_ALL)
-            ->has('matchedJobs', 1)
-            ->where('matchedJobs.0.company_name', 'Latest International Lead')
-            ->where('matchedJobs.0.location_classification', JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL)
+            ->where('filters.search', '')
+            ->where('filters.analysis_readiness', '')
+            ->where('filters.analysis_state', '')
+            ->where('filters.work_mode', '')
+            ->where('filters.show_ignored', true)
+            ->has('matchedJobs', 3)
         )
         ->assertDontSee('Older International Lead')
-        ->assertDontSee('Latest Brazil Lead');
+        ->assertSee('Latest International Lead')
+        ->assertSee('Latest Brazil Lead')
+        ->assertSee('Latest Ignored Lead');
 });
 
 it('does not let search bypass the default brazil location scope', function (): void {

@@ -330,7 +330,7 @@ it('keeps the discovery search query in flash after redirect', function (): void
         );
 });
 
-it('shows newly created international jobs when latest discovery is viewed with all locations', function (): void {
+it('shows newly created jobs in latest discovery view even when conflicting filters are requested', function (): void {
     $user = User::factory()->create();
 
     UserProfile::query()->create([
@@ -369,13 +369,26 @@ it('shows newly created international jobs when latest discovery is viewed with 
     $this->actingAs($user)
         ->get(route('job-leads.index', [
             'discovery_batch' => 'latest',
-            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+            'location_scope' => JobLead::LOCATION_SCOPE_BRAZIL,
+            'search' => 'No matching term',
+            'lead_status' => JobLead::STATUS_IGNORED,
+            'analysis_readiness' => JobLead::ANALYSIS_READINESS_NEEDS_DESCRIPTION,
+            'analysis_state' => JobLead::ANALYSIS_STATE_MISSING,
+            'show_ignored' => 0,
+            'work_mode' => JobLead::WORK_MODE_ONSITE,
         ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('JobLeads/Index')
+            ->where('isLatestDiscoveryView', true)
             ->where('filters.discovery_batch', 'latest')
             ->where('filters.location_scope', JobLead::LOCATION_SCOPE_ALL)
+            ->where('filters.search', '')
+            ->where('filters.lead_status', '')
+            ->where('filters.analysis_readiness', '')
+            ->where('filters.analysis_state', '')
+            ->where('filters.work_mode', '')
+            ->where('filters.show_ignored', true)
             ->has('matchedJobs', 1)
             ->where('matchedJobs.0.company_name', 'Bright Studio')
             ->where('matchedJobs.0.location_classification', JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL)

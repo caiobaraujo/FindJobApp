@@ -12,6 +12,7 @@ class JobDiscoveryQueryMatcher
      */
     private const ALIASES = [
         'bh' => 'belo horizonte',
+        'brasil' => 'brazil',
         'hibrida' => 'hybrid',
         'hibrido' => 'hybrid',
         'hybrid' => 'hybrid',
@@ -24,6 +25,14 @@ class JobDiscoveryQueryMatcher
         'remoto' => 'remote',
         'vue js' => 'vue',
         'vuejs' => 'vue',
+    ];
+
+    /**
+     * @var array<string, list<string>>
+     */
+    private const TOKEN_EQUIVALENTS = [
+        'laravel' => ['laravel', 'php'],
+        'php' => ['php', 'laravel'],
     ];
 
     /**
@@ -84,16 +93,38 @@ class JobDiscoveryQueryMatcher
      */
     public function matches(?string $query, array $job): bool
     {
+        return $this->explain($query, $job)['matches'];
+    }
+
+    /**
+     * @param array{
+     *     company_name?: string|null,
+     *     description_text?: string|null,
+     *     extracted_keywords?: array<int, string>|null,
+     *     job_title?: string|null,
+     *     location?: string|null,
+     *     work_mode?: string|null
+     * } $job
+     * @return array{matches: bool, reasons: list<string>}
+     */
+    public function explain(?string $query, array $job): array
+    {
         $normalizedQuery = $this->normalizeText($query);
 
         if ($normalizedQuery === null) {
-            return true;
+            return [
+                'matches' => true,
+                'reasons' => [],
+            ];
         }
 
         $queryTokens = $this->tokens($normalizedQuery);
 
         if ($queryTokens === []) {
-            return true;
+            return [
+                'matches' => true,
+                'reasons' => [],
+            ];
         }
 
         $locationPhrases = array_values(array_filter(
@@ -112,24 +143,40 @@ class JobDiscoveryQueryMatcher
 
         $haystackText = $this->jobHaystackText($job);
         $haystackTokens = $this->tokens($haystackText);
+        $reasons = [];
 
         if ($generalTokens !== [] && ! $this->containsAnyToken($generalTokens, $haystackTokens, $haystackText)) {
-            return false;
+            $reasons[] = sprintf(
+                'no match with query terms: %s',
+                implode(', ', array_values(array_unique($generalTokens))),
+            );
         }
 
         if ($workModeTokens !== [] && ! $this->containsAllTokens($workModeTokens, $haystackTokens, $haystackText)) {
-            return false;
+            $reasons[] = sprintf(
+                'missing work mode tokens: %s',
+                implode(', ', array_values(array_unique($workModeTokens))),
+            );
         }
 
         if ($locationPhrases !== [] && ! $this->containsAllPhrases($locationPhrases, $haystackText)) {
-            return false;
+            $reasons[] = sprintf(
+                'missing location phrases: %s',
+                implode(', ', array_values(array_unique($locationPhrases))),
+            );
         }
 
-        if ($generalTokens !== []) {
-            return true;
+        if ($reasons !== []) {
+            return [
+                'matches' => false,
+                'reasons' => $reasons,
+            ];
         }
 
-        return $workModeTokens !== [] || $locationPhrases !== [];
+        return [
+            'matches' => $generalTokens !== [] || $workModeTokens !== [] || $locationPhrases !== [],
+            'reasons' => [],
+        ];
     }
 
     private function jobHaystackText(array $job): string
@@ -201,15 +248,27 @@ class JobDiscoveryQueryMatcher
      */
     private function containsToken(string $token, array $haystackTokens, string $haystackText): bool
     {
-        if (in_array($token, $haystackTokens, true)) {
-            return true;
+        $equivalents = self::TOKEN_EQUIVALENTS[$token] ?? [$token];
+
+        foreach ($equivalents as $equivalent) {
+            if (in_array($equivalent, $haystackTokens, true)) {
+                return true;
+            }
+
+            if (str_contains($equivalent, ' ')) {
+                if (str_contains($haystackText, $equivalent)) {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if (preg_match('/\b'.preg_quote($equivalent, '/').'\b/', $haystackText) === 1) {
+                return true;
+            }
         }
 
-        if (str_contains($token, ' ')) {
-            return str_contains($haystackText, $token);
-        }
-
-        return preg_match('/\b'.preg_quote($token, '/').'\b/', $haystackText) === 1;
+        return false;
     }
 
     private function normalizeText(?string $text): ?string

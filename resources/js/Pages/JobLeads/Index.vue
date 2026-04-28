@@ -34,6 +34,10 @@ const props = defineProps({
         type: Boolean,
         required: true,
     },
+    isLatestDiscoveryView: {
+        type: Boolean,
+        required: true,
+    },
     leadStatuses: {
         type: Array,
         required: true,
@@ -89,6 +93,16 @@ const filterForm = reactive({
     work_mode: props.filters.work_mode || '',
 });
 
+const defaultWorkspaceFilters = Object.freeze({
+    analysis_readiness: '',
+    analysis_state: '',
+    lead_status: '',
+    location_scope: 'brazil',
+    search: '',
+    show_ignored: false,
+    work_mode: '',
+});
+
 const leadStatusActions = ['saved', 'shortlisted', 'applied', 'ignored'];
 const leadStatusUpdates = reactive({});
 
@@ -119,14 +133,14 @@ function runDiscovery() {
 }
 
 function resetFilters() {
-    filterForm.analysis_readiness = '';
-    filterForm.analysis_state = '';
+    filterForm.analysis_readiness = defaultWorkspaceFilters.analysis_readiness;
+    filterForm.analysis_state = defaultWorkspaceFilters.analysis_state;
     filterForm.discovery_batch = '';
-    filterForm.lead_status = '';
-    filterForm.location_scope = 'brazil';
-    filterForm.search = '';
-    filterForm.show_ignored = false;
-    filterForm.work_mode = '';
+    filterForm.lead_status = defaultWorkspaceFilters.lead_status;
+    filterForm.location_scope = defaultWorkspaceFilters.location_scope;
+    filterForm.search = defaultWorkspaceFilters.search;
+    filterForm.show_ignored = defaultWorkspaceFilters.show_ignored;
+    filterForm.work_mode = defaultWorkspaceFilters.work_mode;
     submitFilters();
 }
 
@@ -143,6 +157,23 @@ function workspaceHref(discoveryBatch = '', locationScope = filterForm.location_
     }
 
     return route(route().current('job-leads.index') ? 'job-leads.index' : 'matched-jobs.index', params);
+}
+
+function normalWorkspaceHref() {
+    return route(route().current('job-leads.index') ? 'job-leads.index' : 'matched-jobs.index');
+}
+
+function latestDiscoveryParams() {
+    return {
+        analysis_readiness: '',
+        analysis_state: '',
+        discovery_batch: 'latest',
+        lead_status: '',
+        location_scope: 'all',
+        search: '',
+        show_ignored: 1,
+        work_mode: '',
+    };
 }
 
 function leadStatusLabel(leadStatus) {
@@ -205,10 +236,13 @@ const discoverySummary = computed(() => discoveryResults.value.reduce((summary, 
     query_used: false,
 }));
 
-const viewingLatestDiscoveryBatch = computed(() => filterForm.discovery_batch === 'latest');
-const viewingLatestDiscoveryIncludesAllLocations = computed(() => viewingLatestDiscoveryBatch.value && filterForm.location_scope === 'all');
-const latestDiscoveryHref = computed(() => workspaceHref('latest', 'all'));
-const allJobsHref = computed(() => workspaceHref());
+const viewingLatestDiscoveryBatch = computed(() => props.isLatestDiscoveryView);
+const latestDiscoveryHref = computed(() => route(
+    route().current('job-leads.index') ? 'job-leads.index' : 'matched-jobs.index',
+    latestDiscoveryParams(),
+));
+const allJobsHref = computed(() => normalWorkspaceHref());
+const hiddenDiscoveryResults = computed(() => discoveryCreatedCount.value > 0 && props.matchedJobs.length === 0 && ! viewingLatestDiscoveryBatch.value);
 
 function discoveryPrimaryMessage(summary) {
     if (discoveryCreatedCount.value > 0) {
@@ -558,20 +592,42 @@ function setLeadStatus(jobLead, leadStatus) {
                     class="mb-5 rounded-3xl border border-gold-300/15 bg-gold-300/[0.06] px-5 py-4 text-sm leading-7 text-slateglass-200"
                 >
                     <p>
-                        {{ t('job_discovery.showing_new_jobs_from_last_search', 'Showing new jobs from your last search.') }}
+                        {{ t('job_discovery.showing_all_jobs_found_in_last_search', 'Showing all jobs found in your last search.') }}
                     </p>
-                    <p
-                        v-if="viewingLatestDiscoveryIncludesAllLocations"
-                        class="mt-1 text-slateglass-300"
-                    >
-                        {{ t('job_discovery.latest_search_may_include_international', 'This view may include international jobs found in that search.') }}
+                    <p class="mt-1 text-slateglass-300">
+                        {{ t('job_discovery.latest_search_ignores_filters', 'This view ignores filters so you can review all results.') }}
                     </p>
                     <Link
                         :href="allJobsHref"
                         class="ml-2 font-semibold text-gold-200 underline decoration-gold-300/40 underline-offset-4"
                     >
-                        {{ t('job_discovery.view_all_jobs', 'View all jobs') }}
+                        {{ t('job_discovery.back_to_normal_view', 'Back to normal view') }}
                     </Link>
+                </div>
+
+                <div
+                    v-if="hiddenDiscoveryResults"
+                    class="mb-5 rounded-3xl border border-amber-400/20 bg-amber-400/10 px-5 py-4 text-sm leading-7 text-amber-100"
+                >
+                    <p>
+                        {{ t('job_discovery.new_jobs_hidden_by_filters', 'New jobs were found but are hidden by your filters.') }}
+                    </p>
+                    <div class="mt-3 flex flex-wrap gap-3">
+                        <button
+                            type="button"
+                            class="premium-button-primary"
+                            @click="resetFilters"
+                        >
+                            {{ t('matched_jobs.reset', 'Reset') }}
+                        </button>
+                        <Link
+                            v-if="discoveryBatchId"
+                            :href="latestDiscoveryHref"
+                            class="premium-button-secondary"
+                        >
+                            {{ t('job_discovery.view_new_jobs', 'View new jobs') }}
+                        </Link>
+                    </div>
                 </div>
 
                 <div

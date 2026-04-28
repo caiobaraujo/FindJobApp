@@ -40,6 +40,11 @@ class JobLeadDiscoveryRunner
         ));
     }
 
+    public function source(string $source): JobDiscoverySource
+    {
+        return $this->resolveSource($source);
+    }
+
     /**
      * @return array{
      *     source: string,
