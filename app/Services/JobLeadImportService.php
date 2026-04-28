@@ -16,16 +16,20 @@ class JobLeadImportService
      * @param array<string, mixed> $attributes
      * @return array{status: string, job_lead: JobLead|null}
      */
-    public function importForUser(int $userId, string $sourceUrl, array $attributes = []): array
+    public function importForUser(int $userId, ?string $sourceUrl, array $attributes = []): array
     {
-        if (! $this->isImportableUrl($sourceUrl)) {
+        $sourceUrl = $this->nullableString($sourceUrl);
+        $sourcePostUrl = $this->nullableString($attributes['source_post_url'] ?? null);
+        $canonicalSourceUrl = $this->canonicalSourceUrl($sourceUrl, $sourcePostUrl);
+
+        if ($canonicalSourceUrl === null) {
             return [
                 'status' => self::STATUS_INVALID,
                 'job_lead' => null,
             ];
         }
 
-        $normalizedSourceUrl = $this->normalizedSourceUrl($sourceUrl);
+        $normalizedSourceUrl = $this->normalizedSourceUrl($canonicalSourceUrl);
 
         if ($normalizedSourceUrl === null) {
             return [
@@ -48,19 +52,23 @@ class JobLeadImportService
 
         $descriptionText = $this->nullableString($attributes['description_text'] ?? null);
         $analysis = app(JobLeadKeywordExtractor::class)->analyze($descriptionText);
-        $fallbackCompanyName = $this->nullableString($attributes['fallback_company_name'] ?? null)
-            ?? $this->fallbackCompanyName($sourceUrl);
-        $defaultJobTitle = $this->nullableString($attributes['default_job_title'] ?? null)
-            ?? 'Imported job';
+        $sourceType = $this->nullableString($attributes['source_type'] ?? null);
+        $fallbackCompanyName = $this->fallbackCompanyName($sourceUrl, $attributes);
+        $jobTitle = $this->jobTitle($attributes);
 
         $jobLead = JobLead::query()->create(array_filter([
             'user_id' => $userId,
             'source_url' => $sourceUrl,
+            'source_type' => $sourceType,
+            'source_platform' => $this->nullableString($attributes['source_platform'] ?? null),
+            'source_post_url' => $sourcePostUrl,
+            'source_author' => $this->nullableString($attributes['source_author'] ?? null),
+            'source_context_text' => $this->nullableString($attributes['source_context_text'] ?? null),
             'normalized_source_url' => $normalizedSourceUrl,
             'source_host' => $this->sourceHost($normalizedSourceUrl),
             'source_name' => $this->nullableString($attributes['source_name'] ?? null),
             'company_name' => $this->nullableString($attributes['company_name'] ?? null) ?? $fallbackCompanyName,
-            'job_title' => $this->nullableString($attributes['job_title'] ?? null) ?? $defaultJobTitle,
+            'job_title' => $jobTitle,
             'location' => $this->nullableString($attributes['location'] ?? null),
             'work_mode' => $this->nullableString($attributes['work_mode'] ?? null),
             'salary_range' => $this->nullableString($attributes['salary_range'] ?? null),
@@ -79,9 +87,22 @@ class JobLeadImportService
         ];
     }
 
-    private function isImportableUrl(string $sourceUrl): bool
+    private function canonicalSourceUrl(?string $sourceUrl, ?string $sourcePostUrl): ?string
     {
-        if (! filter_var($sourceUrl, FILTER_VALIDATE_URL)) {
+        if ($this->isImportableUrl($sourceUrl)) {
+            return $sourceUrl;
+        }
+
+        if ($this->isImportableUrl($sourcePostUrl)) {
+            return $sourcePostUrl;
+        }
+
+        return null;
+    }
+
+    private function isImportableUrl(?string $sourceUrl): bool
+    {
+        if ($sourceUrl === null || ! filter_var($sourceUrl, FILTER_VALIDATE_URL)) {
             return false;
         }
 
@@ -148,16 +169,25 @@ class JobLeadImportService
         return $trimmedValue;
     }
 
-    private function fallbackCompanyName(?string $sourceUrl): string
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    private function fallbackCompanyName(?string $sourceUrl, array $attributes): ?string
     {
+        $fallbackCompanyName = $this->nullableString($attributes['fallback_company_name'] ?? null);
+
+        if ($fallbackCompanyName !== null) {
+            return $fallbackCompanyName;
+        }
+
         if ($sourceUrl === null || $sourceUrl === '') {
-            return 'Imported company';
+            return null;
         }
 
         $host = parse_url($sourceUrl, PHP_URL_HOST);
 
         if (! is_string($host) || $host === '') {
-            return 'Imported company';
+            return null;
         }
 
         $segments = explode('.', preg_replace('/^www\./', '', strtolower($host)) ?? strtolower($host));
@@ -174,13 +204,22 @@ class JobLeadImportService
         ));
 
         if ($words === []) {
-            return 'Imported company';
+            return null;
         }
 
         return implode(' ', array_map(
             fn (string $word): string => ucfirst(strtolower($word)),
             $words,
         ));
+    }
+
+    /**
+     * @param array<string, mixed> $attributes
+     */
+    private function jobTitle(array $attributes): ?string
+    {
+        return $this->nullableString($attributes['job_title'] ?? null)
+            ?? $this->nullableString($attributes['default_job_title'] ?? null);
     }
 
     private function nullableInt(mixed $value): ?int

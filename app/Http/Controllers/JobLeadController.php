@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Application;
 use App\Http\Requests\BulkImportJobLeadsRequest;
+use App\Http\Requests\ImportPostJobLeadRequest;
 use App\Http\Requests\ImportJobLeadFromUrlRequest;
 use App\Http\Requests\StoreJobLeadRequest;
 use App\Http\Requests\UpdateJobLeadRequest;
@@ -13,6 +14,7 @@ use App\Services\JobDiscovery\JobLeadDiscoveryRunner;
 use App\Services\JobLeadKeywordExtractor;
 use App\Services\JobLeadImportService;
 use App\Services\JobLeadMatchAnalyzer;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
@@ -138,6 +140,43 @@ class JobLeadController extends Controller
             ->with('success', __('app.matched_jobs.import_success'));
     }
 
+    public function importFromPost(ImportPostJobLeadRequest $request, JobLeadImportService $jobLeadImportService): RedirectResponse|JsonResponse
+    {
+        $sourceUrl = $request->input('source_url');
+
+        $result = $jobLeadImportService->importForUser(
+            $request->user()->id,
+            is_string($sourceUrl) ? $this->nullableString($sourceUrl) : null,
+            $this->postImportAttributes($request),
+        );
+
+        if ($result['status'] === JobLeadImportService::STATUS_DUPLICATE && $result['job_lead'] !== null) {
+            if ($request->expectsJson()) {
+                return response()->json([
+                    'status' => JobLeadImportService::STATUS_DUPLICATE,
+                    'job_lead_id' => $result['job_lead']->id,
+                    'redirect_url' => route('job-leads.edit', $result['job_lead']),
+                    'message' => __('app.job_lead_create.duplicate_error'),
+                ], 409);
+            }
+
+            return $this->duplicateJobLeadRedirect($result['job_lead']);
+        }
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'status' => JobLeadImportService::STATUS_CREATED,
+                'job_lead_id' => $result['job_lead']?->id,
+                'redirect_url' => route('job-leads.index'),
+                'message' => __('app.matched_jobs.import_success'),
+            ], 201);
+        }
+
+        return redirect()
+            ->route('job-leads.index')
+            ->with('success', __('app.matched_jobs.import_success'));
+    }
+
     public function bulkImportFromUrls(BulkImportJobLeadsRequest $request, JobLeadImportService $jobLeadImportService): RedirectResponse
     {
         $urls = $this->bulkImportUrls($request->string('source_urls')->value());
@@ -180,10 +219,16 @@ class JobLeadController extends Controller
 
     public function discover(Request $request, JobLeadDiscoveryRunner $jobLeadDiscoveryRunner): RedirectResponse
     {
+        $validatedData = $request->validate([
+            'search_query' => ['nullable', 'string', 'max:120'],
+        ]);
+        $searchQuery = Str::of((string) ($validatedData['search_query'] ?? ''))->squish()->value();
+        $searchQuery = $searchQuery === '' ? null : $searchQuery;
         $summary = [
             'fetched' => 0,
             'created' => 0,
             'duplicates' => 0,
+            'skipped_not_matching_query' => 0,
             'invalid' => 0,
             'failed' => 0,
         ];
@@ -191,7 +236,7 @@ class JobLeadController extends Controller
 
         foreach ($jobLeadDiscoveryRunner->supportedSources() as $source) {
             try {
-                $sourceSummary = $jobLeadDiscoveryRunner->discoverForUser($request->user()->id, $source);
+                $sourceSummary = $jobLeadDiscoveryRunner->discoverForUser($request->user()->id, $source, $searchQuery);
             } catch (Throwable) {
                 $summary['failed']++;
                 $sourceResults[] = [
@@ -199,8 +244,10 @@ class JobLeadController extends Controller
                     'fetched' => 0,
                     'created' => 0,
                     'duplicates' => 0,
+                    'skipped_not_matching_query' => 0,
                     'invalid' => 0,
                     'failed' => 1,
+                    'query_used' => $searchQuery !== null,
                 ];
 
                 continue;
@@ -209,6 +256,7 @@ class JobLeadController extends Controller
             $summary['fetched'] += $sourceSummary['fetched'];
             $summary['created'] += $sourceSummary['created'];
             $summary['duplicates'] += $sourceSummary['duplicates'];
+            $summary['skipped_not_matching_query'] += $sourceSummary['skipped_not_matching_query'];
             $summary['invalid'] += $sourceSummary['invalid'];
             $summary['failed'] += $sourceSummary['failed'];
             $sourceResults[] = [
@@ -216,8 +264,10 @@ class JobLeadController extends Controller
                 'fetched' => $sourceSummary['fetched'],
                 'created' => $sourceSummary['created'],
                 'duplicates' => $sourceSummary['duplicates'],
+                'skipped_not_matching_query' => $sourceSummary['skipped_not_matching_query'],
                 'invalid' => $sourceSummary['invalid'],
                 'failed' => $sourceSummary['failed'],
+                'query_used' => $sourceSummary['query_used'],
             ];
         }
 
@@ -337,6 +387,7 @@ class JobLeadController extends Controller
     private function urlImportAttributes(ImportJobLeadFromUrlRequest $request): array
     {
         return [
+            'source_type' => JobLead::SOURCE_TYPE_MANUAL,
             'source_name' => $this->nullableString($request->string('source_name')->value()),
             'company_name' => $this->nullableString($request->string('company_name')->value()),
             'fallback_company_name' => $this->importCompanyName($request->string('source_url')->value()),
@@ -351,8 +402,33 @@ class JobLeadController extends Controller
     private function bulkImportAttributes(string $sourceUrl): array
     {
         return [
+            'source_type' => JobLead::SOURCE_TYPE_BULK,
             'fallback_company_name' => $this->importCompanyName($sourceUrl),
             'default_job_title' => 'Imported job lead',
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function postImportAttributes(ImportPostJobLeadRequest $request): array
+    {
+        $sourcePlatform = $request->input('source_platform');
+        $sourcePostUrl = $request->input('source_post_url');
+        $sourceAuthor = $request->input('source_author');
+        $sourceContextText = $request->input('source_context_text');
+        $companyName = $request->input('company_name');
+        $jobTitle = $request->input('job_title');
+
+        return [
+            'source_type' => JobLead::SOURCE_TYPE_EXTENSION,
+            'source_platform' => is_string($sourcePlatform) ? $this->nullableString($sourcePlatform) : null,
+            'source_post_url' => is_string($sourcePostUrl) ? $this->nullableString($sourcePostUrl) : null,
+            'source_author' => is_string($sourceAuthor) ? $this->nullableString($sourceAuthor) : null,
+            'source_context_text' => is_string($sourceContextText) ? $this->nullableString($sourceContextText) : null,
+            'description_text' => is_string($sourceContextText) ? $this->nullableString($sourceContextText) : null,
+            'company_name' => is_string($companyName) ? $this->nullableString($companyName) : null,
+            'job_title' => is_string($jobTitle) ? $this->nullableString($jobTitle) : null,
         ];
     }
 
@@ -363,9 +439,11 @@ class JobLeadController extends Controller
     private function storeImportAttributes(array $validatedData): array
     {
         return [
+            'source_type' => JobLead::SOURCE_TYPE_MANUAL,
             'source_name' => $validatedData['source_name'] ?? null,
             'company_name' => $validatedData['company_name'] ?? null,
             'job_title' => $validatedData['job_title'] ?? null,
+            'default_job_title' => 'Imported job',
             'location' => $validatedData['location'] ?? null,
             'work_mode' => $validatedData['work_mode'] ?? null,
             'salary_range' => $validatedData['salary_range'] ?? null,
@@ -387,6 +465,11 @@ class JobLeadController extends Controller
             'company_name' => $jobLead->company_name,
             'job_title' => $jobLead->job_title,
             'source_name' => $jobLead->source_name,
+            'source_type' => $jobLead->source_type,
+            'source_platform' => $jobLead->source_platform,
+            'source_post_url' => $jobLead->source_post_url,
+            'source_author' => $jobLead->source_author,
+            'source_context_text' => $jobLead->source_context_text,
             'source_url' => $jobLead->source_url,
             'normalized_source_url' => $jobLead->normalized_source_url,
             'source_host' => $jobLead->source_host,
@@ -484,6 +567,8 @@ class JobLeadController extends Controller
             }
 
             $preferenceFit = $this->preferenceFit($jobLead, $userProfile);
+            $whyThisJob = $this->whyThisJob($jobLead, $analysis, $preferenceFit);
+            $resumeSkillOverlapCount = $this->resumeSkillOverlapCount($jobKeywords, $detectedResumeSkills);
 
             $rankedJobCards[] = [
                 'card' => [
@@ -492,6 +577,10 @@ class JobLeadController extends Controller
                     'job_title' => $jobLead->job_title,
                     'lead_status' => $jobLead->lead_status,
                     'source_name' => $jobLead->source_name,
+                    'source_type' => $jobLead->source_type,
+                    'source_platform' => $jobLead->source_platform,
+                    'source_post_url' => $jobLead->source_post_url,
+                    'source_author' => $jobLead->source_author,
                     'source_url' => $jobLead->source_url,
                     'source_host' => $jobLead->source_host,
                     'work_mode' => $jobLead->work_mode,
@@ -505,10 +594,12 @@ class JobLeadController extends Controller
                     'can_explain_match' => $detectedResumeSkills !== [] && $jobKeywords !== [],
                     'ats_hint' => $jobLead->ats_hints[0] ?? null,
                     'preference_fit' => $preferenceFit,
+                    'why_this_job' => $whyThisJob,
                 ],
                 'is_active_lead' => $jobLead->lead_status !== JobLead::STATUS_APPLIED
                     && $jobLead->lead_status !== JobLead::STATUS_IGNORED,
                 'has_job_analysis' => $jobKeywords !== [],
+                'resume_skill_overlap_count' => $resumeSkillOverlapCount,
                 'matched_keyword_count' => count($analysis['matched_keywords']),
                 'missing_keyword_count' => count($analysis['missing_keywords']),
                 'preference_fit_rank' => $this->preferenceFitRank($preferenceFit),
@@ -528,6 +619,7 @@ class JobLeadController extends Controller
      *     card: array<string, mixed>,
      *     is_active_lead: bool,
      *     has_job_analysis: bool,
+     *     resume_skill_overlap_count: int,
      *     matched_keyword_count: int,
      *     missing_keyword_count: int,
      *     preference_fit_rank: int,
@@ -556,6 +648,7 @@ class JobLeadController extends Controller
      * @param array{
      *     is_active_lead: bool,
      *     has_job_analysis: bool,
+     *     resume_skill_overlap_count: int,
      *     matched_keyword_count: int,
      *     missing_keyword_count: int,
      *     preference_fit_rank: int,
@@ -609,10 +702,11 @@ class JobLeadController extends Controller
     {
         return $this->compareDesc((int) $left['is_active_lead'], (int) $right['is_active_lead'])
             ?: $this->compareDesc((int) $left['has_job_analysis'], (int) $right['has_job_analysis'])
+            ?: $this->compareDesc($left['resume_skill_overlap_count'], $right['resume_skill_overlap_count'])
             ?: $this->compareDesc($left['matched_keyword_count'], $right['matched_keyword_count'])
             ?: $this->compareAsc($left['missing_keyword_count'], $right['missing_keyword_count'])
-            ?: $this->compareDesc($left['relevance_score'] ?? -1, $right['relevance_score'] ?? -1)
             ?: $this->compareDesc($left['preference_fit_rank'], $right['preference_fit_rank'])
+            ?: $this->compareDesc($left['relevance_score'] ?? -1, $right['relevance_score'] ?? -1)
             ?: $this->compareDesc($left['created_at_timestamp'], $right['created_at_timestamp'])
             ?: $this->compareAsc($left['position'], $right['position']);
     }
@@ -628,6 +722,31 @@ class JobLeadController extends Controller
     }
 
     /**
+     * @param list<string> $jobKeywords
+     * @param list<string> $detectedResumeSkills
+     */
+    private function resumeSkillOverlapCount(array $jobKeywords, array $detectedResumeSkills): int
+    {
+        if ($jobKeywords === [] || $detectedResumeSkills === []) {
+            return 0;
+        }
+
+        $overlapCount = 0;
+
+        foreach (array_values(array_unique($detectedResumeSkills)) as $resumeSkill) {
+            foreach ($jobKeywords as $jobKeyword) {
+                if ($this->containsPreferenceMatch($jobKeyword, [$resumeSkill])) {
+                    $overlapCount++;
+
+                    continue 2;
+                }
+            }
+        }
+
+        return $overlapCount;
+    }
+
+    /**
      * @param array{status: string, matched: list<string>, mismatched: list<string>}|null $preferenceFit
      */
     private function preferenceFitRank(?array $preferenceFit): int
@@ -638,6 +757,31 @@ class JobLeadController extends Controller
             'mismatch' => 0,
             default => -1,
         };
+    }
+
+    /**
+     * @param array{matched_keywords: list<string>, missing_keywords: list<string>, match_summary: string} $analysis
+     * @param array{status: string, matched: list<string>, mismatched: list<string>}|null $preferenceFit
+     * @return array{matched_keywords: list<string>, missing_keywords: list<string>, preference_summary: string|null}|null
+     */
+    private function whyThisJob(JobLead $jobLead, array $analysis, ?array $preferenceFit): ?array
+    {
+        $matchedKeywords = array_slice($analysis['matched_keywords'], 0, 3);
+        $missingKeywords = array_slice($analysis['missing_keywords'], 0, 3);
+
+        $preferenceSummary = in_array($preferenceFit['status'] ?? null, ['match', 'partial'], true)
+            ? $preferenceFit['status']
+            : null;
+
+        if ($matchedKeywords === [] && $missingKeywords === [] && $preferenceSummary === null) {
+            return null;
+        }
+
+        return [
+            'matched_keywords' => $matchedKeywords,
+            'missing_keywords' => $missingKeywords,
+            'preference_summary' => $preferenceSummary,
+        ];
     }
 
     /**

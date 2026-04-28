@@ -97,6 +97,9 @@ it('renders matched jobs with matched and missing keywords when resume data exis
             ->where('matchedJobs.0.matched_keywords.0', 'laravel')
             ->where('matchedJobs.0.matched_keywords.1', 'vue')
             ->where('matchedJobs.0.missing_keywords.0', 'aws')
+            ->where('matchedJobs.0.why_this_job.matched_keywords', ['laravel', 'vue'])
+            ->where('matchedJobs.0.why_this_job.missing_keywords', ['aws'])
+            ->where('matchedJobs.0.why_this_job.preference_summary', null)
             ->where('matchedJobs.0.source_url', 'https://example.com/jobs/northwind')
         )
         ->assertDontSee('Hidden Co');

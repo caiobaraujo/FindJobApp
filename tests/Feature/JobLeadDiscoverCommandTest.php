@@ -32,6 +32,7 @@ it('discovers python job board leads for a selected user and prints a useful sum
         ->sole();
 
     expect($readyLead->lead_status)->toBe(JobLead::STATUS_SAVED)
+        ->and($readyLead->source_type)->toBe(JobLead::SOURCE_TYPE_JOB_BOARD)
         ->and($readyLead->job_title)->toBe('Senior Laravel Engineer')
         ->and($readyLead->company_name)->toBe('Acme Labs')
         ->and($readyLead->location)->toBe('Remote, United States')
@@ -147,4 +148,29 @@ it('reports listing fetch failures honestly', function (): void {
     ])
         ->expectsOutput('Failed to fetch the Python Job Board listing page (HTTP 500).')
         ->assertExitCode(1);
+});
+
+it('supports an optional query filter for discovery imports', function (): void {
+    $user = User::factory()->create();
+
+    Http::fake([
+        'https://www.python.org/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_listing.html')), 200),
+        'https://www.python.org/jobs/1001/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_ready.html')), 200),
+        'https://www.python.org/jobs/1002/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_limited.html')), 200),
+    ]);
+
+    $this->artisan('job-leads:discover', [
+        'user_id' => $user->id,
+        'source' => 'python-job-board',
+        '--query' => 'remoto vuejs',
+    ])
+        ->expectsOutput('Fetched: 3')
+        ->expectsOutput('Created: 1')
+        ->expectsOutput('Duplicates skipped: 0')
+        ->expectsOutput('Skipped not matching query: 1')
+        ->expectsOutput('Invalid skipped: 1')
+        ->expectsOutput('Failed: 0')
+        ->assertExitCode(0);
+
+    $this->assertDatabaseCount('job_leads', 1);
 });

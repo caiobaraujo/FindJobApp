@@ -30,11 +30,17 @@ Route::middleware('auth')->group(function () {
 
         return back();
     })->name('locale.switch');
+    Route::get('/csrf-token', function (Request $request) {
+        return response()->json([
+            'token' => $request->session()->token(),
+        ]);
+    })->name('csrf-token.show');
     Route::get('/job-leads/import', function () {
         return redirect()->route('job-leads.create');
     })->name('job-leads.import.entry');
     Route::post('/job-leads/discover', [JobLeadController::class, 'discover'])->name('job-leads.discover');
     Route::post('/job-leads/import', [JobLeadController::class, 'importFromUrl'])->name('job-leads.import');
+    Route::post('/job-leads/import/post', [JobLeadController::class, 'importFromPost'])->name('job-leads.import-post');
     Route::post('/job-leads/import/bulk', [JobLeadController::class, 'bulkImportFromUrls'])->name('job-leads.bulk-import');
     Route::resource('job-leads', JobLeadController::class)->except(['show']);
     Route::patch('/applications/{application}/status', [ApplicationController::class, 'updateStatus'])

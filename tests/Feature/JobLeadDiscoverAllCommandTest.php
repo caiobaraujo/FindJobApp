@@ -5,6 +5,13 @@ use App\Models\User;
 use App\Models\UserProfile;
 use Illuminate\Support\Facades\Http;
 
+beforeEach(function (): void {
+    config()->set('job_discovery.supported_sources', [
+        'python-job-board',
+        'django-community-jobs',
+    ]);
+});
+
 it('runs discover-all for multiple users with profiles', function (): void {
     $firstUser = User::factory()->create();
     $secondUser = User::factory()->create();

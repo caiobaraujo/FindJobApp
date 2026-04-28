@@ -31,6 +31,53 @@ it('filters english and portuguese stopwords from extracted keywords', function 
     expect($keywords)->not->toContain('diversos');
 });
 
+it('drops generic job posting noise words while keeping technical terms', function (): void {
+    $extractor = new JobLeadKeywordExtractor();
+
+    $keywords = $extractor->extractKeywords(
+        'Like work just own time per good experience team and team, but also PHP, Laravel, Python, Django, Vue, MySQL, SQL, Docker, API, OpenAI, LLM, NLP.',
+    );
+
+    expect($keywords)->toContain('php');
+    expect($keywords)->toContain('laravel');
+    expect($keywords)->toContain('python');
+    expect($keywords)->toContain('django');
+    expect($keywords)->toContain('vue');
+    expect($keywords)->toContain('mysql');
+    expect($keywords)->toContain('sql');
+    expect($keywords)->toContain('docker');
+    expect($keywords)->toContain('api');
+    expect($keywords)->toContain('openai');
+    expect($keywords)->toContain('llm');
+    expect($keywords)->toContain('nlp');
+    expect($keywords)->not->toContain('like');
+    expect($keywords)->not->toContain('work');
+    expect($keywords)->not->toContain('just');
+    expect($keywords)->not->toContain('own');
+    expect($keywords)->not->toContain('time');
+    expect($keywords)->not->toContain('per');
+    expect($keywords)->not->toContain('good');
+    expect($keywords)->not->toContain('experience');
+    expect($keywords)->not->toContain('team');
+});
+
+it('normalizes common technical aliases to canonical keywords', function (): void {
+    $extractor = new JobLeadKeywordExtractor();
+
+    $keywords = $extractor->extractKeywords(
+        'We need a VueJS and NodeJS engineer with Open AI, AngularJS, and fullstack experience.',
+    );
+
+    expect($keywords)->toContain('vue');
+    expect($keywords)->toContain('node');
+    expect($keywords)->toContain('openai');
+    expect($keywords)->toContain('angular');
+    expect($keywords)->toContain('full stack');
+    expect($keywords)->not->toContain('vuejs');
+    expect($keywords)->not->toContain('nodejs');
+    expect($keywords)->not->toContain('angularjs');
+});
+
 it('extracts clean technical keywords from a realistic mixed language description', function (): void {
     $extractor = new JobLeadKeywordExtractor();
 

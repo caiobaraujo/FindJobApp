@@ -29,22 +29,28 @@ class JobLeadKeywordExtractor
     private const IMPORTANT_TERMS = [
         'api',
         'apis',
+        'angular',
         'aws',
         'backend',
+        'django',
         'cloud',
         'css',
         'data',
         'design',
         'devops',
         'docker',
+        'full stack',
         'frontend',
         'graphql',
         'java',
         'javascript',
+        'llm',
         'kubernetes',
         'laravel',
         'mysql',
         'node',
+        'nlp',
+        'openai',
         'php',
         'postgresql',
         'product',
@@ -56,6 +62,18 @@ class JobLeadKeywordExtractor
         'testing',
         'typescript',
         'vue',
+    ];
+
+    /**
+     * @var array<string, string>
+     */
+    private const SKILL_ALIASES = [
+        'apis' => 'api',
+        'angularjs' => 'angular',
+        'fullstack' => 'full stack',
+        'nodejs' => 'node',
+        'open ai' => 'openai',
+        'vuejs' => 'vue',
     ];
 
     /**
@@ -128,6 +146,8 @@ class JobLeadKeywordExtractor
         'isso' => true,
         'isto' => true,
         'it' => true,
+        'just' => true,
+        'like' => true,
         'mais' => true,
         'mas' => true,
         'mesma' => true,
@@ -161,6 +181,8 @@ class JobLeadKeywordExtractor
         'porque' => true,
         'que' => true,
         'quem' => true,
+        'own' => true,
+        'per' => true,
         'role' => true,
         'se' => true,
         'sem' => true,
@@ -172,7 +194,9 @@ class JobLeadKeywordExtractor
         'suas' => true,
         'some' => true,
         'sobre' => true,
+        'strong' => true,
         'team' => true,
+        'teams' => true,
         'tem' => true,
         'ter' => true,
         'that' => true,
@@ -180,6 +204,7 @@ class JobLeadKeywordExtractor
         'their' => true,
         'this' => true,
         'through' => true,
+        'time' => true,
         'to' => true,
         'um' => true,
         'uma' => true,
@@ -190,8 +215,15 @@ class JobLeadKeywordExtractor
         'varias' => true,
         'varios' => true,
         'we' => true,
+        'week' => true,
+        'weeks' => true,
         'will' => true,
+        'work' => true,
+        'worked' => true,
+        'working' => true,
         'with' => true,
+        'year' => true,
+        'years' => true,
         'you' => true,
         'your' => true,
     ];
@@ -252,6 +284,7 @@ class JobLeadKeywordExtractor
         $normalizedDescriptionText = $this->normalizeUnicode($descriptionText);
         $normalizedDescriptionText = strtolower($normalizedDescriptionText);
         $normalizedDescriptionText = preg_replace('/[^a-z0-9\s]+/', ' ', $normalizedDescriptionText) ?? '';
+        $normalizedDescriptionText = preg_replace('/\bopen\s+ai\b/', 'openai', $normalizedDescriptionText) ?? $normalizedDescriptionText;
         $normalizedDescriptionText = trim(preg_replace('/\s+/', ' ', $normalizedDescriptionText) ?? '');
 
         if ($normalizedDescriptionText === '') {
@@ -313,11 +346,17 @@ class JobLeadKeywordExtractor
         $candidates = [];
 
         foreach ($counts as $keyword => $count) {
-            if (! $this->shouldKeepCandidate($keyword, $count, $phrases)) {
+            $normalizedKeyword = $this->normalizeCandidateKeyword($keyword);
+
+            if ($normalizedKeyword === null) {
                 continue;
             }
 
-            $candidates[$keyword] = $count;
+            if (! $this->shouldKeepCandidate($normalizedKeyword, $count, $phrases)) {
+                continue;
+            }
+
+            $candidates[$normalizedKeyword] = max($candidates[$normalizedKeyword] ?? 0, $count);
         }
 
         uksort($candidates, fn (string $left, string $right): int => $this->compareCandidates(
@@ -411,6 +450,10 @@ class JobLeadKeywordExtractor
     private function shouldKeepCandidate(string $keyword, int $count, bool $phrases): bool
     {
         if ($phrases) {
+            if ($this->isImportantTerm($keyword)) {
+                return true;
+            }
+
             if ($count >= 2) {
                 return true;
             }
@@ -423,6 +466,21 @@ class JobLeadKeywordExtractor
         }
 
         return $this->isImportantTerm($keyword);
+    }
+
+    private function normalizeCandidateKeyword(string $keyword): ?string
+    {
+        $normalizedKeyword = strtolower(trim(preg_replace('/\s+/', ' ', $keyword) ?? $keyword));
+
+        if ($normalizedKeyword === '') {
+            return null;
+        }
+
+        if (isset(self::SKILL_ALIASES[$normalizedKeyword])) {
+            return self::SKILL_ALIASES[$normalizedKeyword];
+        }
+
+        return $normalizedKeyword;
     }
 
     private function candidateScore(int $count, string $keyword): int

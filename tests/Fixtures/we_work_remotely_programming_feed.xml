@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:dc="http://purl.org/dc/elements/1.1/">
+  <channel>
+    <title>We Work Remotely Programming Jobs</title>
+    <item>
+      <title>Senior Laravel Engineer at Acme Remote</title>
+      <link>https://weworkremotely.com/remote-jobs/acme-remote-senior-laravel-engineer</link>
+      <dc:creator>Acme Remote</dc:creator>
+      <description><![CDATA[Senior Laravel role building APIs and Vue dashboards. Location: Remote - Americas]]></description>
+    </item>
+    <item>
+      <title>Senior Account Executive at Non Tech Co</title>
+      <link>https://weworkremotely.com/remote-jobs/non-tech-co-senior-account-executive</link>
+      <dc:creator>Non Tech Co</dc:creator>
+      <description><![CDATA[Sales role for enterprise accounts. Location: Remote - United States]]></description>
+    </item>
+    <item>
+      <title>Broken listing</title>
+      <link>not-a-valid-url</link>
+      <description><![CDATA[Software role but malformed URL.]]></description>
+    </item>
+  </channel>
+</rss>

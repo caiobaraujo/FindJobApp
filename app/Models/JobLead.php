@@ -22,6 +22,16 @@ class JobLead extends Model
 
     public const STATUS_IGNORED = 'ignored';
 
+    public const SOURCE_TYPE_MANUAL = 'manual';
+
+    public const SOURCE_TYPE_BULK = 'bulk';
+
+    public const SOURCE_TYPE_JOB_BOARD = 'job_board';
+
+    public const SOURCE_TYPE_POST = 'post';
+
+    public const SOURCE_TYPE_EXTENSION = 'extension';
+
     public const WORK_MODE_REMOTE = 'remote';
 
     public const WORK_MODE_HYBRID = 'hybrid';
@@ -41,6 +51,11 @@ class JobLead extends Model
         'company_name',
         'job_title',
         'source_name',
+        'source_type',
+        'source_platform',
+        'source_post_url',
+        'source_author',
+        'source_context_text',
         'source_url',
         'normalized_source_url',
         'source_host',
@@ -66,6 +81,20 @@ class JobLead extends Model
             self::STATUS_SHORTLISTED,
             self::STATUS_APPLIED,
             self::STATUS_IGNORED,
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function sourceTypes(): array
+    {
+        return [
+            self::SOURCE_TYPE_MANUAL,
+            self::SOURCE_TYPE_BULK,
+            self::SOURCE_TYPE_JOB_BOARD,
+            self::SOURCE_TYPE_POST,
+            self::SOURCE_TYPE_EXTENSION,
         ];
     }
 

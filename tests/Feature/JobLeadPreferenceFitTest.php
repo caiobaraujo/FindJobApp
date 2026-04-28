@@ -51,6 +51,7 @@ it('serializes a work mode preference match', function (): void {
             ->where('matchedJobs.0.preference_fit.status', 'match')
             ->where('matchedJobs.0.preference_fit.matched', ['work_mode'])
             ->where('matchedJobs.0.preference_fit.mismatched', [])
+            ->where('matchedJobs.0.why_this_job.preference_summary', 'match')
         );
 });
 
@@ -75,6 +76,7 @@ it('serializes a work mode preference mismatch', function (): void {
             ->where('matchedJobs.0.preference_fit.status', 'mismatch')
             ->where('matchedJobs.0.preference_fit.matched', [])
             ->where('matchedJobs.0.preference_fit.mismatched', ['work_mode'])
+            ->where('matchedJobs.0.why_this_job', null)
         );
 });
 
@@ -121,6 +123,7 @@ it('serializes a location preference match from the lead location', function ():
             ->component('JobLeads/Index')
             ->where('matchedJobs.0.preference_fit.status', 'match')
             ->where('matchedJobs.0.preference_fit.matched', ['location'])
+            ->where('matchedJobs.0.why_this_job.preference_summary', 'match')
         );
 });
 

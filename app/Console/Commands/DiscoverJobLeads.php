@@ -10,7 +10,7 @@ use Throwable;
 
 class DiscoverJobLeads extends Command
 {
-    protected $signature = 'job-leads:discover {user_id} {source}';
+    protected $signature = 'job-leads:discover {user_id} {source} {--query=}';
 
     protected $description = 'Fetch public jobs from a supported source and create JobLeads for a user.';
 
@@ -26,9 +26,10 @@ class DiscoverJobLeads extends Command
         }
 
         $source = (string) $this->argument('source');
+        $query = $this->option('query');
 
         try {
-            $summary = $jobLeadDiscoveryRunner->discoverForUser($user->id, $source);
+            $summary = $jobLeadDiscoveryRunner->discoverForUser($user->id, $source, is_string($query) ? $query : null);
         } catch (Throwable $throwable) {
             $this->error($throwable->getMessage());
 
@@ -48,6 +49,9 @@ class DiscoverJobLeads extends Command
         $this->line(sprintf('Fetched: %d', $summary['fetched']));
         $this->line(sprintf('Created: %d', $summary['created']));
         $this->line(sprintf('Duplicates skipped: %d', $summary['duplicates']));
+        if ($summary['query_used']) {
+            $this->line(sprintf('Skipped not matching query: %d', $summary['skipped_not_matching_query']));
+        }
         $this->line(sprintf('Invalid skipped: %d', $summary['invalid']));
         $this->line(sprintf('Failed: %d', $summary['failed']));
 

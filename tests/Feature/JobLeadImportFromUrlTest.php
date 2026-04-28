@@ -25,6 +25,7 @@ it('allows an authenticated user to import a job lead from a valid url', functio
     expect($jobLead->source_url)->toBe('https://example.com/jobs/staff-engineer');
     expect($jobLead->normalized_source_url)->toBe('https://example.com/jobs/staff-engineer');
     expect($jobLead->source_host)->toBe('example.com');
+    expect($jobLead->source_type)->toBe(JobLead::SOURCE_TYPE_MANUAL);
     expect($jobLead->source_name)->toBe('LinkedIn');
     expect($jobLead->company_name)->toBe('Northwind');
     expect($jobLead->job_title)->toBe('Staff Engineer');
@@ -68,6 +69,7 @@ it('sets default import values for new job leads', function (): void {
     expect($jobLead->lead_status)->toBe('saved');
     expect($jobLead->discovered_at?->toDateString())->toBe('2026-04-22');
     expect($jobLead->source_name)->toBeNull();
+    expect($jobLead->source_type)->toBe(JobLead::SOURCE_TYPE_MANUAL);
     expect($jobLead->normalized_source_url)->toBe('https://example.com/jobs/design-lead');
     expect($jobLead->source_host)->toBe('example.com');
     expect($jobLead->company_name)->toBe('example.com');

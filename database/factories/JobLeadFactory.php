@@ -18,6 +18,7 @@ class JobLeadFactory extends Factory
             'company_name' => fake()->company(),
             'job_title' => fake()->jobTitle(),
             'source_name' => fake()->randomElement(['LinkedIn', 'Indeed', 'Company Site']),
+            'source_type' => JobLead::SOURCE_TYPE_MANUAL,
             'source_url' => fake()->url(),
             'location' => fake()->optional()->city(),
             'work_mode' => fake()->optional()->randomElement(JobLead::workModes()),

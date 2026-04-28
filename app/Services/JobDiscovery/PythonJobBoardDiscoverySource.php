@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
 
-class PythonJobBoardDiscoverySource
+class PythonJobBoardDiscoverySource implements JobDiscoverySource
 {
     public const SOURCE_KEY = 'python-job-board';
 

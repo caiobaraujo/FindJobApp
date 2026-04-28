@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use RuntimeException;
 
-class DjangoCommunityJobsDiscoverySource
+class DjangoCommunityJobsDiscoverySource implements JobDiscoverySource
 {
     public const SOURCE_KEY = 'django-community-jobs';
 

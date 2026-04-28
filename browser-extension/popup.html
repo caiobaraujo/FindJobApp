@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FindJobApp Capture</title>
+    <style>
+        :root {
+            color-scheme: light;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            margin: 0;
+            min-width: 380px;
+            background: #f5f1e8;
+            color: #1f2937;
+        }
+
+        main {
+            padding: 16px;
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 16px;
+        }
+
+        p {
+            margin: 0 0 12px;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #475569;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        input,
+        textarea,
+        button {
+            box-sizing: border-box;
+            width: 100%;
+            border-radius: 10px;
+            border: 1px solid #cbd5e1;
+            font: inherit;
+        }
+
+        input,
+        textarea {
+            padding: 10px 12px;
+            background: #ffffff;
+            color: #111827;
+        }
+
+        textarea {
+            min-height: 132px;
+            resize: vertical;
+        }
+
+        .field {
+            margin-bottom: 12px;
+        }
+
+        .hint,
+        .url {
+            overflow-wrap: anywhere;
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .actions {
+            margin-top: 14px;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 8px;
+            margin: 12px 0 14px;
+        }
+
+        .action-row button {
+            flex: 1 1 0;
+        }
+
+        button {
+            padding: 11px 12px;
+            background: #0f172a;
+            border-color: #0f172a;
+            color: #ffffff;
+            cursor: pointer;
+            font-weight: 700;
+        }
+
+        button:disabled {
+            cursor: wait;
+            opacity: 0.7;
+        }
+
+        button.secondary {
+            background: #ffffff;
+            border-color: #cbd5e1;
+            color: #0f172a;
+        }
+
+        button.secondary.is-active {
+            background: #e2e8f0;
+            border-color: #94a3b8;
+        }
+
+        .panel {
+            display: none;
+        }
+
+        .panel.is-visible {
+            display: block;
+        }
+
+        .candidates {
+            display: grid;
+            gap: 10px;
+            margin-top: 12px;
+            max-height: 280px;
+            overflow-y: auto;
+        }
+
+        .candidate {
+            border: 1px solid #cbd5e1;
+            border-radius: 12px;
+            background: #ffffff;
+            padding: 10px 12px;
+        }
+
+        .candidate-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .candidate-header input {
+            width: auto;
+            margin-top: 2px;
+        }
+
+        .candidate-meta {
+            margin: 4px 0 0;
+            font-size: 11px;
+            color: #64748b;
+        }
+
+        .candidate-preview {
+            margin: 0;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #1f2937;
+            white-space: pre-wrap;
+        }
+
+        .empty-state {
+            padding: 12px;
+            border: 1px dashed #cbd5e1;
+            border-radius: 12px;
+            background: #ffffff;
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .status {
+            margin-top: 12px;
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .status[data-tone="success"] {
+            color: #166534;
+        }
+
+        .status[data-tone="error"] {
+            color: #b91c1c;
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>FindJobApp Capture</h1>
+        <p>Capture one visible post manually or scan the visible current page for likely hiring opportunities before sending anything to FindJobApp.</p>
+
+        <div class="field">
+            <label for="page-url">Current page URL</label>
+            <div id="page-url" class="url"></div>
+        </div>
+
+        <div class="action-row">
+            <button id="show-manual-button" type="button" class="secondary is-active">Manual capture</button>
+            <button id="show-scan-button" type="button" class="secondary">Scan visible posts</button>
+        </div>
+
+        <section id="manual-panel" class="panel is-visible">
+            <div class="field">
+                <label for="context-text">Captured text</label>
+                <textarea id="context-text" placeholder="Select post text on the page, then open the extension."></textarea>
+                <div class="hint">Selected text is preferred. If nothing is selected, the extension uses a conservative visible text snippet.</div>
+            </div>
+
+            <div class="field">
+                <label for="job-url">Job URL (optional)</label>
+                <input id="job-url" type="url" placeholder="https://company.com/jobs/role">
+            </div>
+
+            <div class="field">
+                <label for="job-title">Job title (optional)</label>
+                <input id="job-title" type="text" placeholder="Senior Laravel Engineer">
+            </div>
+
+            <div class="field">
+                <label for="company-name">Company name (optional)</label>
+                <input id="company-name" type="text" placeholder="Acme Labs">
+            </div>
+
+            <div class="actions">
+                <button id="send-button" type="button">Send to FindJobApp</button>
+            </div>
+        </section>
+
+        <section id="scan-panel" class="panel">
+            <p>Scan only the visible current-page content for post-like blocks that look like hiring opportunities. Nothing is sent until you confirm.</p>
+
+            <div class="actions">
+                <button id="scan-button" type="button">Scan visible posts</button>
+            </div>
+
+            <div id="scan-results" class="candidates"></div>
+
+            <div class="actions">
+                <button id="send-selected-button" type="button">Send selected to FindJobApp</button>
+            </div>
+        </section>
+
+        <div id="status" class="status" aria-live="polite"></div>
+    </main>
+
+    <script src="popup.js"></script>
+</body>
+</html>

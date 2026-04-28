@@ -51,6 +51,10 @@ it('includes source metadata in matched job cards', function (): void {
         'company_name' => 'Northwind',
         'job_title' => 'Senior Laravel Engineer',
         'source_name' => 'Company Site',
+        'source_type' => JobLead::SOURCE_TYPE_POST,
+        'source_platform' => 'linkedin',
+        'source_post_url' => 'https://www.linkedin.com/posts/example-hiring-post',
+        'source_author' => 'Northwind Recruiter',
         'source_url' => 'https://careers.example.com/jobs/laravel-engineer?ref=feed',
         'normalized_source_url' => 'https://careers.example.com/jobs/laravel-engineer',
         'source_host' => 'careers.example.com',
@@ -65,6 +69,10 @@ it('includes source metadata in matched job cards', function (): void {
         ->assertInertia(fn (Assert $page) => $page
             ->component('JobLeads/Index')
             ->where('matchedJobs.0.source_name', 'Company Site')
+            ->where('matchedJobs.0.source_type', JobLead::SOURCE_TYPE_POST)
+            ->where('matchedJobs.0.source_platform', 'linkedin')
+            ->where('matchedJobs.0.source_post_url', 'https://www.linkedin.com/posts/example-hiring-post')
+            ->where('matchedJobs.0.source_author', 'Northwind Recruiter')
             ->where('matchedJobs.0.source_host', 'careers.example.com')
             ->where('matchedJobs.0.source_url', 'https://careers.example.com/jobs/laravel-engineer?ref=feed')
         );

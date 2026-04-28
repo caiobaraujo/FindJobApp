@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Remotive Jobs</title>
+    <item>
+      <title>Staff Python Engineer at Orbit Labs</title>
+      <link>https://remotive.com/remote-jobs/software-dev/staff-python-engineer-1001</link>
+      <category>Software Development</category>
+      <description><![CDATA[Location: Remote - Worldwide | Build Django services and data pipelines.]]></description>
+    </item>
+    <item>
+      <title>Customer Support Manager at Supportify</title>
+      <link>https://remotive.com/remote-jobs/customer-support/customer-support-manager-1002</link>
+      <category>Customer Service</category>
+      <description><![CDATA[Help customers with onboarding and retention.]]></description>
+    </item>
+    <item>
+      <title>Frontend Engineer at Nova Stack</title>
+      <link>https://remotive.com/remote-jobs/software-dev/frontend-engineer-1003</link>
+      <category>Software Development</category>
+      <description><![CDATA[Remote Location Latin America | Vue.js and TypeScript product team.]]></description>
+    </item>
+  </channel>
+</rss>

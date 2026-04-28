@@ -48,6 +48,7 @@ it('keeps url only leads visible in the saved job workspace and marks them as li
             ->where('matchedJobs.0.company_name', 'URL Only Lead Co')
             ->where('matchedJobs.0.source_url', 'https://example.com/jobs/url-only')
             ->where('matchedJobs.0.has_limited_analysis', true)
+            ->where('matchedJobs.0.why_this_job', null)
         );
 });
 
@@ -185,6 +186,40 @@ it('uses newest leads as the fallback order when usefulness signals are tied', f
             ->has('matchedJobs', 2)
             ->where('matchedJobs.0.company_name', 'Newer Lead Co')
             ->where('matchedJobs.1.company_name', 'Older Lead Co')
+        );
+});
+
+it('prioritizes jobs that overlap with the users main technical stack over unrelated jobs', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'PHP, Laravel, Python, Django, Vue, MySQL, SQL, Docker, OpenAI, and full stack backend development.',
+        'core_skills' => ['PHP', 'Laravel', 'Python', 'Django', 'Vue', 'MySQL', 'SQL', 'Docker', 'OpenAI'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Relevant Stack Co',
+        'description_text' => 'Looking for a PHP Laravel Vue backend engineer with MySQL, Docker, and Python experience.',
+        'extracted_keywords' => ['php', 'laravel', 'vue', 'mysql', 'docker', 'python'],
+        'relevance_score' => 10,
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Unrelated Lead Co',
+        'description_text' => 'Seeking a sales operations leader with customer success and revenue planning experience.',
+        'extracted_keywords' => ['sales', 'operations', 'customer success', 'revenue'],
+        'relevance_score' => 100,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 2)
+            ->where('matchedJobs.0.company_name', 'Relevant Stack Co')
+            ->where('matchedJobs.1.company_name', 'Unrelated Lead Co')
         );
 });
 

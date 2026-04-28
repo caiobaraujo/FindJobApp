@@ -2,6 +2,7 @@
 import AppShell from '@/Components/ui/AppShell.vue';
 import MatchWhyDrawer from '@/Components/MatchWhyDrawer.vue';
 import ResumeSkillsCard from '@/Components/ResumeSkillsCard.vue';
+import InputError from '@/Components/InputError.vue';
 import { useI18n } from '@/composables/useI18n';
 import EmptyState from '@/Components/ui/EmptyState.vue';
 import PageHeader from '@/Components/ui/PageHeader.vue';
@@ -66,7 +67,9 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
-const discoveryForm = useForm({});
+const discoveryForm = useForm({
+    search_query: '',
+});
 const page = usePage();
 const discoveryResults = computed(() => page.props.flash?.discovery || []);
 
@@ -103,7 +106,9 @@ function runDiscovery() {
         return;
     }
 
-    discoveryForm.post(route('job-leads.discover'));
+    discoveryForm.post(route('job-leads.discover'), {
+        preserveScroll: true,
+    });
 }
 
 function resetFilters() {
@@ -142,6 +147,24 @@ function discoverySourceStatusClasses(sourceResult) {
     }
 
     return 'border-white/10 bg-black/20 text-white';
+}
+
+function discoverySourceSummary(sourceResult) {
+    const summary = t(
+        'job_discovery.source_summary',
+        'Fetched :fetched, created :created, duplicates :duplicates, invalid :invalid, failed :failed.',
+        sourceResult,
+    );
+
+    if (! sourceResult.query_used) {
+        return summary;
+    }
+
+    return `${summary} ${t(
+        'job_discovery.skipped_not_matching_query',
+        'Skipped not matching query: :count.',
+        { count: sourceResult.skipped_not_matching_query || 0 },
+    )}`;
 }
 
 function analysisStateFor(jobLead) {
@@ -226,6 +249,22 @@ function preferenceFitClasses(preferenceFit) {
     return 'border-red-400/20 bg-red-400/10 text-red-200';
 }
 
+function whyThisJobPreferenceLabel(whyThisJob) {
+    if (whyThisJob?.preference_summary === 'match') {
+        return t('matched_jobs.matches_preferences', 'Matches your preferences');
+    }
+
+    if (whyThisJob?.preference_summary === 'partial') {
+        return t('matched_jobs.partially_matches_preferences', 'Partially matches your preferences');
+    }
+
+    return null;
+}
+
+function keywordSummary(keywords) {
+    return keywords.join(', ');
+}
+
 function visibleMatchedKeywords(jobLead) {
     return jobLead.matched_keywords.slice(0, 5);
 }
@@ -308,20 +347,45 @@ function setLeadStatus(jobLead, leadStatus) {
                 >
                     {{ t('buttons.resume_setup', 'Resume setup') }}
                 </Link>
-                <div class="max-w-sm">
-                    <button
-                        type="button"
-                        class="premium-button-secondary w-full justify-center disabled:cursor-not-allowed disabled:opacity-60"
-                        :disabled="discoveryForm.processing"
-                        @click="runDiscovery"
+                <div class="w-full max-w-xl">
+                    <form
+                        class="space-y-3"
+                        @submit.prevent="runDiscovery"
                     >
-                        {{ discoveryForm.processing
-                            ? t('job_discovery.finding_jobs', 'Finding jobs...')
-                            : t('job_discovery.find_jobs', 'Find jobs') }}
-                    </button>
-                    <p class="mt-2 text-sm leading-6 text-slateglass-300">
-                        {{ t('job_discovery.helper', 'Search supported public sources and add new matching leads to your workspace.') }}
-                    </p>
+                        <div>
+                            <label
+                                for="discovery-search-query"
+                                class="text-sm font-medium text-white"
+                            >
+                                {{ t('job_discovery.search_new_jobs', 'Search new jobs') }}
+                            </label>
+                            <input
+                                id="discovery-search-query"
+                                v-model="discoveryForm.search_query"
+                                type="text"
+                                class="mt-2 block w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-slateglass-400 focus:border-gold-300/40 focus:outline-none focus:ring-2 focus:ring-gold-300/20"
+                                :placeholder="t('job_discovery.search_new_jobs_placeholder', 'Laravel, Vue, remote, Belo Horizonte...')"
+                            >
+                            <InputError
+                                class="mt-2"
+                                :message="discoveryForm.errors.search_query"
+                            />
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button
+                                type="submit"
+                                class="premium-button-secondary justify-center disabled:cursor-not-allowed disabled:opacity-60"
+                                :disabled="discoveryForm.processing"
+                            >
+                                {{ discoveryForm.processing
+                                    ? t('job_discovery.finding_jobs', 'Finding jobs...')
+                                    : t('job_discovery.find_jobs', 'Find jobs') }}
+                            </button>
+                            <p class="text-sm leading-6 text-slateglass-300">
+                                {{ t('job_discovery.discovery_search_helper', 'Search configured public sources and add matching leads to your workspace.') }}
+                            </p>
+                        </div>
+                    </form>
                 </div>
                 <Link
                     :href="route('job-leads.create')"
@@ -365,7 +429,7 @@ function setLeadStatus(jobLead, leadStatus) {
                                     {{ discoverySourceLabel(sourceResult.source) }}
                                 </p>
                                 <p class="mt-1 text-xs text-slateglass-300">
-                                    {{ t('job_discovery.source_summary', 'Fetched :fetched, created :created, duplicates :duplicates, invalid :invalid, failed :failed.', sourceResult) }}
+                                    {{ discoverySourceSummary(sourceResult) }}
                                 </p>
                             </div>
                             <span
@@ -655,6 +719,40 @@ function setLeadStatus(jobLead, leadStatus) {
                                     {{ preferenceFitLabel(jobLead.preference_fit) }}
                                 </span>
                             </div>
+
+                            <div
+                                v-if="jobLead.why_this_job"
+                                class="mt-4 rounded-2xl border border-white/8 bg-black/15 px-4 py-3 text-sm leading-6 text-slateglass-300"
+                            >
+                                <p class="text-[11px] font-semibold uppercase tracking-[0.18em] text-slateglass-400">
+                                    {{ t('matched_jobs.why_this_job', 'Why this job?') }}
+                                </p>
+                                <p
+                                    v-if="whyThisJobPreferenceLabel(jobLead.why_this_job)"
+                                    class="mt-2 text-slateglass-200"
+                                >
+                                    {{ whyThisJobPreferenceLabel(jobLead.why_this_job) }}
+                                </p>
+                                <p
+                                    v-if="jobLead.why_this_job.matched_keywords.length > 0"
+                                    class="mt-1"
+                                >
+                                    <span class="font-semibold text-slateglass-200">
+                                        {{ t('matched_jobs.matches', 'Matches') }}:
+                                    </span>
+                                    {{ keywordSummary(jobLead.why_this_job.matched_keywords) }}
+                                </p>
+                                <p
+                                    v-if="jobLead.why_this_job.missing_keywords.length > 0"
+                                    class="mt-1"
+                                >
+                                    <span class="font-semibold text-slateglass-200">
+                                        {{ t('matched_jobs.missing', 'Missing') }}:
+                                    </span>
+                                    {{ keywordSummary(jobLead.why_this_job.missing_keywords) }}
+                                </p>
+                            </div>
+
                             <div class="mt-6 grid gap-4 xl:grid-cols-2">
                                 <div class="rounded-3xl border border-emerald-400/12 bg-emerald-400/[0.05] p-5">
                                     <p class="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300/90">
@@ -731,6 +829,15 @@ function setLeadStatus(jobLead, leadStatus) {
                                     class="premium-button-primary"
                                 >
                                     {{ t('buttons.go_to_job', 'Go to job') }}
+                                </a>
+                                <a
+                                    v-if="jobLead.source_post_url"
+                                    :href="jobLead.source_post_url"
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    class="premium-button-secondary"
+                                >
+                                    {{ t('buttons.view_source_post', 'View source post') }}
                                 </a>
                                 <Link
                                     :href="route('job-leads.edit', jobLead.id)"
