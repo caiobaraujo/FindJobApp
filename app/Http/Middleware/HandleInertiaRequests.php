@@ -37,6 +37,9 @@ class HandleInertiaRequests extends Middleware
             ],
             'flash' => [
                 'discovery' => fn () => $request->session()->get('discovery'),
+                'discovery_batch_id' => fn () => $request->session()->get('discovery_batch_id'),
+                'discovery_created_count' => fn () => $request->session()->get('discovery_created_count'),
+                'discovery_search_query' => fn () => $request->session()->get('discovery_search_query'),
                 'success' => fn () => $request->session()->get('success'),
                 'error' => fn () => $request->session()->get('error'),
             ],

@@ -21,11 +21,176 @@ it('hides ignored leads by default in the saved job workspace', function (): voi
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('JobLeads/Index')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_BRAZIL)
             ->where('filters.show_ignored', false)
             ->has('matchedJobs', 1)
             ->where('matchedJobs.0.company_name', 'Visible Saved Lead')
         )
         ->assertDontSee('Hidden Ignored Lead');
+});
+
+it('excludes clearly international jobs by default in the saved job workspace', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Brazil Lead Co',
+        'location' => 'Remote Brazil',
+        'relevance_score' => null,
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'International Lead Co',
+        'location' => 'Remote, United States',
+        'relevance_score' => null,
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Unknown Lead Co',
+        'location' => null,
+        'relevance_score' => null,
+    ]);
+
+    $response = $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_BRAZIL)
+            ->has('matchedJobs', 2)
+        )
+        ->assertSee('Brazil Lead Co')
+        ->assertSee('Unknown Lead Co')
+        ->assertDontSee('International Lead Co');
+
+    $locationClassifications = collect($response->inertiaProps('matchedJobs'))
+        ->pluck('location_classification', 'company_name')
+        ->sortKeys()
+        ->all();
+
+    expect($locationClassifications)->toBe([
+        'Brazil Lead Co' => JobLead::LOCATION_CLASSIFICATION_BRAZIL,
+        'Unknown Lead Co' => JobLead::LOCATION_CLASSIFICATION_UNKNOWN,
+    ]);
+});
+
+it('excludes known international source leads by default when location is missing', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Unknown Manual Lead',
+        'source_name' => 'Manual',
+        'source_type' => JobLead::SOURCE_TYPE_MANUAL,
+        'location' => null,
+        'relevance_score' => null,
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Remotive JavaScript Lead',
+        'source_name' => 'Remotive',
+        'source_type' => JobLead::SOURCE_TYPE_JOB_BOARD,
+        'job_title' => 'JavaScript Engineer',
+        'location' => null,
+        'relevance_score' => null,
+    ]);
+
+    $response = $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_BRAZIL)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Unknown Manual Lead')
+            ->where('matchedJobs.0.location_classification', JobLead::LOCATION_CLASSIFICATION_UNKNOWN)
+        )
+        ->assertSee('Unknown Manual Lead')
+        ->assertDontSee('Remotive JavaScript Lead');
+
+    expect(collect($response->inertiaProps('matchedJobs'))->pluck('company_name')->all())
+        ->toBe(['Unknown Manual Lead']);
+});
+
+it('includes international jobs when location scope is all', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'International Lead Co',
+        'location' => 'Remote, United States',
+        'relevance_score' => null,
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Brazil Lead Co',
+        'location' => 'Belo Horizonte, Brazil',
+        'relevance_score' => null,
+    ]);
+
+    $response = $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_ALL)
+            ->has('matchedJobs', 2)
+        )
+        ->assertSee('International Lead Co')
+        ->assertSee('Brazil Lead Co');
+
+    $locationClassifications = collect($response->inertiaProps('matchedJobs'))
+        ->pluck('location_classification', 'company_name')
+        ->sortKeys()
+        ->all();
+
+    expect($locationClassifications)->toBe([
+        'Brazil Lead Co' => JobLead::LOCATION_CLASSIFICATION_BRAZIL,
+        'International Lead Co' => JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL,
+    ]);
+});
+
+it('includes known international source leads when location scope is all', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'We Work Remotely Lead',
+        'source_name' => 'We Work Remotely',
+        'source_type' => JobLead::SOURCE_TYPE_JOB_BOARD,
+        'location' => null,
+        'relevance_score' => null,
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Company Career Lead',
+        'source_name' => 'Company Career Pages',
+        'source_type' => JobLead::SOURCE_TYPE_JOB_BOARD,
+        'source_url' => 'https://hotmart.com/en/jobs/product-engineer',
+        'location' => null,
+        'relevance_score' => null,
+    ]);
+
+    $response = $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_ALL)
+            ->has('matchedJobs', 2)
+        )
+        ->assertSee('We Work Remotely Lead')
+        ->assertSee('Company Career Lead');
+
+    $locationClassifications = collect($response->inertiaProps('matchedJobs'))
+        ->pluck('location_classification', 'company_name')
+        ->sortKeys()
+        ->all();
+
+    expect($locationClassifications)->toBe([
+        'Company Career Lead' => JobLead::LOCATION_CLASSIFICATION_BRAZIL,
+        'We Work Remotely Lead' => JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL,
+    ]);
 });
 
 it('keeps url only leads visible in the saved job workspace and marks them as limited analysis', function (): void {
@@ -49,6 +214,27 @@ it('keeps url only leads visible in the saved job workspace and marks them as li
             ->where('matchedJobs.0.source_url', 'https://example.com/jobs/url-only')
             ->where('matchedJobs.0.has_limited_analysis', true)
             ->where('matchedJobs.0.why_this_job', null)
+        );
+});
+
+it('keeps unknown manual leads visible by default', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Unknown Manual Lead',
+        'source_type' => JobLead::SOURCE_TYPE_MANUAL,
+        'source_name' => 'Manual',
+        'location' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Unknown Manual Lead')
+            ->where('matchedJobs.0.location_classification', JobLead::LOCATION_CLASSIFICATION_UNKNOWN)
         );
 });
 
@@ -187,6 +373,193 @@ it('uses newest leads as the fallback order when usefulness signals are tied', f
             ->where('matchedJobs.0.company_name', 'Newer Lead Co')
             ->where('matchedJobs.1.company_name', 'Older Lead Co')
         );
+});
+
+it('shows only leads from the latest discovery batch when requested', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel and Vue',
+        'last_discovery_batch_id' => 'batch-latest',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Older Batch Lead',
+        'job_title' => 'Laravel Engineer',
+        'description_text' => 'Laravel and Vue role.',
+        'extracted_keywords' => ['laravel', 'vue'],
+        'discovery_batch_id' => 'batch-older',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Latest Batch Lead',
+        'job_title' => 'Vue Engineer',
+        'description_text' => 'Vue and Laravel role.',
+        'extracted_keywords' => ['vue', 'laravel'],
+        'discovery_batch_id' => 'batch-latest',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'discovery_batch' => 'latest',
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.discovery_batch', 'latest')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_ALL)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Latest Batch Lead')
+            ->where('latestDiscoveryBatchId', 'batch-latest')
+        )
+        ->assertDontSee('Older Batch Lead');
+});
+
+it('keeps the default workspace list when no discovery batch filter is applied', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel and Vue',
+        'last_discovery_batch_id' => 'batch-latest',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Older Batch Lead',
+        'job_title' => 'Laravel Engineer',
+        'description_text' => 'Laravel and Vue role.',
+        'extracted_keywords' => ['laravel', 'vue'],
+        'discovery_batch_id' => 'batch-older',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Latest Batch Lead',
+        'job_title' => 'Vue Engineer',
+        'description_text' => 'Vue and Laravel role.',
+        'extracted_keywords' => ['vue', 'laravel'],
+        'discovery_batch_id' => 'batch-latest',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.discovery_batch', '')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_BRAZIL)
+            ->has('matchedJobs', 2)
+        );
+});
+
+it('composes location scope with discovery batch and lead status filters', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'last_discovery_batch_id' => 'batch-latest',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Older International Lead',
+        'lead_status' => JobLead::STATUS_SAVED,
+        'location' => 'Worldwide',
+        'discovery_batch_id' => 'batch-older',
+    ]);
+
+    JobLead::factory()->for($user)->shortlisted()->create([
+        'company_name' => 'Latest International Lead',
+        'location' => 'Portugal',
+        'discovery_batch_id' => 'batch-latest',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Latest Brazil Lead',
+        'location' => 'Belo Horizonte, Brazil',
+        'discovery_batch_id' => 'batch-latest',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'discovery_batch' => 'latest',
+            'lead_status' => JobLead::STATUS_SHORTLISTED,
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.discovery_batch', 'latest')
+            ->where('filters.lead_status', JobLead::STATUS_SHORTLISTED)
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_ALL)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Latest International Lead')
+            ->where('matchedJobs.0.location_classification', JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL)
+        )
+        ->assertDontSee('Older International Lead')
+        ->assertDontSee('Latest Brazil Lead');
+});
+
+it('does not let search bypass the default brazil location scope', function (): void {
+    $user = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Brazil JavaScript Lead',
+        'job_title' => 'JavaScript Engineer',
+        'location' => 'Sao Paulo, Brazil',
+        'relevance_score' => null,
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'International JavaScript Lead',
+        'job_title' => 'JavaScript Engineer',
+        'source_name' => 'Remotive',
+        'source_type' => JobLead::SOURCE_TYPE_JOB_BOARD,
+        'location' => null,
+        'relevance_score' => null,
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'search' => 'javascript',
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.search', 'javascript')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_BRAZIL)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Brazil JavaScript Lead')
+        )
+        ->assertDontSee('International JavaScript Lead');
+});
+
+it('keeps location filtering scoped to the authenticated user', function (): void {
+    $user = User::factory()->create();
+    $otherUser = User::factory()->create();
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'User Brazil Lead',
+        'location' => 'Contagem, MG',
+    ]);
+
+    JobLead::factory()->for($otherUser)->saved()->create([
+        'company_name' => 'Other User International Lead',
+        'location' => 'Canada',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_ALL)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'User Brazil Lead')
+        )
+        ->assertDontSee('Other User International Lead');
 });
 
 it('prioritizes jobs that overlap with the users main technical stack over unrelated jobs', function (): void {

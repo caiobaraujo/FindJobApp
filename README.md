@@ -71,3 +71,21 @@ npm run dev
 ```bash
 make test
 ```
+
+## E2E Smoke Test
+
+The repo includes one minimal Playwright smoke test for the discovery UI flow.
+
+Run it locally with:
+
+```bash
+php artisan serve
+npm run dev
+npm run test:e2e
+```
+
+Notes:
+
+- The E2E setup prepares a deterministic local user: `e2e@example.com` / `password`.
+- The Playwright run starts the app in fixture-backed discovery mode so the browser flow does not depend on live external job boards.
+- Playwright saves screenshots, traces, videos, and an HTML report on failures.

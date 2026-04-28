@@ -5,6 +5,7 @@ namespace App\Services\JobDiscovery;
 use App\Models\JobLead;
 use App\Models\UserProfile;
 use App\Services\JobLeadImportService;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -15,6 +16,7 @@ class JobLeadDiscoveryRunner
         private readonly DjangoCommunityJobsDiscoverySource $djangoCommunityJobsDiscoverySource,
         private readonly WeWorkRemotelyDiscoverySource $weWorkRemotelyDiscoverySource,
         private readonly RemotiveDiscoverySource $remotiveDiscoverySource,
+        private readonly LaraJobsDiscoverySource $laraJobsDiscoverySource,
         private readonly CompanyCareerPagesDiscoverySource $companyCareerPagesDiscoverySource,
         private readonly JobDiscoveryQueryMatcher $jobDiscoveryQueryMatcher,
         private readonly JobLeadImportService $jobLeadImportService,
@@ -54,10 +56,11 @@ class JobLeadDiscoveryRunner
      *     query_used: bool
      * }
      */
-    public function discoverForUser(int $userId, string $source, ?string $searchQuery = null): array
+    public function discoverForUser(int $userId, string $source, ?string $searchQuery = null, ?string $discoveryBatchId = null): array
     {
         $discoverySource = $this->resolveSource($source);
         $normalizedSearchQuery = $this->normalizedSearchQuery($searchQuery);
+        $discoveryBatchId ??= (string) Str::uuid();
 
         $listing = $discoverySource->discoverEntriesWithDiagnostics();
         $entries = $listing['entries'];
@@ -100,6 +103,7 @@ class JobLeadDiscoveryRunner
                 'location' => $discoveredJob['location'],
                 'work_mode' => $discoveredJob['work_mode'] ?? null,
                 'description_text' => $discoveredJob['description_text'],
+                'discovery_batch_id' => $discoveryBatchId,
                 'default_job_title' => 'Imported job lead',
             ]);
 
@@ -131,10 +135,11 @@ class JobLeadDiscoveryRunner
             'invalid' => $invalidCount,
             'failed' => $failedCount,
             'query_used' => $normalizedSearchQuery !== null,
+            'discovery_batch_id' => $discoveryBatchId,
         ];
     }
 
-    public function recordDiscoveryRun(int $userId, int $createdCount): void
+    public function recordDiscoveryRun(int $userId, int $createdCount, ?string $discoveryBatchId): void
     {
         $userProfile = UserProfile::query()
             ->where('user_id', $userId)
@@ -147,6 +152,7 @@ class JobLeadDiscoveryRunner
         $userProfile->forceFill([
             'last_discovered_at' => now(),
             'last_discovered_new_count' => $createdCount,
+            'last_discovery_batch_id' => $discoveryBatchId,
         ])->save();
     }
 
@@ -190,6 +196,7 @@ class JobLeadDiscoveryRunner
             $this->djangoCommunityJobsDiscoverySource->sourceKey() => $this->djangoCommunityJobsDiscoverySource,
             $this->weWorkRemotelyDiscoverySource->sourceKey() => $this->weWorkRemotelyDiscoverySource,
             $this->remotiveDiscoverySource->sourceKey() => $this->remotiveDiscoverySource,
+            $this->laraJobsDiscoverySource->sourceKey() => $this->laraJobsDiscoverySource,
             $this->companyCareerPagesDiscoverySource->sourceKey() => $this->companyCareerPagesDiscoverySource,
         ];
     }

@@ -66,6 +66,7 @@ class JobLeadImportService
             'source_context_text' => $this->nullableString($attributes['source_context_text'] ?? null),
             'normalized_source_url' => $normalizedSourceUrl,
             'source_host' => $this->sourceHost($normalizedSourceUrl),
+            'discovery_batch_id' => $this->nullableString($attributes['discovery_batch_id'] ?? null),
             'source_name' => $this->nullableString($attributes['source_name'] ?? null),
             'company_name' => $this->nullableString($attributes['company_name'] ?? null) ?? $fallbackCompanyName,
             'job_title' => $jobTitle,

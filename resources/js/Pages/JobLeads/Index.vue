@@ -1,15 +1,13 @@
 <script setup>
 import AppShell from '@/Components/ui/AppShell.vue';
 import MatchWhyDrawer from '@/Components/MatchWhyDrawer.vue';
-import ResumeSkillsCard from '@/Components/ResumeSkillsCard.vue';
 import InputError from '@/Components/InputError.vue';
 import { useI18n } from '@/composables/useI18n';
 import EmptyState from '@/Components/ui/EmptyState.vue';
-import PageHeader from '@/Components/ui/PageHeader.vue';
 import SectionCard from '@/Components/ui/SectionCard.vue';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import { Head, Link, router, useForm, usePage } from '@inertiajs/vue3';
-import { computed, reactive } from 'vue';
+import { computed, reactive, watch } from 'vue';
 
 const props = defineProps({
     analysisReadinessOptions: {
@@ -67,16 +65,25 @@ const props = defineProps({
 });
 
 const { t } = useI18n();
-const discoveryForm = useForm({
-    search_query: '',
-});
 const page = usePage();
-const discoveryResults = computed(() => page.props.flash?.discovery || []);
+const discoveryResults = computed(() => Array.isArray(page.props.flash?.discovery) ? page.props.flash.discovery : []);
+const discoveryBatchId = computed(() => page.props.flash?.discovery_batch_id || '');
+const discoveryCreatedCount = computed(() => Number(page.props.flash?.discovery_created_count || 0));
+const discoverySearchQuery = computed(() => page.props.flash?.discovery_search_query || '');
+const discoveryForm = useForm({
+    search_query: discoverySearchQuery.value,
+});
+
+watch(discoverySearchQuery, (value) => {
+    discoveryForm.search_query = value || '';
+});
 
 const filterForm = reactive({
     analysis_readiness: props.filters.analysis_readiness || '',
     analysis_state: props.filters.analysis_state || '',
+    discovery_batch: props.filters.discovery_batch || '',
     lead_status: props.filters.lead_status || '',
+    location_scope: props.filters.location_scope || 'brazil',
     search: props.filters.search || '',
     show_ignored: Boolean(props.filters.show_ignored),
     work_mode: props.filters.work_mode || '',
@@ -114,11 +121,28 @@ function runDiscovery() {
 function resetFilters() {
     filterForm.analysis_readiness = '';
     filterForm.analysis_state = '';
+    filterForm.discovery_batch = '';
     filterForm.lead_status = '';
+    filterForm.location_scope = 'brazil';
     filterForm.search = '';
     filterForm.show_ignored = false;
     filterForm.work_mode = '';
     submitFilters();
+}
+
+function workspaceHref(discoveryBatch = '', locationScope = filterForm.location_scope) {
+    const params = {
+        ...filterForm,
+        location_scope: locationScope,
+    };
+
+    if (discoveryBatch === '') {
+        delete params.discovery_batch;
+    } else {
+        params.discovery_batch = discoveryBatch;
+    }
+
+    return route(route().current('job-leads.index') ? 'job-leads.index' : 'matched-jobs.index', params);
 }
 
 function leadStatusLabel(leadStatus) {
@@ -127,6 +151,30 @@ function leadStatusLabel(leadStatus) {
 
 function workModeLabel(workMode) {
     return t(`job_lead_form.work_modes.${workMode}`, workMode);
+}
+
+function locationClassificationLabel(locationClassification) {
+    if (locationClassification === 'brazil') {
+        return t('matched_jobs.brazil_job', 'Brazil');
+    }
+
+    if (locationClassification === 'international') {
+        return t('matched_jobs.international_job', 'International');
+    }
+
+    return null;
+}
+
+function locationClassificationClasses(locationClassification) {
+    if (locationClassification === 'brazil') {
+        return 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200';
+    }
+
+    if (locationClassification === 'international') {
+        return 'border-sky-400/20 bg-sky-400/10 text-sky-200';
+    }
+
+    return '';
 }
 
 function analysisStateLabel(analysisState) {
@@ -141,30 +189,100 @@ function discoverySourceLabel(source) {
     return t(`job_discovery.sources.${source.replaceAll('-', '_')}`, source);
 }
 
-function discoverySourceStatusClasses(sourceResult) {
-    if ((sourceResult.failed || 0) > 0) {
-        return 'border-amber-400/20 bg-amber-400/10 text-amber-100';
+const discoverySummary = computed(() => discoveryResults.value.reduce((summary, sourceResult) => ({
+    fetched: summary.fetched + (sourceResult.fetched || 0),
+    created: summary.created + (sourceResult.created || 0),
+    duplicates: summary.duplicates + (sourceResult.duplicates || 0),
+    skipped_not_matching_query: summary.skipped_not_matching_query + (sourceResult.skipped_not_matching_query || 0),
+    failed: summary.failed + (sourceResult.failed || 0),
+    query_used: summary.query_used || Boolean(sourceResult.query_used),
+}), {
+    fetched: 0,
+    created: 0,
+    duplicates: 0,
+    skipped_not_matching_query: 0,
+    failed: 0,
+    query_used: false,
+}));
+
+const viewingLatestDiscoveryBatch = computed(() => filterForm.discovery_batch === 'latest');
+const viewingLatestDiscoveryIncludesAllLocations = computed(() => viewingLatestDiscoveryBatch.value && filterForm.location_scope === 'all');
+const latestDiscoveryHref = computed(() => workspaceHref('latest', 'all'));
+const allJobsHref = computed(() => workspaceHref());
+
+function discoveryPrimaryMessage(summary) {
+    if (discoveryCreatedCount.value > 0) {
+        return t(
+            discoveryCreatedCount.value === 1
+                ? 'job_discovery.new_jobs_found_single'
+                : 'job_discovery.new_jobs_found_multiple',
+            discoveryCreatedCount.value === 1
+                ? '1 new job found.'
+                : ':count new jobs found.',
+            {
+            count: discoveryCreatedCount.value,
+            },
+        );
     }
 
-    return 'border-white/10 bg-black/20 text-white';
+    return t('job_discovery.no_new_jobs_found', 'No new jobs found.');
 }
 
-function discoverySourceSummary(sourceResult) {
-    const summary = t(
-        'job_discovery.source_summary',
-        'Fetched :fetched, created :created, duplicates :duplicates, invalid :invalid, failed :failed.',
-        sourceResult,
-    );
+function discoverySecondaryMessages(summary) {
+    const messages = [];
 
-    if (! sourceResult.query_used) {
-        return summary;
+    if (discoveryCreatedCount.value > 0) {
+        messages.push(t(
+            'job_discovery.new_jobs_note',
+            'The new jobs appear below, prioritized by your resume.',
+        ));
+
+        return messages;
     }
 
-    return `${summary} ${t(
-        'job_discovery.skipped_not_matching_query',
-        'Skipped not matching query: :count.',
-        { count: sourceResult.skipped_not_matching_query || 0 },
-    )}`;
+    messages.push(t(
+        'job_discovery.checked_configured_sources',
+        'We checked the configured sources.',
+    ));
+
+    if (summary.duplicates > 0) {
+        messages.push(t(
+            'job_discovery.result_no_new_duplicates',
+            'No new jobs. The jobs found were already in your workspace.',
+        ));
+    }
+
+    if (summary.skipped_not_matching_query > 0) {
+        messages.push(t(
+            'job_discovery.query_skipped_summary',
+            ':count jobs were skipped because they did not match your search.',
+            { count: summary.skipped_not_matching_query },
+        ));
+    }
+
+    if (summary.failed > 0) {
+        messages.push(t(
+            'job_discovery.result_failed_only',
+            'Some sources failed. Try again later.',
+        ));
+    }
+
+    return messages;
+}
+
+function discoveryDetailsRow(sourceResult) {
+    return t(
+        'job_discovery.details_row',
+        ':source — found :fetched · new :created · duplicates :duplicates · skipped :skipped · failed :failed',
+        {
+            source: discoverySourceLabel(sourceResult.source),
+            fetched: sourceResult.fetched || 0,
+            created: sourceResult.created || 0,
+            duplicates: sourceResult.duplicates || 0,
+            skipped: sourceResult.skipped_not_matching_query || 0,
+            failed: sourceResult.failed || 0,
+        },
+    );
 }
 
 function analysisStateFor(jobLead) {
@@ -334,19 +452,7 @@ function setLeadStatus(jobLead, leadStatus) {
         </template>
 
         <AppShell>
-            <ResumeSkillsCard :skills="detectedResumeSkills" />
-
-            <PageHeader
-                :eyebrow="t('matched_jobs.eyebrow', 'Core product')"
-                :title="t('matched_jobs.title', 'Matched jobs')"
-                :description="t('matched_jobs.page_description', 'This workspace is focused on immediate signal: overlap with your resume, missing keywords to address, and direct links to the original job source.')"
-            >
-                <Link
-                    :href="route('resume-profile.show')"
-                    class="premium-button-primary"
-                >
-                    {{ t('buttons.resume_setup', 'Resume setup') }}
-                </Link>
+            <div class="mb-8 flex flex-wrap items-end justify-between gap-6">
                 <div class="w-full max-w-xl">
                     <form
                         class="space-y-3"
@@ -362,6 +468,7 @@ function setLeadStatus(jobLead, leadStatus) {
                             <input
                                 id="discovery-search-query"
                                 v-model="discoveryForm.search_query"
+                                data-testid="discovery-search-input"
                                 type="text"
                                 class="mt-2 block w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-slateglass-400 focus:border-gold-300/40 focus:outline-none focus:ring-2 focus:ring-gold-300/20"
                                 :placeholder="t('job_discovery.search_new_jobs_placeholder', 'Laravel, Vue, remote, Belo Horizonte...')"
@@ -374,6 +481,7 @@ function setLeadStatus(jobLead, leadStatus) {
                         <div class="flex flex-wrap items-center gap-3">
                             <button
                                 type="submit"
+                                data-testid="find-jobs-button"
                                 class="premium-button-secondary justify-center disabled:cursor-not-allowed disabled:opacity-60"
                                 :disabled="discoveryForm.processing"
                             >
@@ -381,9 +489,6 @@ function setLeadStatus(jobLead, leadStatus) {
                                     ? t('job_discovery.finding_jobs', 'Finding jobs...')
                                     : t('job_discovery.find_jobs', 'Find jobs') }}
                             </button>
-                            <p class="text-sm leading-6 text-slateglass-300">
-                                {{ t('job_discovery.discovery_search_helper', 'Search configured public sources and add matching leads to your workspace.') }}
-                            </p>
                         </div>
                     </form>
                 </div>
@@ -393,80 +498,80 @@ function setLeadStatus(jobLead, leadStatus) {
                 >
                     {{ t('buttons.add_job', 'Add job') }}
                 </Link>
-            </PageHeader>
+            </div>
 
             <SectionCard
                 :title="t('matched_jobs.filter_title', 'Find a match faster')"
                 :description="t('matched_jobs.filter_description', 'Search by company or role. The list is already narrowed to jobs with at least one detected match when your resume is ready.')"
             >
                 <div
-                    v-if="discoveryStatus"
-                    class="mb-5 text-sm leading-6 text-slateglass-300"
+                    v-if="discoveryResults.length"
+                    data-testid="discovery-result"
+                    class="mb-5 rounded-3xl border border-white/10 bg-black/20 px-5 py-4"
                 >
-                    <p>
-                        {{ t('job_discovery.last_update', 'Last update: :time', { time: discoveryStatus.last_discovered_at_human }) }}
+                    <p class="text-sm font-semibold text-white">
+                        {{ discoveryPrimaryMessage(discoverySummary) }}
                     </p>
-                    <p>
-                        {{ discoveryStatus.last_discovered_new_count > 0
-                            ? t('job_discovery.new_jobs_found', ':count new jobs found', { count: discoveryStatus.last_discovered_new_count })
-                            : t('job_discovery.no_new_jobs_found', 'No new jobs found') }}
+                    <div
+                        v-if="discoveryCreatedCount > 0 && discoveryBatchId"
+                        class="mt-3 flex flex-wrap gap-3"
+                    >
+                        <Link
+                            :href="latestDiscoveryHref"
+                            data-testid="view-new-jobs-link"
+                            class="premium-button-primary"
+                        >
+                            {{ t('job_discovery.view_new_jobs', 'View new jobs') }}
+                        </Link>
+                        <Link
+                            :href="allJobsHref"
+                            class="premium-button-secondary"
+                        >
+                            {{ t('job_discovery.view_all_jobs', 'View all jobs') }}
+                        </Link>
+                    </div>
+                    <p
+                        v-for="message in discoverySecondaryMessages(discoverySummary)"
+                        :key="message"
+                        class="mt-2 text-sm leading-6 text-slateglass-300"
+                    >
+                        {{ message }}
                     </p>
+                    <details class="mt-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slateglass-300">
+                        <summary class="cursor-pointer list-none font-medium text-white">
+                            {{ t('job_discovery.technical_details', 'Technical details') }}
+                        </summary>
+                        <div class="mt-3 space-y-2">
+                            <p
+                                v-for="sourceResult in discoveryResults"
+                                :key="sourceResult.source"
+                                class="text-xs leading-6 text-slateglass-300"
+                            >
+                                {{ discoveryDetailsRow(sourceResult) }}
+                            </p>
+                        </div>
+                    </details>
                 </div>
 
                 <div
-                    v-if="discoveryResults.length"
-                    class="mb-5 grid gap-3 lg:grid-cols-2"
+                    v-if="viewingLatestDiscoveryBatch"
+                    class="mb-5 rounded-3xl border border-gold-300/15 bg-gold-300/[0.06] px-5 py-4 text-sm leading-7 text-slateglass-200"
                 >
-                    <div
-                        v-for="sourceResult in discoveryResults"
-                        :key="sourceResult.source"
-                        class="rounded-3xl border px-5 py-4"
-                        :class="discoverySourceStatusClasses(sourceResult)"
+                    <p>
+                        {{ t('job_discovery.showing_new_jobs_from_last_search', 'Showing new jobs from your last search.') }}
+                    </p>
+                    <p
+                        v-if="viewingLatestDiscoveryIncludesAllLocations"
+                        class="mt-1 text-slateglass-300"
                     >
-                        <div class="flex items-start justify-between gap-3">
-                            <div>
-                                <p class="text-sm font-semibold text-white">
-                                    {{ discoverySourceLabel(sourceResult.source) }}
-                                </p>
-                                <p class="mt-1 text-xs text-slateglass-300">
-                                    {{ discoverySourceSummary(sourceResult) }}
-                                </p>
-                            </div>
-                            <span
-                                v-if="sourceResult.failed > 0"
-                                class="rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-100"
-                            >
-                                {{ t('job_discovery.partial_failure', 'Some failures') }}
-                            </span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mb-5 grid gap-3 md:grid-cols-3">
-                    <div class="rounded-3xl border border-white/10 bg-black/20 px-5 py-4">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slateglass-400">
-                            {{ t('matched_jobs.active_leads', 'Active leads') }}
-                        </p>
-                        <p class="mt-2 text-2xl font-semibold text-white">
-                            {{ leadStatusCounts.active }}
-                        </p>
-                    </div>
-                    <div class="rounded-3xl border border-white/10 bg-black/20 px-5 py-4">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slateglass-400">
-                            {{ t('matched_jobs.ignored_leads', 'Ignored leads') }}
-                        </p>
-                        <p class="mt-2 text-2xl font-semibold text-white">
-                            {{ leadStatusCounts.ignored }}
-                        </p>
-                    </div>
-                    <div class="rounded-3xl border border-white/10 bg-black/20 px-5 py-4">
-                        <p class="text-[11px] font-semibold uppercase tracking-[0.22em] text-slateglass-400">
-                            {{ t('matched_jobs.applied_leads', 'Applied leads') }}
-                        </p>
-                        <p class="mt-2 text-2xl font-semibold text-white">
-                            {{ leadStatusCounts.applied }}
-                        </p>
-                    </div>
+                        {{ t('job_discovery.latest_search_may_include_international', 'This view may include international jobs found in that search.') }}
+                    </p>
+                    <Link
+                        :href="allJobsHref"
+                        class="ml-2 font-semibold text-gold-200 underline decoration-gold-300/40 underline-offset-4"
+                    >
+                        {{ t('job_discovery.view_all_jobs', 'View all jobs') }}
+                    </Link>
                 </div>
 
                 <div
@@ -475,7 +580,7 @@ function setLeadStatus(jobLead, leadStatus) {
                 >
                     {{ leadsMissingAnalysisCount === 1
                         ? t('matched_jobs.missing_analysis_single', '1 saved lead does not have keyword analysis yet.')
-                        : t('matched_jobs.missing_analysis_multiple', ':count saved leads do not have keyword analysis yet.').replace(':count', String(leadsMissingAnalysisCount)) }}
+                        : t('matched_jobs.missing_analysis_multiple', ':count saved leads do not have keyword analysis yet.', { count: leadsMissingAnalysisCount }) }}
                     <Link
                         :href="route('job-leads.create')"
                         class="ml-2 font-semibold text-gold-200 underline decoration-gold-300/40 underline-offset-4"
@@ -569,14 +674,26 @@ function setLeadStatus(jobLead, leadStatus) {
                     </div>
 
                     <div class="xl:col-span-5 flex flex-wrap items-center justify-between gap-3">
-                        <label class="flex items-center gap-3 text-sm text-slateglass-300">
-                            <input
-                                v-model="filterForm.show_ignored"
-                                type="checkbox"
-                                class="h-4 w-4 rounded border-white/20 bg-black/20 text-gold-300 focus:ring-gold-300/40"
-                            >
-                            <span>{{ t('matched_jobs.show_ignored', 'Show ignored leads') }}</span>
-                        </label>
+                        <div class="flex flex-wrap items-center gap-4">
+                            <label class="flex items-center gap-3 text-sm text-slateglass-300">
+                                <input
+                                    v-model="filterForm.location_scope"
+                                    type="checkbox"
+                                    true-value="all"
+                                    false-value="brazil"
+                                    class="h-4 w-4 rounded border-white/20 bg-black/20 text-gold-300 focus:ring-gold-300/40"
+                                >
+                                <span>{{ t('matched_jobs.include_international_jobs', 'Include international jobs') }}</span>
+                            </label>
+                            <label class="flex items-center gap-3 text-sm text-slateglass-300">
+                                <input
+                                    v-model="filterForm.show_ignored"
+                                    type="checkbox"
+                                    class="h-4 w-4 rounded border-white/20 bg-black/20 text-gold-300 focus:ring-gold-300/40"
+                                >
+                                <span>{{ t('matched_jobs.show_ignored', 'Show ignored leads') }}</span>
+                            </label>
+                        </div>
 
                         <div class="flex items-end gap-3">
                         <button
@@ -649,6 +766,7 @@ function setLeadStatus(jobLead, leadStatus) {
                     <div
                         v-for="jobLead in matchedJobs"
                         :key="jobLead.id"
+                        data-testid="job-lead-card"
                         class="px-6 py-6"
                     >
                         <div class="rounded-[1.75rem] border border-white/10 bg-white/[0.03] p-6 shadow-panel">
@@ -684,6 +802,13 @@ function setLeadStatus(jobLead, leadStatus) {
                                     class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slateglass-400"
                                 >
                                     {{ workModeLabel(jobLead.work_mode) }}
+                                </span>
+                                <span
+                                    v-if="locationClassificationLabel(jobLead.location_classification)"
+                                    class="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                                    :class="locationClassificationClasses(jobLead.location_classification)"
+                                >
+                                    {{ locationClassificationLabel(jobLead.location_classification) }}
                                 </span>
                                 <span
                                     class="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"

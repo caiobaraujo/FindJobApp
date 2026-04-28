@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\User;
 use App\Services\JobDiscovery\JobLeadDiscoveryRunner;
 use Illuminate\Console\Command;
+use Illuminate\Support\Str;
 use Symfony\Component\Console\Command\Command as SymfonyCommand;
 use Throwable;
 
@@ -27,14 +28,17 @@ class DiscoverJobLeads extends Command
 
         $source = (string) $this->argument('source');
         $query = $this->option('query');
+        $discoveryBatchId = (string) Str::uuid();
 
         try {
-            $summary = $jobLeadDiscoveryRunner->discoverForUser($user->id, $source, is_string($query) ? $query : null);
+            $summary = $jobLeadDiscoveryRunner->discoverForUser($user->id, $source, is_string($query) ? $query : null, $discoveryBatchId);
         } catch (Throwable $throwable) {
             $this->error($throwable->getMessage());
 
             return SymfonyCommand::FAILURE;
         }
+
+        $jobLeadDiscoveryRunner->recordDiscoveryRun($user->id, $summary['created'], $discoveryBatchId);
 
         if ($this->getOutput()->isVerbose()) {
             $this->line(sprintf('Listing HTTP status: %d', $summary['listing_status_code']));

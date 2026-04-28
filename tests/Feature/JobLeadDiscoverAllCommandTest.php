@@ -49,11 +49,11 @@ it('runs discover-all for multiple users with profiles', function (): void {
 
     $this->artisan('job-leads:discover-all')
         ->expectsOutput(sprintf('Processing user %d', $firstUser->id))
-        ->expectsOutput(sprintf('User %d source python-job-board summary: fetched=3 created=2 duplicates=0 invalid=1 failed=0', $firstUser->id))
-        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=2 duplicates=0 invalid=1 failed=0', $firstUser->id))
+        ->expectsOutput(sprintf('User %d source python-job-board summary: fetched=3 created=2 duplicates=0 skipped=0 invalid=1 failed=0', $firstUser->id))
+        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=2 duplicates=0 skipped=0 invalid=1 failed=0', $firstUser->id))
         ->expectsOutput(sprintf('Processing user %d', $secondUser->id))
-        ->expectsOutput(sprintf('User %d source python-job-board summary: fetched=3 created=2 duplicates=0 invalid=1 failed=0', $secondUser->id))
-        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=2 duplicates=0 invalid=1 failed=0', $secondUser->id))
+        ->expectsOutput(sprintf('User %d source python-job-board summary: fetched=3 created=2 duplicates=0 skipped=0 invalid=1 failed=0', $secondUser->id))
+        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=2 duplicates=0 skipped=0 invalid=1 failed=0', $secondUser->id))
         ->assertExitCode(0);
 
     expect(JobLead::query()->where('user_id', $firstUser->id)->count())->toBe(4)
@@ -64,13 +64,22 @@ it('runs discover-all for multiple users with profiles', function (): void {
     $firstUserProfile->refresh();
     $secondUserProfile->refresh();
     $disabledUserProfile->refresh();
+    $firstUserBatchIds = JobLead::query()->where('user_id', $firstUser->id)->pluck('discovery_batch_id')->unique()->values()->all();
+    $secondUserBatchIds = JobLead::query()->where('user_id', $secondUser->id)->pluck('discovery_batch_id')->unique()->values()->all();
 
     expect($firstUserProfile->last_discovered_at)->not->toBeNull()
         ->and($firstUserProfile->last_discovered_new_count)->toBe(4)
+        ->and($firstUserProfile->last_discovery_batch_id)->not->toBeNull()
+        ->and($firstUserBatchIds)->toHaveCount(1)
+        ->and($firstUserBatchIds[0])->toBe($firstUserProfile->last_discovery_batch_id)
         ->and($secondUserProfile->last_discovered_at)->not->toBeNull()
         ->and($secondUserProfile->last_discovered_new_count)->toBe(4)
+        ->and($secondUserProfile->last_discovery_batch_id)->not->toBeNull()
+        ->and($secondUserBatchIds)->toHaveCount(1)
+        ->and($secondUserBatchIds[0])->toBe($secondUserProfile->last_discovery_batch_id)
         ->and($disabledUserProfile->last_discovered_at)->toBeNull()
-        ->and($disabledUserProfile->last_discovered_new_count)->toBeNull();
+        ->and($disabledUserProfile->last_discovered_new_count)->toBeNull()
+        ->and($disabledUserProfile->last_discovery_batch_id)->toBeNull();
 });
 
 it('keeps dedupe working when discover-all runs repeatedly', function (): void {
@@ -95,14 +104,14 @@ it('keeps dedupe working when discover-all runs repeatedly', function (): void {
 
     $this->artisan('job-leads:discover-all')
         ->expectsOutput(sprintf('Processing user %d', $user->id))
-        ->expectsOutput(sprintf('User %d source python-job-board summary: fetched=3 created=2 duplicates=0 invalid=1 failed=0', $user->id))
-        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=2 duplicates=0 invalid=1 failed=0', $user->id))
+        ->expectsOutput(sprintf('User %d source python-job-board summary: fetched=3 created=2 duplicates=0 skipped=0 invalid=1 failed=0', $user->id))
+        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=2 duplicates=0 skipped=0 invalid=1 failed=0', $user->id))
         ->assertExitCode(0);
 
     $this->artisan('job-leads:discover-all')
         ->expectsOutput(sprintf('Processing user %d', $user->id))
-        ->expectsOutput(sprintf('User %d source python-job-board summary: fetched=3 created=0 duplicates=2 invalid=1 failed=0', $user->id))
-        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=0 duplicates=2 invalid=1 failed=0', $user->id))
+        ->expectsOutput(sprintf('User %d source python-job-board summary: fetched=3 created=0 duplicates=2 skipped=0 invalid=1 failed=0', $user->id))
+        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=0 duplicates=2 skipped=0 invalid=1 failed=0', $user->id))
         ->assertExitCode(0);
 
     $userProfile->refresh();
@@ -142,10 +151,10 @@ it('continues processing the next user if one discovery run fails', function ():
     $this->artisan('job-leads:discover-all')
         ->expectsOutput(sprintf('Processing user %d', $firstUser->id))
         ->expectsOutput(sprintf('User %d source python-job-board failed: Failed to fetch the Python Job Board listing page (HTTP 500).', $firstUser->id))
-        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=2 duplicates=0 invalid=1 failed=0', $firstUser->id))
+        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=2 duplicates=0 skipped=0 invalid=1 failed=0', $firstUser->id))
         ->expectsOutput(sprintf('Processing user %d', $secondUser->id))
-        ->expectsOutput(sprintf('User %d source python-job-board summary: fetched=3 created=2 duplicates=0 invalid=1 failed=0', $secondUser->id))
-        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=2 duplicates=0 invalid=1 failed=0', $secondUser->id))
+        ->expectsOutput(sprintf('User %d source python-job-board summary: fetched=3 created=2 duplicates=0 skipped=0 invalid=1 failed=0', $secondUser->id))
+        ->expectsOutput(sprintf('User %d source django-community-jobs summary: fetched=3 created=2 duplicates=0 skipped=0 invalid=1 failed=0', $secondUser->id))
         ->assertExitCode(0);
 
     $firstUserProfile->refresh();

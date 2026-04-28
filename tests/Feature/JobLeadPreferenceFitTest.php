@@ -117,10 +117,13 @@ it('serializes a location preference match from the lead location', function ():
     ]);
 
     $this->actingAs($user)
-        ->get(route('job-leads.index'))
+        ->get(route('job-leads.index', [
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+        ]))
         ->assertOk()
         ->assertInertia(fn (Assert $page) => $page
             ->component('JobLeads/Index')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_ALL)
             ->where('matchedJobs.0.preference_fit.status', 'match')
             ->where('matchedJobs.0.preference_fit.matched', ['location'])
             ->where('matchedJobs.0.why_this_job.preference_summary', 'match')

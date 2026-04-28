@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\UserProfile;
 use App\Services\JobDiscovery\JobLeadDiscoveryRunner;
 use Illuminate\Console\Command;
+use Illuminate\Support\Str;
 use Symfony\Component\Console\Command\Command as SymfonyCommand;
 use Throwable;
 
@@ -27,10 +28,11 @@ class DiscoverAllJobLeads extends Command
         foreach ($userIds as $userId) {
             $this->line(sprintf('Processing user %d', $userId));
             $createdCount = 0;
+            $discoveryBatchId = (string) Str::uuid();
 
             foreach ($sources as $source) {
                 try {
-                    $summary = $jobLeadDiscoveryRunner->discoverForUser((int) $userId, $source);
+                    $summary = $jobLeadDiscoveryRunner->discoverForUser((int) $userId, $source, null, $discoveryBatchId);
                 } catch (Throwable $throwable) {
                     $this->error(sprintf('User %d source %s failed: %s', $userId, $source, $throwable->getMessage()));
 
@@ -38,12 +40,13 @@ class DiscoverAllJobLeads extends Command
                 }
 
                 $this->line(sprintf(
-                    'User %d source %s summary: fetched=%d created=%d duplicates=%d invalid=%d failed=%d',
+                    'User %d source %s summary: fetched=%d created=%d duplicates=%d skipped=%d invalid=%d failed=%d',
                     $userId,
                     $source,
                     $summary['fetched'],
                     $summary['created'],
                     $summary['duplicates'],
+                    $summary['skipped_not_matching_query'],
                     $summary['invalid'],
                     $summary['failed'],
                 ));
@@ -51,7 +54,7 @@ class DiscoverAllJobLeads extends Command
                 $createdCount += $summary['created'];
             }
 
-            $jobLeadDiscoveryRunner->recordDiscoveryRun((int) $userId, $createdCount);
+            $jobLeadDiscoveryRunner->recordDiscoveryRun((int) $userId, $createdCount, $discoveryBatchId);
         }
 
         return SymfonyCommand::SUCCESS;

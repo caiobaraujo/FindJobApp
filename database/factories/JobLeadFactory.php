@@ -20,6 +20,7 @@ class JobLeadFactory extends Factory
             'source_name' => fake()->randomElement(['LinkedIn', 'Indeed', 'Company Site']),
             'source_type' => JobLead::SOURCE_TYPE_MANUAL,
             'source_url' => fake()->url(),
+            'discovery_batch_id' => null,
             'location' => fake()->optional()->city(),
             'work_mode' => fake()->optional()->randomElement(JobLead::workModes()),
             'salary_range' => fake()->optional()->randomElement(['$90k-$110k', '$120k-$150k']),

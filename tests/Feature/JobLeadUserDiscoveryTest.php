@@ -44,13 +44,8 @@ it('allows an authenticated user to trigger discovery for their own workspace', 
     $this->actingAs($user)
         ->post(route('job-leads.discover'))
         ->assertRedirect(route('job-leads.index'))
-        ->assertSessionHas('success', __('app.job_discovery.summary', [
-            'fetched' => 6,
-            'created' => 4,
-            'duplicates' => 0,
-            'skipped_not_matching_query' => 0,
-            'invalid' => 2,
-            'failed' => 0,
+        ->assertSessionHas('success', __('app.job_discovery.new_jobs_found_multiple', [
+            'count' => 4,
         ]));
 
     expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(4)
@@ -58,11 +53,21 @@ it('allows an authenticated user to trigger discovery for their own workspace', 
 
     $userProfile->refresh();
     $otherUserProfile->refresh();
+    $batchIds = JobLead::query()
+        ->where('user_id', $user->id)
+        ->pluck('discovery_batch_id')
+        ->unique()
+        ->values()
+        ->all();
 
     expect($userProfile->last_discovered_at)->not->toBeNull()
         ->and($userProfile->last_discovered_new_count)->toBe(4)
+        ->and($userProfile->last_discovery_batch_id)->not->toBeNull()
+        ->and($batchIds)->toHaveCount(1)
+        ->and($batchIds[0])->toBe($userProfile->last_discovery_batch_id)
         ->and($otherUserProfile->last_discovered_at)->toBeNull()
-        ->and($otherUserProfile->last_discovered_new_count)->toBeNull();
+        ->and($otherUserProfile->last_discovered_new_count)->toBeNull()
+        ->and($otherUserProfile->last_discovery_batch_id)->toBeNull();
 });
 
 it('shares source level discovery results through flash after redirect', function (): void {
@@ -125,6 +130,7 @@ it('skips duplicates when the user triggers discovery again', function (): void 
     ]);
 
     $this->actingAs($user)->post(route('job-leads.discover'))->assertRedirect(route('job-leads.index'));
+    $firstDiscoveryBatchId = UserProfile::query()->where('user_id', $user->id)->sole()->last_discovery_batch_id;
 
     Http::fake([
         'https://www.python.org/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_listing.html')), 200),
@@ -136,19 +142,21 @@ it('skips duplicates when the user triggers discovery again', function (): void 
     $this->actingAs($user)
         ->post(route('job-leads.discover'))
         ->assertRedirect(route('job-leads.index'))
-        ->assertSessionHas('success', __('app.job_discovery.summary', [
-            'fetched' => 6,
-            'created' => 0,
-            'duplicates' => 4,
-            'skipped_not_matching_query' => 0,
-            'invalid' => 2,
-            'failed' => 0,
-        ]));
+        ->assertSessionHas('success', __('app.job_discovery.no_new_jobs_found'));
 
     $userProfile = UserProfile::query()->where('user_id', $user->id)->sole();
+    $existingLeadBatchIds = JobLead::query()
+        ->where('user_id', $user->id)
+        ->pluck('discovery_batch_id')
+        ->unique()
+        ->values()
+        ->all();
 
     expect($userProfile->last_discovered_at)->not->toBeNull()
-        ->and($userProfile->last_discovered_new_count)->toBe(0);
+        ->and($userProfile->last_discovered_new_count)->toBe(0)
+        ->and($userProfile->last_discovery_batch_id)->not->toBe($firstDiscoveryBatchId)
+        ->and($existingLeadBatchIds)->toHaveCount(1)
+        ->and($existingLeadBatchIds[0])->toBe($firstDiscoveryBatchId);
 });
 
 it('returns a summary even when one discovery source fails', function (): void {
@@ -168,36 +176,19 @@ it('returns a summary even when one discovery source fails', function (): void {
     $this->actingAs($user)
         ->post(route('job-leads.discover'))
         ->assertRedirect(route('job-leads.index'))
-        ->assertSessionHas('success', __('app.job_discovery.summary', [
-            'fetched' => 3,
-            'created' => 2,
-            'duplicates' => 0,
-            'skipped_not_matching_query' => 0,
-            'invalid' => 1,
-            'failed' => 1,
-        ]))
-        ->assertSessionHas('discovery', [
-            [
-                'source' => 'python-job-board',
-                'fetched' => 0,
-                'created' => 0,
-                'duplicates' => 0,
-                'skipped_not_matching_query' => 0,
-                'invalid' => 0,
-                'failed' => 1,
-                'query_used' => false,
-            ],
-            [
-                'source' => 'django-community-jobs',
-                'fetched' => 3,
-                'created' => 2,
-                'duplicates' => 0,
-                'skipped_not_matching_query' => 0,
-                'invalid' => 1,
-                'failed' => 0,
-                'query_used' => false,
-            ],
-        ]);
+        ->assertSessionHas('success', __('app.job_discovery.new_jobs_found_multiple', [
+            'count' => 2,
+        ]));
+
+    $discovery = session('discovery');
+
+    expect($discovery)->toHaveCount(2)
+        ->and($discovery[0]['source'])->toBe('python-job-board')
+        ->and($discovery[0]['failed'])->toBe(1)
+        ->and($discovery[0]['discovery_batch_id'])->not->toBeNull()
+        ->and($discovery[1]['source'])->toBe('django-community-jobs')
+        ->and($discovery[1]['created'])->toBe(2)
+        ->and($discovery[1]['discovery_batch_id'])->toBe($discovery[0]['discovery_batch_id']);
 
     $userProfile = UserProfile::query()->where('user_id', $user->id)->sole();
 
@@ -227,36 +218,20 @@ it('imports only matching discovered jobs when a search query is provided', func
             'search_query' => 'Laravel remote',
         ])
         ->assertRedirect(route('job-leads.index'))
-        ->assertSessionHas('success', __('app.job_discovery.summary', [
-            'fetched' => 6,
-            'created' => 1,
-            'duplicates' => 0,
-            'skipped_not_matching_query' => 3,
-            'invalid' => 2,
-            'failed' => 0,
-        ]))
-        ->assertSessionHas('discovery', [
-            [
-                'source' => 'python-job-board',
-                'fetched' => 3,
-                'created' => 1,
-                'duplicates' => 0,
-                'skipped_not_matching_query' => 1,
-                'invalid' => 1,
-                'failed' => 0,
-                'query_used' => true,
-            ],
-            [
-                'source' => 'django-community-jobs',
-                'fetched' => 3,
-                'created' => 0,
-                'duplicates' => 0,
-                'skipped_not_matching_query' => 2,
-                'invalid' => 1,
-                'failed' => 0,
-                'query_used' => true,
-            ],
-        ]);
+        ->assertSessionHas('success', __('app.job_discovery.new_jobs_found_single'))
+        ->assertSessionHas('discovery_search_query', 'Laravel remote');
+
+    $discovery = session('discovery');
+
+    expect($discovery)->toHaveCount(2)
+        ->and($discovery[0]['source'])->toBe('python-job-board')
+        ->and($discovery[0]['created'])->toBe(1)
+        ->and($discovery[0]['skipped_not_matching_query'])->toBe(1)
+        ->and($discovery[0]['discovery_batch_id'])->not->toBeNull()
+        ->and($discovery[1]['source'])->toBe('django-community-jobs')
+        ->and($discovery[1]['created'])->toBe(0)
+        ->and($discovery[1]['skipped_not_matching_query'])->toBe(2)
+        ->and($discovery[1]['discovery_batch_id'])->toBe($discovery[0]['discovery_batch_id']);
 
     expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(1)
         ->and(JobLead::query()->where('user_id', $user->id)->sole()->job_title)->toBe('Senior Laravel Engineer');
@@ -296,14 +271,7 @@ it('keeps duplicate handling working when discovery uses a search query', functi
             'search_query' => 'Laravel remote',
         ])
         ->assertRedirect(route('job-leads.index'))
-        ->assertSessionHas('success', __('app.job_discovery.summary', [
-            'fetched' => 6,
-            'created' => 0,
-            'duplicates' => 1,
-            'skipped_not_matching_query' => 3,
-            'invalid' => 2,
-            'failed' => 0,
-        ]));
+        ->assertSessionHas('success', __('app.job_discovery.no_new_jobs_found'));
 
     expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(1)
         ->and(JobLead::query()->where('user_id', $otherUser->id)->count())->toBe(1);
@@ -333,4 +301,84 @@ it('supports alias-based discovery queries for imported jobs', function (): void
 
     expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(1)
         ->and(JobLead::query()->where('user_id', $user->id)->sole()->job_title)->toBe('Senior Laravel Engineer');
+});
+
+it('keeps the discovery search query in flash after redirect', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Resume text',
+        'auto_discover_jobs' => false,
+    ]);
+
+    Http::fake([
+        'https://www.python.org/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_listing.html')), 200),
+        'https://www.python.org/jobs/1001/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_ready.html')), 200),
+        'https://www.python.org/jobs/1002/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_limited.html')), 200),
+        'https://www.djangoproject.com/community/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/django_community_jobs_listing.html')), 200),
+    ]);
+
+    $this->actingAs($user)
+        ->followingRedirects()
+        ->post(route('job-leads.discover'), [
+            'search_query' => 'Laravel remote',
+        ])
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('flash.discovery_search_query', 'Laravel remote')
+        );
+});
+
+it('shows newly created international jobs when latest discovery is viewed with all locations', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Resume text',
+        'auto_discover_jobs' => false,
+    ]);
+
+    config()->set('job_discovery.supported_sources', [
+        'larajobs',
+    ]);
+
+    Http::fake([
+        'https://larajobs.com/' => Http::response(
+            file_get_contents(base_path('tests/Fixtures/larajobs_listing.html')),
+            200,
+        ),
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('job-leads.discover'), [
+            'search_query' => 'javascript',
+        ])
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.job_discovery.new_jobs_found_single'));
+
+    $userProfile = UserProfile::query()->where('user_id', $user->id)->sole();
+
+    expect($userProfile->last_discovery_batch_id)->not->toBeNull();
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertDontSee('Bright Studio');
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'discovery_batch' => 'latest',
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.discovery_batch', 'latest')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_ALL)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Bright Studio')
+            ->where('matchedJobs.0.location_classification', JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL)
+        )
+        ->assertSee('Bright Studio');
 });

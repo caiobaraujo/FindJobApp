@@ -93,6 +93,7 @@ it('bulk imported leads are saved active visible and limited analysis', function
 
     expect($jobLead->lead_status)->toBe(JobLead::STATUS_SAVED)
         ->and($jobLead->source_type)->toBe(JobLead::SOURCE_TYPE_BULK)
+        ->and($jobLead->discovery_batch_id)->toBeNull()
         ->and($jobLead->description_text)->toBeNull()
         ->and($jobLead->extracted_keywords)->toBe([])
         ->and($jobLead->ats_hints)->toBe([

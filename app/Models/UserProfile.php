@@ -16,6 +16,7 @@ class UserProfile extends Model
         'auto_discover_jobs',
         'last_discovered_at',
         'last_discovered_new_count',
+        'last_discovery_batch_id',
         'professional_summary',
         'core_skills',
         'work_experience_text',

@@ -67,6 +67,97 @@ it('discovers remotive leads and skips duplicate urls', function (): void {
     expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(2);
 });
 
+it('discovers larajobs leads for laravel and javascript coverage', function (): void {
+    $user = User::factory()->create();
+
+    Http::fake([
+        'https://larajobs.com/' => Http::response(
+            file_get_contents(base_path('tests/Fixtures/larajobs_listing.html')),
+            200,
+        ),
+    ]);
+
+    $this->artisan('job-leads:discover', [
+        'user_id' => $user->id,
+        'source' => 'larajobs',
+    ])
+        ->expectsOutput('Fetched: 4')
+        ->expectsOutput('Created: 2')
+        ->expectsOutput('Duplicates skipped: 0')
+        ->expectsOutput('Invalid skipped: 2')
+        ->expectsOutput('Failed: 0')
+        ->assertExitCode(0);
+
+    $leads = JobLead::query()
+        ->where('user_id', $user->id)
+        ->orderBy('source_url')
+        ->get();
+
+    expect($leads)->toHaveCount(2)
+        ->and($leads[0]->source_type)->toBe(JobLead::SOURCE_TYPE_JOB_BOARD)
+        ->and($leads[0]->source_name)->toBe('LaraJobs')
+        ->and($leads[1]->source_type)->toBe(JobLead::SOURCE_TYPE_JOB_BOARD)
+        ->and($leads[1]->source_name)->toBe('LaraJobs');
+});
+
+it('imports only matching laravel jobs from larajobs when a laravel query is used', function (): void {
+    $user = User::factory()->create();
+
+    Http::fake([
+        'https://larajobs.com/' => Http::response(
+            file_get_contents(base_path('tests/Fixtures/larajobs_listing.html')),
+            200,
+        ),
+    ]);
+
+    $this->artisan('job-leads:discover', [
+        'user_id' => $user->id,
+        'source' => 'larajobs',
+        '--query' => 'laravel',
+    ])
+        ->expectsOutput('Fetched: 4')
+        ->expectsOutput('Created: 1')
+        ->expectsOutput('Duplicates skipped: 0')
+        ->expectsOutput('Skipped not matching query: 1')
+        ->expectsOutput('Invalid skipped: 2')
+        ->expectsOutput('Failed: 0')
+        ->assertExitCode(0);
+
+    $lead = JobLead::query()->where('user_id', $user->id)->sole();
+
+    expect($lead->job_title)->toBe('Senior Laravel Engineer')
+        ->and($lead->location)->toBe('Remote / Brazil');
+});
+
+it('imports only matching javascript jobs from larajobs when a javascript query is used', function (): void {
+    $user = User::factory()->create();
+
+    Http::fake([
+        'https://larajobs.com/' => Http::response(
+            file_get_contents(base_path('tests/Fixtures/larajobs_listing.html')),
+            200,
+        ),
+    ]);
+
+    $this->artisan('job-leads:discover', [
+        'user_id' => $user->id,
+        'source' => 'larajobs',
+        '--query' => 'javascript',
+    ])
+        ->expectsOutput('Fetched: 4')
+        ->expectsOutput('Created: 1')
+        ->expectsOutput('Duplicates skipped: 0')
+        ->expectsOutput('Skipped not matching query: 1')
+        ->expectsOutput('Invalid skipped: 2')
+        ->expectsOutput('Failed: 0')
+        ->assertExitCode(0);
+
+    $lead = JobLead::query()->where('user_id', $user->id)->sole();
+
+    expect($lead->job_title)->toBe('Frontend JavaScript Engineer')
+        ->and($lead->location)->toBe('Remote / LATAM');
+});
+
 it('imports software opportunities from curated company career pages', function (): void {
     $user = User::factory()->create();
 
@@ -186,14 +277,8 @@ it('uses the new configured sources when discovery runs with a search query', fu
             'search_query' => 'Laravel híbrido BH',
         ])
         ->assertRedirect(route('job-leads.index'))
-        ->assertSessionHas('success', __('app.job_discovery.summary', [
-            'fetched' => 4,
-            'created' => 1,
-            'duplicates' => 0,
-            'skipped_not_matching_query' => 1,
-            'invalid' => 2,
-            'failed' => 0,
-        ]));
+        ->assertSessionHas('success', __('app.job_discovery.new_jobs_found_single'))
+        ->assertSessionHas('discovery_search_query', 'Laravel híbrido BH');
 
     $lead = JobLead::query()->where('user_id', $user->id)->sole();
 

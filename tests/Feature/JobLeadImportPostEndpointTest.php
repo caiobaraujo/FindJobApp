@@ -49,6 +49,7 @@ it('allows an authenticated user to import an extension style post lead', functi
         ->and($jobLead->source_author)->toBe('Hiring Manager')
         ->and($jobLead->source_context_text)->toContain('Laravel and Vue engineer')
         ->and($jobLead->description_text)->toContain('Laravel and Vue engineer')
+        ->and($jobLead->discovery_batch_id)->toBeNull()
         ->and($jobLead->source_url)->toBeNull()
         ->and($jobLead->company_name)->toBeNull()
         ->and($jobLead->job_title)->toBeNull()

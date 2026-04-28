@@ -2,10 +2,15 @@
 
 use App\Models\JobLead;
 use App\Models\User;
+use App\Models\UserProfile;
 use Illuminate\Support\Facades\Http;
 
 it('discovers python job board leads for a selected user and prints a useful summary', function (): void {
     $user = User::factory()->create();
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Resume text',
+    ]);
 
     Http::fake([
         'https://www.python.org/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_listing.html')), 200),
@@ -43,13 +48,23 @@ it('discovers python job board leads for a selected user and prints a useful sum
         ->where('user_id', $user->id)
         ->where('source_url', 'https://beta.example.com/jobs/python-support-engineer')
         ->sole();
+    $userProfile = UserProfile::query()->where('user_id', $user->id)->sole();
+    $batchIds = JobLead::query()
+        ->where('user_id', $user->id)
+        ->pluck('discovery_batch_id')
+        ->unique()
+        ->values()
+        ->all();
 
     expect($limitedLead->lead_status)->toBe(JobLead::STATUS_SAVED)
         ->and($limitedLead->job_title)->toBe('Python Support Engineer')
         ->and($limitedLead->company_name)->toBe('Beta Systems')
         ->and($limitedLead->location)->toBe('Lisbon, Portugal')
         ->and($limitedLead->extracted_keywords)->toBe([])
-        ->and($limitedLead->hasLimitedAnalysis())->toBeTrue();
+        ->and($limitedLead->hasLimitedAnalysis())->toBeTrue()
+        ->and($userProfile->last_discovery_batch_id)->not->toBeNull()
+        ->and($batchIds)->toHaveCount(1)
+        ->and($batchIds[0])->toBe($userProfile->last_discovery_batch_id);
 });
 
 it('prints verbose parser diagnostics for the listing page', function (): void {

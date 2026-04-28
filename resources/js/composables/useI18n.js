@@ -7,6 +7,16 @@ function translationValue(translations, path) {
     return path.split('.').reduce((carry, key) => carry?.[key], translations);
 }
 
+function interpolatePlaceholders(value, replacements = {}) {
+    if (typeof value !== 'string') {
+        return value;
+    }
+
+    return Object.entries(replacements).reduce((carry, [key, replacement]) => {
+        return carry.replaceAll(`:${key}`, String(replacement));
+    }, value);
+}
+
 export function useI18n() {
     const page = usePage();
 
@@ -26,10 +36,15 @@ export function useI18n() {
         return defaultLocales;
     });
 
-    function t(path, fallback) {
+    function t(path, fallback, replacements = {}) {
+        if (fallback && typeof fallback === 'object' && ! Array.isArray(fallback)) {
+            replacements = fallback;
+            fallback = undefined;
+        }
+
         const value = translationValue(translations.value, path);
 
-        return value ?? fallback ?? path;
+        return interpolatePlaceholders(value ?? fallback ?? path, replacements);
     }
 
     return {

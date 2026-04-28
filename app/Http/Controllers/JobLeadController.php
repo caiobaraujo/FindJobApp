@@ -37,6 +37,7 @@ class JobLeadController extends Controller
         $jobLeads = JobLead::query()
             ->where('user_id', $request->user()->id)
             ->visibleInWorkspace($filters['show_ignored'], $filters['lead_status'] ?? null)
+            ->discoveryBatch($this->resolvedDiscoveryBatchId($filters['discovery_batch'] ?? null, $userProfile))
             ->leadStatus($filters['lead_status'] ?? null)
             ->analysisReadiness($filters['analysis_readiness'] ?? null)
             ->workMode($filters['work_mode'] ?? null)
@@ -44,6 +45,7 @@ class JobLeadController extends Controller
             ->orderByPriority()
             ->search($filters['search'] ?? null)
             ->get();
+        $jobLeads = $this->filterJobLeadsByLocationScope($jobLeads, $filters['location_scope']);
 
         $matchedJobs = $this->jobCards($jobLeads, $userProfile, $matchedOnly, $detectedResumeSkills);
 
@@ -55,7 +57,9 @@ class JobLeadController extends Controller
             'filters' => [
                 'analysis_readiness' => $filters['analysis_readiness'] ?? '',
                 'analysis_state' => $filters['analysis_state'] ?? '',
+                'discovery_batch' => $filters['discovery_batch'] ?? '',
                 'lead_status' => $filters['lead_status'] ?? '',
+                'location_scope' => $filters['location_scope'],
                 'search' => $filters['search'] ?? '',
                 'show_ignored' => $filters['show_ignored'],
                 'work_mode' => $filters['work_mode'] ?? '',
@@ -69,6 +73,7 @@ class JobLeadController extends Controller
             'resumeNeedsTextInput' => $this->resumeNeedsTextInput($userProfile),
             'matchedJobs' => $matchedJobs,
             'workModes' => JobLead::workModes(),
+            'latestDiscoveryBatchId' => $userProfile?->last_discovery_batch_id,
         ]);
     }
 
@@ -224,6 +229,7 @@ class JobLeadController extends Controller
         ]);
         $searchQuery = Str::of((string) ($validatedData['search_query'] ?? ''))->squish()->value();
         $searchQuery = $searchQuery === '' ? null : $searchQuery;
+        $discoveryBatchId = (string) Str::uuid();
         $summary = [
             'fetched' => 0,
             'created' => 0,
@@ -236,7 +242,7 @@ class JobLeadController extends Controller
 
         foreach ($jobLeadDiscoveryRunner->supportedSources() as $source) {
             try {
-                $sourceSummary = $jobLeadDiscoveryRunner->discoverForUser($request->user()->id, $source, $searchQuery);
+                $sourceSummary = $jobLeadDiscoveryRunner->discoverForUser($request->user()->id, $source, $searchQuery, $discoveryBatchId);
             } catch (Throwable) {
                 $summary['failed']++;
                 $sourceResults[] = [
@@ -248,6 +254,7 @@ class JobLeadController extends Controller
                     'invalid' => 0,
                     'failed' => 1,
                     'query_used' => $searchQuery !== null,
+                    'discovery_batch_id' => $discoveryBatchId,
                 ];
 
                 continue;
@@ -268,15 +275,19 @@ class JobLeadController extends Controller
                 'invalid' => $sourceSummary['invalid'],
                 'failed' => $sourceSummary['failed'],
                 'query_used' => $sourceSummary['query_used'],
+                'discovery_batch_id' => $sourceSummary['discovery_batch_id'],
             ];
         }
 
-        $jobLeadDiscoveryRunner->recordDiscoveryRun($request->user()->id, $summary['created']);
+        $jobLeadDiscoveryRunner->recordDiscoveryRun($request->user()->id, $summary['created'], $discoveryBatchId);
 
         return redirect()
             ->route('job-leads.index')
             ->with('discovery', $sourceResults)
-            ->with('success', __('app.job_discovery.summary', $summary));
+            ->with('discovery_batch_id', $discoveryBatchId)
+            ->with('discovery_created_count', $summary['created'])
+            ->with('discovery_search_query', $searchQuery)
+            ->with('success', $this->discoverySuccessMessage($summary));
     }
 
     public function edit(JobLead $jobLead, Request $request): Response
@@ -324,6 +335,29 @@ class JobLeadController extends Controller
     }
 
     /**
+     * @param array{
+     *     fetched: int,
+     *     created: int,
+     *     duplicates: int,
+     *     skipped_not_matching_query: int,
+     *     invalid: int,
+     *     failed: int
+     * } $summary
+     */
+    private function discoverySuccessMessage(array $summary): string
+    {
+        if ($summary['created'] > 0) {
+            return $summary['created'] === 1
+                ? __('app.job_discovery.new_jobs_found_single')
+                : __('app.job_discovery.new_jobs_found_multiple', [
+                    'count' => $summary['created'],
+                ]);
+        }
+
+        return __('app.job_discovery.no_new_jobs_found');
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function filters(Request $request): array
@@ -334,7 +368,9 @@ class JobLeadController extends Controller
                 ...JobLead::analysisReadinessOptions(),
             ])],
             'analysis_state' => ['nullable', 'string', Rule::in(JobLead::analysisStates())],
+            'discovery_batch' => ['nullable', 'string', 'max:120'],
             'lead_status' => ['nullable', 'string', Rule::in(JobLead::leadStatuses())],
+            'location_scope' => ['nullable', 'string', Rule::in(JobLead::locationScopes())],
             'search' => ['nullable', 'string', 'max:255'],
             'show_ignored' => ['nullable', 'boolean'],
             'work_mode' => ['nullable', 'string', Rule::in(JobLead::workModes())],
@@ -345,8 +381,37 @@ class JobLeadController extends Controller
         }
 
         $filters['show_ignored'] = $request->boolean('show_ignored');
+        $filters['location_scope'] = $filters['location_scope'] ?? JobLead::LOCATION_SCOPE_BRAZIL;
 
         return $filters;
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     * @return \Illuminate\Support\Collection<int, JobLead>
+     */
+    private function filterJobLeadsByLocationScope($jobLeads, string $locationScope)
+    {
+        if ($locationScope === JobLead::LOCATION_SCOPE_ALL) {
+            return $jobLeads;
+        }
+
+        return $jobLeads->filter(
+            fn (JobLead $jobLead): bool => $jobLead->locationClassification() !== JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL,
+        )->values();
+    }
+
+    private function resolvedDiscoveryBatchId(?string $requestedDiscoveryBatch, ?UserProfile $userProfile): ?string
+    {
+        if (blank($requestedDiscoveryBatch)) {
+            return null;
+        }
+
+        if ($requestedDiscoveryBatch === 'latest') {
+            return $userProfile?->last_discovery_batch_id;
+        }
+
+        return $requestedDiscoveryBatch;
     }
 
     /**
@@ -474,6 +539,7 @@ class JobLeadController extends Controller
             'normalized_source_url' => $jobLead->normalized_source_url,
             'source_host' => $jobLead->source_host,
             'location' => $jobLead->location,
+            'location_classification' => $jobLead->locationClassification(),
             'work_mode' => $jobLead->work_mode,
             'salary_range' => $jobLead->salary_range,
             'description_excerpt' => $jobLead->description_excerpt,
@@ -583,6 +649,8 @@ class JobLeadController extends Controller
                     'source_author' => $jobLead->source_author,
                     'source_url' => $jobLead->source_url,
                     'source_host' => $jobLead->source_host,
+                    'location' => $jobLead->location,
+                    'location_classification' => $jobLead->locationClassification(),
                     'work_mode' => $jobLead->work_mode,
                     'extracted_keywords' => $jobKeywords,
                     'has_limited_analysis' => $jobLead->hasLimitedAnalysis(),
@@ -906,7 +974,7 @@ class JobLeadController extends Controller
     }
 
     /**
-     * @return array{last_discovered_at_human: string, last_discovered_new_count: int}|null
+     * @return array{last_discovered_at_human: string, last_discovered_new_count: int, last_discovery_batch_id: string|null}|null
      */
     private function discoveryStatus(?UserProfile $userProfile): ?array
     {
@@ -919,6 +987,7 @@ class JobLeadController extends Controller
                 ->locale(app()->getLocale())
                 ->diffForHumans(),
             'last_discovered_new_count' => (int) ($userProfile->last_discovered_new_count ?? 0),
+            'last_discovery_batch_id' => $userProfile->last_discovery_batch_id,
         ];
     }
 
