@@ -180,10 +180,6 @@ class BrazilianTechJobBoardsDiscoverySource implements JobDiscoverySource
      */
     private function liveDetailEntry(array $entry): ?array
     {
-        if (config('job_discovery.use_fixture_responses')) {
-            return null;
-        }
-
         $detailUrl = $this->nullableString($entry['detail_url'] ?? null);
         $sourcePlatform = $this->nullableString($entry['source_platform'] ?? null);
 
@@ -346,6 +342,25 @@ class BrazilianTechJobBoardsDiscoverySource implements JobDiscoverySource
      */
     private function fetchDetailPageHtml(string $detailUrl): ?array
     {
+        if (config('job_discovery.use_fixture_responses')) {
+            $fixtureResponses = config('job_discovery.fixture_responses.brazilian_tech_job_boards', []);
+            $fixturePath = is_array($fixtureResponses) ? ($fixtureResponses[$detailUrl] ?? null) : null;
+
+            if (is_string($fixturePath) && is_file($fixturePath)) {
+                $fixtureBody = file_get_contents($fixturePath);
+
+                if (is_string($fixtureBody)) {
+                    return [
+                        'successful' => true,
+                        'status_code' => 200,
+                        'body' => $fixtureBody,
+                    ];
+                }
+            }
+
+            return null;
+        }
+
         $response = Http::timeout(10)
             ->accept('text/html')
             ->withUserAgent('FindJobApp/1.0')
@@ -485,9 +500,10 @@ class BrazilianTechJobBoardsDiscoverySource implements JobDiscoverySource
     {
         $xpath = $this->xpath($html);
         $pageText = $this->pageText($html);
+        $descriptionText = $this->programathorDescriptionText($xpath) ?? $pageText;
         $jobTitle = $this->nodeText($xpath, null, '//h1[1]');
         $companyName = $this->nodeText($xpath, null, '//h2[1]');
-        $location = $this->locationFromDetailText($pageText);
+        $location = $this->locationFromDetailText($descriptionText ?? $pageText);
 
         if (! $this->isCompleteEntry($this->nullableString($entry['detail_url'] ?? null), $jobTitle, $companyName)) {
             return null;
@@ -498,8 +514,8 @@ class BrazilianTechJobBoardsDiscoverySource implements JobDiscoverySource
             'job_title' => $jobTitle,
             'company_name' => $companyName,
             'location' => $location,
-            'work_mode' => $this->nullableWorkMode($location ?? $pageText),
-            'description_text' => Str::limit($pageText, 1600, ''),
+            'work_mode' => $this->nullableWorkMode($location ?? $descriptionText ?? $pageText),
+            'description_text' => Str::limit($descriptionText ?? $pageText, 1600, ''),
             'source_platform' => 'programathor',
             'target_identifier' => $this->nullableString($entry['target_identifier'] ?? null),
             'target_name' => $this->nullableString($entry['target_name'] ?? null),
@@ -742,6 +758,54 @@ class BrazilianTechJobBoardsDiscoverySource implements JobDiscoverySource
         libxml_clear_errors();
 
         return $this->normalizeText($document->textContent);
+    }
+
+    private function programathorDescriptionText(DOMXPath $xpath): ?string
+    {
+        $sections = [
+            '//main//*[contains(@class, "job-description")]',
+            '//main//*[contains(@class, "vacancy-description")]',
+            '//main//*[contains(@class, "vaga-descricao")]',
+            '//main//*[contains(@class, "content")]//section',
+            '//main//section[.//h2 or .//h3]',
+            '//main//article',
+        ];
+
+        foreach ($sections as $selector) {
+            $nodes = $xpath->query($selector);
+
+            if ($nodes === false || $nodes->count() === 0) {
+                continue;
+            }
+
+            $sectionTexts = [];
+
+            foreach ($nodes as $node) {
+                if (! $node instanceof DOMNode) {
+                    continue;
+                }
+
+                $text = $this->normalizeText($node->textContent);
+
+                if ($text === null || strlen($text) < 200) {
+                    continue;
+                }
+
+                if (! $this->softwareTextMatches($text)) {
+                    continue;
+                }
+
+                $sectionTexts[] = $text;
+            }
+
+            $combinedText = $this->normalizeText(implode("\n", array_unique($sectionTexts)));
+
+            if ($combinedText !== null && strlen($combinedText) >= 200) {
+                return $combinedText;
+            }
+        }
+
+        return null;
     }
 
     private function nodeText(DOMXPath $xpath, ?DOMNode $contextNode, string $selector): ?string

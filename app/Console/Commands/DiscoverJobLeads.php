@@ -86,7 +86,7 @@ class DiscoverJobLeads extends Command
                     (int) ($targetSummary['skipped_expired'] ?? 0),
                     (int) ($targetSummary['skipped_missing_company'] ?? 0),
                     (int) ($targetSummary['failed'] ?? 0),
-                ));
+                ).$this->detailEnrichmentSuffix($targetSummary));
             }
         }
 
@@ -104,5 +104,20 @@ class DiscoverJobLeads extends Command
         $this->line(sprintf('Failed: %d', $summary['failed']));
 
         return SymfonyCommand::SUCCESS;
+    }
+
+    /**
+     * @param array<string, mixed> $targetSummary
+     */
+    private function detailEnrichmentSuffix(array $targetSummary): string
+    {
+        $detailSucceeded = (int) ($targetSummary['detail_enrichment_succeeded'] ?? 0);
+        $detailFailed = (int) ($targetSummary['detail_enrichment_failed'] ?? 0);
+
+        if ($detailSucceeded === 0 && $detailFailed === 0) {
+            return '';
+        }
+
+        return sprintf(' · detail ok %d · detail failed %d', $detailSucceeded, $detailFailed);
     }
 }

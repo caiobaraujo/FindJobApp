@@ -31,6 +31,7 @@ it('derives deterministic discovery signals from a realistic full stack resume',
         'laravel',
         'fullstack',
         'nodejs',
+        'javascript',
         'sql',
         'mysql',
         'docker',
@@ -90,4 +91,24 @@ it('keeps empty resume inputs from inventing discovery signals', function (): vo
         'aliases' => [],
         'query_profiles' => [],
     ]);
+});
+
+it('builds match signals from the same canonical resume taxonomy used for job comparison', function (): void {
+    $resumeText = 'Full stack engineer with Node.js, Vue.js, Angular, Python, Django, PHP, Laravel, SQL, and MySQL experience. We go above and beyond for product quality.';
+
+    $signals = app(ResumeDiscoverySignalBuilder::class)->matchSignals($resumeText, []);
+
+    expect($signals)->toContain('nodejs')
+        ->and($signals)->toContain('vue')
+        ->and($signals)->toContain('angular')
+        ->and($signals)->toContain('python')
+        ->and($signals)->toContain('django')
+        ->and($signals)->toContain('php')
+        ->and($signals)->toContain('laravel')
+        ->and($signals)->toContain('sql')
+        ->and($signals)->toContain('mysql')
+        ->and($signals)->toContain('javascript')
+        ->and($signals)->toContain('frontend')
+        ->and($signals)->toContain('backend')
+        ->and($signals)->not->toContain('go');
 });

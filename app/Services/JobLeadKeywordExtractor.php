@@ -188,6 +188,11 @@ class JobLeadKeywordExtractor
         'your' => true,
     ];
 
+    public function __construct(
+        private readonly TechnicalKeywordSignalQuality $technicalKeywordSignalQuality,
+    ) {
+    }
+
     /**
      * @return array{extracted_keywords: list<string>, ats_hints: list<string>}
      */
@@ -202,11 +207,13 @@ class JobLeadKeywordExtractor
             ];
         }
 
-        $keywords = $this->extractKeywords($normalizedDescriptionText);
+        $allKeywords = $this->extractAllKeywords($normalizedDescriptionText);
+        $keywords = array_slice($allKeywords, 0, self::MAX_KEYWORDS);
+        $quality = $this->technicalKeywordSignalQuality->summarize($allKeywords);
 
         return [
             'extracted_keywords' => $keywords,
-            'ats_hints' => $this->buildAtsHints($normalizedDescriptionText, $keywords),
+            'ats_hints' => $this->buildAtsHints($normalizedDescriptionText, $keywords, $quality),
         ];
     }
 
@@ -222,6 +229,20 @@ class JobLeadKeywordExtractor
         }
 
         return array_slice($this->taxonomyKeywords($normalizedDescriptionText), 0, self::MAX_KEYWORDS);
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function extractAllKeywords(?string $descriptionText): array
+    {
+        $normalizedDescriptionText = $this->normalizeDescriptionText($descriptionText);
+
+        if ($normalizedDescriptionText === null) {
+            return [];
+        }
+
+        return $this->taxonomyKeywords($normalizedDescriptionText);
     }
 
     private function normalizeDescriptionText(?string $descriptionText): ?string
@@ -255,7 +276,7 @@ class JobLeadKeywordExtractor
         $matches = [];
 
         foreach (TechnicalKeywordTaxonomy::definitions() as $canonical => $definition) {
-            $firstPosition = $this->firstMatchPosition($descriptionText, $definition['aliases'], $definition['requires_context'] ?? []);
+            $firstPosition = $this->firstMatchPosition($descriptionText, $canonical, $definition['aliases'], $definition['requires_context'] ?? []);
 
             if ($firstPosition === null) {
                 continue;
@@ -313,7 +334,7 @@ class JobLeadKeywordExtractor
      * @param list<string> $aliases
      * @param list<string> $requiredContext
      */
-    private function firstMatchPosition(string $descriptionText, array $aliases, array $requiredContext): ?int
+    private function firstMatchPosition(string $descriptionText, string $canonical, array $aliases, array $requiredContext): ?int
     {
         $firstPosition = null;
 
@@ -327,7 +348,11 @@ class JobLeadKeywordExtractor
             $matchedText = (string) $matches[0][0];
             $position = (int) $matches[0][1];
 
-            if (! $this->hasRequiredContext($descriptionText, $position, strlen($matchedText), $requiredContext)) {
+            if (! $this->hasRequiredContext($descriptionText, $position, strlen($matchedText), $requiredContext, $canonical, $alias, $matchedText)) {
+                continue;
+            }
+
+            if ($canonical === 'go' && $alias === 'go' && ! $this->hasStandaloneGoContext($descriptionText, $position, strlen($matchedText))) {
                 continue;
             }
 
@@ -350,9 +375,13 @@ class JobLeadKeywordExtractor
     /**
      * @param list<string> $requiredContext
      */
-    private function hasRequiredContext(string $descriptionText, int $position, int $matchLength, array $requiredContext): bool
+    private function hasRequiredContext(string $descriptionText, int $position, int $matchLength, array $requiredContext, string $canonical, string $alias, string $matchedText): bool
     {
         if ($requiredContext === []) {
+            return true;
+        }
+
+        if ($canonical === 'rest_api' && $alias !== 'rest') {
             return true;
         }
 
@@ -362,12 +391,26 @@ class JobLeadKeywordExtractor
             $quotedContextTerm = preg_quote(strtolower($contextTerm), '/');
             $quotedContextTerm = str_replace('\ ', '\s+', $quotedContextTerm);
 
+            if (preg_match('/(?<![a-z0-9])'.$quotedContextTerm.'(?![a-z0-9])/u', strtolower($matchedText)) === 1) {
+                return true;
+            }
+
             if (preg_match('/(?<![a-z0-9])'.$quotedContextTerm.'(?![a-z0-9])/u', $contextWindow) === 1) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private function hasStandaloneGoContext(string $descriptionText, int $position, int $matchLength): bool
+    {
+        $contextWindow = substr($descriptionText, max(0, $position - 30), $matchLength + 60) ?: $descriptionText;
+
+        return preg_match(
+            '/(?<![a-z0-9])(backend|developer|engineer|software|microservices|grpc|kubernetes|service|platform)(?![a-z0-9]).{0,30}(?<![a-z0-9])go(?![a-z0-9])|(?<![a-z0-9])go(?![a-z0-9]).{0,30}(?<![a-z0-9])(backend|developer|engineer|software|microservices|grpc|kubernetes|service|platform)(?![a-z0-9])/u',
+            $contextWindow,
+        ) === 1;
     }
 
     /**
@@ -382,11 +425,20 @@ class JobLeadKeywordExtractor
 
     /**
      * @param list<string> $keywords
+     * @param array{
+     *     explainable_keywords: list<string>,
+     *     has_strong_technical_signals: bool,
+     *     quality: string
+     * } $quality
      * @return list<string>
      */
-    private function buildAtsHints(string $descriptionText, array $keywords): array
+    private function buildAtsHints(string $descriptionText, array $keywords, array $quality): array
     {
         $hints = [];
+
+        if ($quality['quality'] === TechnicalKeywordSignalQuality::QUALITY_LIMITED) {
+            $hints[] = 'Only broad technical context was found. Add the full job posting to surface stronger stack-specific signals.';
+        }
 
         if (count($keywords) < 4) {
             $hints[] = 'Paste more of the job description to surface a stronger ATS keyword set.';
@@ -396,8 +448,8 @@ class JobLeadKeywordExtractor
             $hints[] = 'The description looks short. Add the full posting before tailoring your resume.';
         }
 
-        if ($keywords !== []) {
-            $hints[] = 'Likely ATS terms to reflect in your resume: '.implode(', ', array_slice($keywords, 0, 6)).'.';
+        if ($quality['explainable_keywords'] !== []) {
+            $hints[] = 'Likely ATS terms to reflect in your resume: '.implode(', ', array_slice($quality['explainable_keywords'], 0, 6)).'.';
         }
 
         if ($hints === []) {

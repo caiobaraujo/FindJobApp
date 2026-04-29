@@ -135,6 +135,66 @@ it('renders matched jobs with matched and missing keywords when resume data exis
         ->assertDontSee('Hidden Co');
 });
 
+it('exposes friendly keyword labels without changing canonical match data', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Node.js platform engineer with REST API, data engineering, and CI/CD experience.',
+        'core_skills' => ['Node.js', 'REST API', 'Data Engineering', 'CI/CD'],
+    ]);
+
+    JobLead::factory()->for($user)->create([
+        'company_name' => 'Label Co',
+        'job_title' => 'Platform Engineer',
+        'source_url' => 'https://example.com/jobs/label-co',
+        'extracted_keywords' => ['ci_cd', 'nodejs', 'rest_api', 'api', 'data_engineering', 'data', 'graphql'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('matchedJobs.0.company_name', 'Label Co')
+            ->where('matchedJobs.0.job_keywords_used', ['ci_cd', 'nodejs', 'rest_api', 'api', 'data_engineering', 'data', 'graphql'])
+            ->where('matchedJobs.0.missing_keywords', ['graphql'])
+            ->where('matchedJobs.0.matched_keyword_labels', ['CI/CD', 'Node.js', 'REST API', 'Data Engineering'])
+            ->where('matchedJobs.0.missing_keyword_labels', ['GraphQL'])
+            ->where('matchedJobs.0.why_this_job.matched_keyword_labels', ['CI/CD', 'Node.js', 'REST API'])
+            ->where('matchedJobs.0.why_this_job.missing_keyword_labels', ['GraphQL'])
+        );
+});
+
+it('keeps matched and missing keywords aligned with canonical resume signals', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Full stack engineer with Node.js, Vue.js, Angular, Python, Django, PHP, Laravel, SQL, and MySQL experience. We go above and beyond to support the team.',
+        'core_skills' => ['Node.js', 'Vue.js', 'Angular', 'Python', 'Django', 'PHP', 'Laravel', 'SQL', 'MySQL'],
+    ]);
+
+    JobLead::factory()->for($user)->create([
+        'company_name' => 'Canonical Match Co',
+        'job_title' => 'JavaScript Platform Engineer',
+        'source_url' => 'https://example.com/jobs/canonical-match',
+        'extracted_keywords' => ['javascript', 'nodejs', 'go', 'python', 'django', 'php', 'laravel', 'sql', 'mysql'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('matchedJobs.0.company_name', 'Canonical Match Co')
+            ->where('matchedJobs.0.matched_keywords', ['javascript', 'nodejs', 'python', 'django', 'php', 'laravel', 'sql', 'mysql'])
+            ->where('matchedJobs.0.missing_keywords', ['go'])
+            ->where('matchedJobs.0.matched_keyword_labels', ['JavaScript', 'Node.js', 'Python', 'Django', 'PHP', 'Laravel', 'SQL', 'MySQL'])
+            ->where('matchedJobs.0.missing_keyword_labels', ['Go'])
+        );
+});
+
 it('keeps jobs without a source url from exposing a go to job button payload', function (): void {
     $user = User::factory()->create();
 

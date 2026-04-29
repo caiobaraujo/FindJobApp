@@ -152,3 +152,56 @@ it('uses resume-derived query profiles with the brazilian tech job boards source
     expect($lead->job_title)->toBe('Vue.js Product Engineer')
         ->and($lead->source_platform)->toBe('remotar');
 });
+
+it('imports a qa python programathor lead with full detail text and matches python without false javascript', function (): void {
+    config()->set('job_discovery.use_fixture_responses', true);
+    config()->set('job_discovery.supported_sources', ['brazilian-tech-job-boards']);
+    config()->set('job_discovery.brazilian_tech_job_board_targets', [[
+        'platform' => 'programathor',
+        'name' => 'ProgramaThor QA',
+        'parser_strategy' => 'programathor_cards',
+        'listing_urls' => [
+            'https://fixtures.programathor.com.br/jobs/qa-python',
+        ],
+    ]]);
+
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Python QA engineer with Pytest, Playwright, REST APIs, GitHub Actions, AWS, and microservices experience.',
+        'core_skills' => ['Python', 'QA', 'Pytest', 'Playwright', 'AWS'],
+    ]);
+
+    $this->artisan('job-leads:discover', [
+        'user_id' => $user->id,
+        'source' => 'brazilian-tech-job-boards',
+    ])->assertExitCode(0);
+
+    $lead = JobLead::query()
+        ->where('user_id', $user->id)
+        ->where('source_url', 'https://programathor.com.br/jobs/9001-chronos-cap-qa-python')
+        ->sole();
+
+    expect(strlen((string) $lead->description_text))->toBeGreaterThan(400)
+        ->and($lead->ats_hints[0] ?? null)->not->toBe('The description looks short. Add the full posting before tailoring your resume.')
+        ->and($lead->description_text)->toContain('RESTful APIs com Postman')
+        ->and($lead->extracted_keywords)->toContain('python')
+        ->and($lead->extracted_keywords)->toContain('qa')
+        ->and($lead->extracted_keywords)->toContain('pytest')
+        ->and($lead->extracted_keywords)->toContain('selenium')
+        ->and($lead->extracted_keywords)->toContain('playwright')
+        ->and($lead->extracted_keywords)->toContain('rest_api')
+        ->and($lead->extracted_keywords)->not->toContain('javascript');
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('matchedJobs.0.company_name', 'Chronos Cap')
+            ->where('matchedJobs.0.job_title', 'Engenheiro(a) de QA - Python - Pleno')
+            ->where('matchedJobs.0.matched_keywords', fn ($keywords): bool => $keywords->contains('python') && ! $keywords->contains('javascript'))
+            ->where('matchedJobs.0.missing_keywords', fn ($keywords): bool => ! $keywords->contains('python'))
+        );
+});

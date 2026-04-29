@@ -8,81 +8,34 @@ use Normalizer;
 class ResumeDiscoverySignalBuilder
 {
     /**
-     * @var array<string, array{patterns: list<string>, aliases: list<string>}>
+     * @var list<string>
      */
-    private const CANONICAL_SKILLS = [
-        'vue' => [
-            'patterns' => ['vue', 'vue js', 'vuejs'],
-            'aliases' => ['vue', 'vue js', 'vuejs'],
-        ],
-        'angular' => [
-            'patterns' => ['angular', 'angular js', 'angularjs'],
-            'aliases' => ['angular', 'angular js', 'angularjs'],
-        ],
-        'python' => [
-            'patterns' => ['python'],
-            'aliases' => ['python'],
-        ],
-        'django' => [
-            'patterns' => ['django'],
-            'aliases' => ['django'],
-        ],
-        'php' => [
-            'patterns' => ['php'],
-            'aliases' => ['php'],
-        ],
-        'laravel' => [
-            'patterns' => ['laravel'],
-            'aliases' => ['laravel'],
-        ],
-        'fullstack' => [
-            'patterns' => ['full stack', 'fullstack'],
-            'aliases' => ['full stack', 'fullstack'],
-        ],
-        'nodejs' => [
-            'patterns' => ['node js', 'nodejs'],
-            'aliases' => ['node', 'node js', 'nodejs'],
-        ],
-        'javascript' => [
-            'patterns' => ['javascript'],
-            'aliases' => ['javascript'],
-        ],
-        'sql' => [
-            'patterns' => ['sql'],
-            'aliases' => ['sql'],
-        ],
-        'mysql' => [
-            'patterns' => ['mysql', 'my sql'],
-            'aliases' => ['mysql', 'my sql'],
-        ],
-        'docker' => [
-            'patterns' => ['docker'],
-            'aliases' => ['docker'],
-        ],
-        'openai' => [
-            'patterns' => ['openai', 'open ai'],
-            'aliases' => ['openai', 'open ai'],
-        ],
-        'llm' => [
-            'patterns' => ['llm', 'llms', 'large language model', 'large language models'],
-            'aliases' => ['llm', 'llms', 'large language model'],
-        ],
-        'nlp' => [
-            'patterns' => ['nlp', 'natural language processing'],
-            'aliases' => ['nlp', 'natural language processing'],
-        ],
-        'chatbot' => [
-            'patterns' => ['chatbot', 'chatbots', 'chat bot', 'chat bots'],
-            'aliases' => ['chatbot', 'chat bot'],
-        ],
-        'frontend' => [
-            'patterns' => ['frontend', 'front end'],
-            'aliases' => ['frontend', 'front end'],
-        ],
-        'backend' => [
-            'patterns' => ['backend', 'back end'],
-            'aliases' => ['backend', 'back end'],
-        ],
+    private const DISCOVERY_SKILL_ORDER = [
+        'vue',
+        'angular',
+        'python',
+        'django',
+        'php',
+        'laravel',
+        'fullstack',
+        'nodejs',
+        'javascript',
+        'sql',
+        'mysql',
+        'docker',
+        'openai',
+        'llm',
+        'nlp',
+        'chatbot',
+        'frontend',
+        'backend',
+    ];
+
+    /**
+     * @var array<string, list<string>>
+     */
+    private const ALIAS_OVERRIDES = [
+        'nodejs' => ['node'],
     ];
 
     public function __construct(
@@ -102,9 +55,7 @@ class ResumeDiscoverySignalBuilder
      */
     public function build(?string $resumeText, ?array $coreSkills): array
     {
-        $normalizedCoreSkills = $this->normalizedCoreSkills($coreSkills);
-        $normalizedResumeText = $this->normalizeText($resumeText);
-        $canonicalSkills = $this->canonicalSkills($normalizedResumeText, $normalizedCoreSkills);
+        $canonicalSkills = $this->canonicalSkills($resumeText, $coreSkills);
         $roleFamilies = $this->roleFamilies($canonicalSkills);
         $aliases = $this->aliases($canonicalSkills);
         $queryProfiles = $this->queryProfiles($canonicalSkills);
@@ -122,75 +73,37 @@ class ResumeDiscoverySignalBuilder
      * @param list<string>|null $coreSkills
      * @return list<string>
      */
-    public function detectedSkills(?string $resumeText, ?array $coreSkills, int $limit = 10): array
+    public function matchSignals(?string $resumeText, ?array $coreSkills): array
     {
-        $skills = [];
+        $canonicalSkills = $this->canonicalSkills($resumeText, $coreSkills);
+        $technicalKeywords = $this->technicalKeywords($resumeText, $coreSkills);
 
-        foreach ($coreSkills ?? [] as $skill) {
-            if (! is_string($skill)) {
-                continue;
-            }
-
-            $normalizedSkill = $this->normalizeText($skill);
-
-            if ($normalizedSkill === null) {
-                continue;
-            }
-
-            $skills[] = $normalizedSkill;
-        }
-
-        if (filled($resumeText)) {
-            $analysis = $this->jobLeadKeywordExtractor->analyze($resumeText);
-
-            foreach ($analysis['extracted_keywords'] as $keyword) {
-                if (! is_string($keyword)) {
-                    continue;
-                }
-
-                $skills[] = $keyword;
-            }
-        }
-
-        return array_slice(array_values(array_unique($skills)), 0, $limit);
+        return array_values(array_unique([
+            ...$technicalKeywords,
+            ...$this->roleFamilies($canonicalSkills),
+        ]));
     }
 
     /**
      * @param list<string>|null $coreSkills
      * @return list<string>
      */
-    private function normalizedCoreSkills(?array $coreSkills): array
+    public function detectedSkills(?string $resumeText, ?array $coreSkills, int $limit = 10): array
     {
-        $normalized = [];
-
-        foreach ($coreSkills ?? [] as $skill) {
-            if (! is_string($skill)) {
-                continue;
-            }
-
-            $value = $this->normalizeText($skill);
-
-            if ($value === null) {
-                continue;
-            }
-
-            $normalized[] = $value;
-        }
-
-        return array_values(array_unique($normalized));
+        return array_slice($this->technicalKeywords($resumeText, $coreSkills), 0, $limit);
     }
 
     /**
-     * @param list<string> $coreSkills
+     * @param list<string>|null $coreSkills
      * @return list<string>
      */
-    private function canonicalSkills(?string $resumeText, array $coreSkills): array
+    private function canonicalSkills(?string $resumeText, ?array $coreSkills): array
     {
+        $technicalKeywords = $this->technicalKeywords($resumeText, $coreSkills);
         $canonicalSkills = [];
-        $haystacks = $this->haystacks($resumeText, $coreSkills);
 
-        foreach (array_keys(self::CANONICAL_SKILLS) as $canonicalSkill) {
-            if (! $this->containsCanonicalSkill($canonicalSkill, $haystacks)) {
+        foreach (self::DISCOVERY_SKILL_ORDER as $canonicalSkill) {
+            if (! in_array($canonicalSkill, $technicalKeywords, true)) {
                 continue;
             }
 
@@ -263,9 +176,14 @@ class ResumeDiscoverySignalBuilder
     private function aliases(array $canonicalSkills): array
     {
         $aliases = [];
+        $definitions = TechnicalKeywordTaxonomy::definitions();
 
         foreach ($canonicalSkills as $canonicalSkill) {
-            foreach (self::CANONICAL_SKILLS[$canonicalSkill]['aliases'] ?? [] as $alias) {
+            foreach ($definitions[$canonicalSkill]['aliases'] ?? [] as $alias) {
+                $aliases[] = $alias;
+            }
+
+            foreach (self::ALIAS_OVERRIDES[$canonicalSkill] ?? [] as $alias) {
                 $aliases[] = $alias;
             }
         }
@@ -394,54 +312,50 @@ class ResumeDiscoverySignalBuilder
     private function profileAliases(array $profileCanonicalSkills, array $canonicalSkills): array
     {
         $aliases = [];
+        $availableAliases = collect($this->aliases($canonicalSkills));
 
         foreach ($profileCanonicalSkills as $canonicalSkill) {
             if (! in_array($canonicalSkill, $canonicalSkills, true)) {
                 continue;
             }
 
-            foreach (self::CANONICAL_SKILLS[$canonicalSkill]['aliases'] ?? [] as $alias) {
-                $aliases[] = $alias;
-            }
+            $skillAliases = $this->aliases([$canonicalSkill]);
+            $aliases = [...$aliases, ...$availableAliases->intersect($skillAliases)->values()->all()];
         }
 
         return array_values(array_unique($aliases));
     }
 
     /**
-     * @param list<string> $coreSkills
+     * @param list<string>|null $coreSkills
      * @return list<string>
      */
-    private function haystacks(?string $resumeText, array $coreSkills): array
+    private function technicalKeywords(?string $resumeText, ?array $coreSkills): array
     {
-        $haystacks = [];
+        $keywords = [];
 
-        if ($resumeText !== null) {
-            $haystacks[] = $resumeText;
+        foreach ($coreSkills ?? [] as $skill) {
+            if (! is_string($skill)) {
+                continue;
+            }
+
+            $canonicalSkill = TechnicalKeywordTaxonomy::canonicalForExplicitSkill($skill);
+
+            if ($canonicalSkill !== null) {
+                $keywords[] = $canonicalSkill;
+                continue;
+            }
+
+            $keywords = [...$keywords, ...$this->jobLeadKeywordExtractor->extractKeywords($skill)];
         }
 
-        return [...$haystacks, ...$coreSkills];
-    }
-
-    /**
-     * @param list<string> $haystacks
-     */
-    private function containsCanonicalSkill(string $canonicalSkill, array $haystacks): bool
-    {
-        foreach ($haystacks as $haystack) {
-            foreach (self::CANONICAL_SKILLS[$canonicalSkill]['patterns'] ?? [] as $pattern) {
-                if ($this->containsPhrase($haystack, $pattern)) {
-                    return true;
-                }
+        if (filled($resumeText)) {
+            foreach ($this->jobLeadKeywordExtractor->extractAllKeywords($resumeText) as $keyword) {
+                $keywords[] = $keyword;
             }
         }
 
-        return false;
-    }
-
-    private function containsPhrase(string $haystack, string $phrase): bool
-    {
-        return preg_match('/(^|\s)'.preg_quote($phrase, '/').'(\s|$)/', $haystack) === 1;
+        return array_values(array_unique($keywords));
     }
 
     private function normalizeText(?string $value): ?string

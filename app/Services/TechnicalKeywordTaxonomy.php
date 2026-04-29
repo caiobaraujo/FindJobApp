@@ -2,6 +2,9 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Str;
+use Normalizer;
+
 class TechnicalKeywordTaxonomy
 {
     /**
@@ -26,6 +29,48 @@ class TechnicalKeywordTaxonomy
         }
 
         return $definitions;
+    }
+
+    public static function canonicalForExplicitSkill(string $skill): ?string
+    {
+        $normalizedSkill = self::normalizeText($skill);
+
+        if ($normalizedSkill === null) {
+            return null;
+        }
+
+        $matches = [];
+
+        foreach (self::definitions() as $canonical => $definition) {
+            foreach ($definition['aliases'] as $alias) {
+                $normalizedAlias = self::normalizeText($alias);
+
+                if ($normalizedAlias !== $normalizedSkill) {
+                    continue;
+                }
+
+                $matches[] = [
+                    'canonical' => $canonical,
+                    'specificity' => strlen($normalizedAlias),
+                ];
+            }
+        }
+
+        if ($matches === []) {
+            return null;
+        }
+
+        usort($matches, function (array $left, array $right): int {
+            $specificityComparison = $right['specificity'] <=> $left['specificity'];
+
+            if ($specificityComparison !== 0) {
+                return $specificityComparison;
+            }
+
+            return strcmp($left['canonical'], $right['canonical']);
+        });
+
+        return $matches[0]['canonical'];
     }
 
     /**
@@ -94,6 +139,7 @@ class TechnicalKeywordTaxonomy
                 'kubernetes' => ['aliases' => ['kubernetes', 'k8s']],
                 'terraform' => ['aliases' => ['terraform']],
                 'ci_cd' => ['aliases' => ['ci/cd', 'ci cd', 'cicd', 'continuous integration', 'continuous delivery']],
+                'git' => ['aliases' => ['git']],
                 'github_actions' => ['aliases' => ['github actions']],
                 'devops' => ['aliases' => ['devops', 'dev ops']],
             ],
@@ -108,6 +154,10 @@ class TechnicalKeywordTaxonomy
                 'phpunit' => ['aliases' => ['phpunit']],
                 'pytest' => ['aliases' => ['pytest']],
                 'qa' => ['aliases' => ['qa', 'quality assurance']],
+                'robot_framework' => ['aliases' => ['robot framework']],
+                'selenium' => ['aliases' => ['selenium']],
+                'postman' => ['aliases' => ['postman']],
+                'owasp' => ['aliases' => ['owasp']],
                 'test_automation' => ['aliases' => ['test automation', 'automacao de testes']],
             ],
             'data' => [
@@ -139,14 +189,15 @@ class TechnicalKeywordTaxonomy
                 'hexagonal_architecture' => ['aliases' => ['hexagonal architecture']],
                 'event_driven' => ['aliases' => ['event driven', 'event-driven']],
                 'api' => ['aliases' => ['api', 'apis']],
+                'rpa' => ['aliases' => ['rpa', 'robotic process automation']],
             ],
             'ai_ml' => [
                 'openai' => ['aliases' => ['openai', 'open ai']],
                 'llm' => ['aliases' => ['llm', 'llms', 'large language model', 'large language models']],
                 'nlp' => ['aliases' => ['nlp', 'natural language processing']],
                 'machine_learning' => ['aliases' => ['machine learning', 'ml']],
-                'ai_ml' => ['aliases' => ['artificial intelligence', 'ai/ml', 'ai ml']],
-                'chatbot' => ['aliases' => ['chatbot', 'chatbots']],
+                'ai_ml' => ['aliases' => ['artificial intelligence', 'ai/ml', 'ai ml', 'conversational ai', 'ai agent', 'ai agents', 'agentes de ia']],
+                'chatbot' => ['aliases' => ['chatbot', 'chatbots', 'chat bot', 'chat bots']],
             ],
             'product_delivery' => [
                 'automation' => ['aliases' => ['automation', 'automacao']],
@@ -155,5 +206,40 @@ class TechnicalKeywordTaxonomy
                 'design' => ['aliases' => ['design']],
             ],
         ];
+    }
+
+    private static function normalizeText(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $normalized = self::normalizeUnicode($value);
+        $normalized = Str::of($normalized)
+            ->lower()
+            ->replaceMatches('/[^a-z0-9]+/', ' ')
+            ->trim()
+            ->value();
+
+        return $normalized === '' ? null : $normalized;
+    }
+
+    private static function normalizeUnicode(string $text): string
+    {
+        if (class_exists(Normalizer::class)) {
+            $normalizedText = Normalizer::normalize($text, Normalizer::FORM_KD);
+
+            if (is_string($normalizedText)) {
+                return preg_replace('/\p{Mn}+/u', '', $normalizedText) ?? $normalizedText;
+            }
+        }
+
+        $transliteratedText = iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $text);
+
+        if ($transliteratedText === false) {
+            return $text;
+        }
+
+        return $transliteratedText;
     }
 }

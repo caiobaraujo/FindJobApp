@@ -188,3 +188,35 @@ it('surfaces missing keyword analysis counts on the matched jobs page', function
             ->where('leadsMissingAnalysisCount', 1)
         );
 });
+
+it('marks generic api and data only leads as limited analysis and avoids misleading keyword explanations', function (): void {
+    $user = User::factory()->create();
+
+    $this->actingAs($user)
+        ->post(route('job-leads.store'), [
+            'company_name' => 'Generic Signals Co',
+            'job_title' => 'Integration Analyst',
+            'source_url' => 'https://example.com/jobs/generic-signals',
+            'lead_status' => 'saved',
+            'description_text' => 'Data-focused role supporting API integrations, cloud collaboration, and backend automation for internal workflows.',
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $jobLead = JobLead::query()->sole();
+
+    expect($jobLead->extracted_keywords)->toContain('data')
+        ->and($jobLead->extracted_keywords)->toContain('api')
+        ->and($jobLead->hasLimitedAnalysis())->toBeTrue()
+        ->and($jobLead->ats_hints)->toContain('Only broad technical context was found. Add the full job posting to surface stronger stack-specific signals.');
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('matchedJobs.0.company_name', 'Generic Signals Co')
+            ->where('matchedJobs.0.has_limited_analysis', true)
+            ->where('matchedJobs.0.matched_keywords', [])
+            ->where('matchedJobs.0.missing_keywords', [])
+        );
+});

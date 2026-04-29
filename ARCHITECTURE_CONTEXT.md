@@ -102,6 +102,8 @@ Important:
 - URL-only leads must remain valid
 - The system must never invent missing data
 - Extracted keywords must come from deterministic taxonomy-based analysis of job-specific text only
+- Contextual-only keyword sets such as `api`, `data`, `cloud`, or `backend` without stronger stack-specific evidence must be treated as limited analysis
+- Workspace keyword explanations may apply deterministic display labels and redundancy suppression without changing canonical stored or matched keyword values
 
 ---
 
@@ -125,6 +127,7 @@ Secondary entity.
 - No AI features in the current phase
 - Do not introduce paid, opaque, or AI-based external APIs
 - Discovery must be deterministic and testable with fixtures
+- Matched and missing job keywords must be computed from canonical taxonomy-based resume signals, not raw substring matching against resume text
 
 ---
 
@@ -153,6 +156,19 @@ Definition:
 - deterministic
 - test-covered
 - explainable
+
+---
+
+## Matching Rules
+
+- Job keyword analysis and resume keyword analysis must share the same deterministic technical taxonomy
+- Resume comparison signals are built from:
+    - canonical technical keywords extracted from stored resume text
+    - canonical technical keywords derived from explicit core skills
+    - deterministic role-family expansions such as `javascript`, `frontend`, `backend`, `database`, and `ai_applied` when supported by canonical resume evidence
+- Display labels are applied only after canonical matched and missing keyword sets are computed
+- Ambiguous terms such as `go` must only match when technical context is present
+- Generic contextual terms must not create misleading matched or missing keyword explanations by themselves
 
 ---
 
@@ -209,6 +225,7 @@ Implemented:
 - LaraJobs
 - CompanyCareerPages
 - BrazilianTechJobBoards
+- GupyPublicJobs
 
 `CompanyCareerPages` is now a curated Brazil-first source set, not generic crawling.
 
@@ -239,6 +256,7 @@ Implemented:
 - Fixed platform parser strategies only:
     - `programathor_cards`
     - `remotar_cards`
+- Detail-page enrichment for supported boards must prefer job-specific description sections over whole-page text when available
 - Import eligibility remains strict:
     - job title required
     - job URL required
@@ -246,6 +264,30 @@ Implemented:
 - Current curated platforms:
     - ProgramaThor
     - Remotar
+
+`GupyPublicJobs` is a curated Brazil-first public Gupy source set, not generic scraping.
+
+- Fixed public Gupy listing URLs only
+- Fixed curated company targets only
+- Deterministic parser strategy only:
+    - `gupy_listing`
+- Detail-page enrichment is allowed for matched curated candidate URLs and should prefer job-specific content sections over page chrome
+- Import eligibility remains strict:
+    - job title required
+    - job URL required
+    - company name required from the curated target or explicit page evidence
+- Current curated targets include:
+    - Afya
+    - Omie
+    - FCamara
+    - Minsait
+    - Global Hitss
+    - Gaudium
+    - Montreal
+    - CIGAM
+    - Positivo Tecnologia
+    - Gran
+    - JBS
 
 Enabled by default:
 
@@ -262,20 +304,25 @@ Enabled by default in local/development:
 Local enablement is controlled by:
 
 - `JOB_DISCOVERY_ENABLE_BRAZILIAN_TECH_JOB_BOARDS=true|false`
+- `JOB_DISCOVERY_ENABLE_GUPY_PUBLIC_JOBS=true|false`
 
 Disabled but available:
 
 - remotive
+- gupy-public-jobs
 
 Fixture mode:
 
 - larajobs
 - company-career-pages
 - brazilian-tech-job-boards
+- gupy-public-jobs
 
 `company-career-pages` fixture mode now uses the curated Brazil-first target set above and deterministic per-company HTML fixtures so import counts, deduplication, and per-target diagnostics remain repeatable.
 
 `brazilian-tech-job-boards` fixture mode now uses deterministic ProgramaThor and Remotar HTML fixtures so import counts, deduplication, per-platform diagnostics, and resume-derived query-profile matching remain repeatable.
+
+`gupy-public-jobs` fixture mode now uses deterministic curated Gupy listing and detail HTML fixtures so import counts, deduplication, per-company diagnostics, and detail-enrichment behavior remain repeatable.
 
 ---
 
@@ -433,6 +480,15 @@ These metrics are emitted in the discovery flash payload and structured discover
 - Extraction prefers upstream description cleanup first:
     - strip raw URLs
     - strip image file references
+- Extracted terms are classified by signal quality:
+    - strong: specific technologies, frameworks, tools, databases, languages, and cloud products
+    - contextual: broad role or domain terms such as `api`, `data`, `cloud`, `backend`, `frontend`, `testing`, and `automation`
+    - weak: non-technical or low-signal terms that should not explain a lead by themselves
+- Strong specific terms suppress broader parent terms in match explanations when appropriate, for example:
+    - `rest_api` over `api`
+    - `data_engineering` over `data`
+    - `postgresql` or `mysql` over generic database context
+- Leads with only contextual or weak terms must remain valid `JobLead` records but are considered limited keyword analysis and should not look like strong resume matches
     - strip obvious page/schema/analytics/script tokens
 - A small deterministic safety net removes obvious page or JavaScript chrome noise, but extraction is not driven by one-off blacklists
 
@@ -506,12 +562,14 @@ For `brazilian-tech-job-boards`, source diagnostics now also preserve per-platfo
 - query skips
 - expired skips
 - missing-company skips
+- detail enrichment successes and failures
 
 Use it for Brazilian board diagnosis with commands like:
 
 ```bash
 php artisan discovery:inspect-source brazilian-tech-job-boards --query=laravel
 php artisan discovery:inspect-source brazilian-tech-job-boards --query=frontend --resume-text="Vue.js engineer" --skill=Vue.js
+php artisan discovery:inspect-source gupy-public-jobs --query=python
 ```
 
 ---

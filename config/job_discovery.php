@@ -2,6 +2,7 @@
 
 $useFixtureResponses = (bool) env('JOB_DISCOVERY_USE_FIXTURES', false);
 $enableBrazilianTechJobBoards = (bool) env('JOB_DISCOVERY_ENABLE_BRAZILIAN_TECH_JOB_BOARDS', env('APP_ENV', 'production') === 'local');
+$enableGupyPublicJobs = (bool) env('JOB_DISCOVERY_ENABLE_GUPY_PUBLIC_JOBS', false);
 
 $fixtureCompanyCareerTargets = [
     [
@@ -115,10 +116,38 @@ $fixtureBrazilianTechJobBoardTargets = [
     ],
 ];
 
+$fixtureGupyPublicJobTargets = [
+    [
+        'name' => 'Afya',
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://afya.gupy.io/',
+    ],
+    [
+        'name' => 'Omie',
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://omie.gupy.io/',
+    ],
+    [
+        'name' => 'FCamara',
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://fcamara.gupy.io/',
+    ],
+    [
+        'name' => 'Gran',
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://gran.gupy.io/',
+    ],
+    [
+        'name' => null,
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://mystery.gupy.io/',
+    ],
+];
+
 return [
-    'fixture_supported_sources' => ['larajobs', 'company-career-pages'],
+    'fixture_supported_sources' => ['larajobs', 'company-career-pages', 'gupy-public-jobs'],
     'supported_sources' => $useFixtureResponses
-        ? ['larajobs', 'company-career-pages']
+        ? ['larajobs', 'company-career-pages', 'gupy-public-jobs']
         : array_values(array_filter([
             'python-job-board',
             'django-community-jobs',
@@ -126,10 +155,12 @@ return [
             'larajobs',
             'company-career-pages',
             $enableBrazilianTechJobBoards ? 'brazilian-tech-job-boards' : null,
+            $enableGupyPublicJobs ? 'gupy-public-jobs' : null,
         ])),
     'use_fixture_responses' => $useFixtureResponses,
     'fixture_company_career_targets' => $fixtureCompanyCareerTargets,
     'fixture_brazilian_tech_job_board_targets' => $fixtureBrazilianTechJobBoardTargets,
+    'fixture_gupy_public_job_targets' => $fixtureGupyPublicJobTargets,
     'fixture_responses' => [
         'larajobs' => base_path('tests/Fixtures/larajobs_listing.html'),
         'company_career_pages' => [
@@ -147,6 +178,20 @@ return [
         'brazilian_tech_job_boards' => [
             'https://fixtures.programathor.com.br/jobs' => base_path('tests/Fixtures/brazilian_tech_job_boards_programathor.html'),
             'https://fixtures.remotar.com.br/vagas-tecnologia-remoto' => base_path('tests/Fixtures/brazilian_tech_job_boards_remotar.html'),
+            'https://fixtures.programathor.com.br/jobs/qa-python' => base_path('tests/Fixtures/brazilian_tech_job_boards_programathor_qa_python_listing.html'),
+            'https://programathor.com.br/jobs/9001-chronos-cap-qa-python' => base_path('tests/Fixtures/brazilian_tech_job_boards_programathor_qa_python_detail.html'),
+        ],
+        'gupy_public_jobs' => [
+            'https://afya.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_afya_listing.html'),
+            'https://afya.gupy.io/jobs/71001' => base_path('tests/Fixtures/gupy_public_jobs_backend_python_detail.html'),
+            'https://afya.gupy.io/jobs/71002' => base_path('tests/Fixtures/gupy_public_jobs_frontend_javascript_detail.html'),
+            'https://omie.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_omie_listing.html'),
+            'https://omie.gupy.io/jobs/72001' => base_path('tests/Fixtures/gupy_public_jobs_backend_php_detail.html'),
+            'https://fcamara.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_fcamara_listing.html'),
+            'https://fcamara.gupy.io/jobs/73001' => base_path('tests/Fixtures/gupy_public_jobs_devops_detail.html'),
+            'https://gran.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_gran_listing.html'),
+            'https://gran.gupy.io/jobs/74001' => base_path('tests/Fixtures/gupy_public_jobs_qa_data_detail.html'),
+            'https://mystery.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_mystery_listing.html'),
         ],
     ],
     'company_career_targets' => $useFixtureResponses ? $fixtureCompanyCareerTargets : [
@@ -257,6 +302,63 @@ return [
             'listing_urls' => [
                 'https://blog.remotar.com.br/tag/vagas-tecnologia/',
             ],
+        ],
+    ],
+    'gupy_public_job_targets' => $useFixtureResponses ? $fixtureGupyPublicJobTargets : [
+        [
+            'name' => 'Afya',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://afya.gupy.io/',
+        ],
+        [
+            'name' => 'Omie',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://omie.gupy.io/',
+        ],
+        [
+            'name' => 'FCamara',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://fcamara.gupy.io/',
+        ],
+        [
+            'name' => 'Minsait',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://minsait.gupy.io/',
+        ],
+        [
+            'name' => 'Global Hitss',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://globalhitss.gupy.io/',
+        ],
+        [
+            'name' => 'Gaudium',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://gaudium.gupy.io/',
+        ],
+        [
+            'name' => 'Montreal',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://montreal.gupy.io/',
+        ],
+        [
+            'name' => 'CIGAM',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://cigam.gupy.io/',
+        ],
+        [
+            'name' => 'Positivo Tecnologia',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://positivotecnologia.gupy.io/',
+        ],
+        [
+            'name' => 'Gran',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://gran.gupy.io/',
+        ],
+        [
+            'name' => 'JBS',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://jbs.gupy.io/',
         ],
     ],
 ];

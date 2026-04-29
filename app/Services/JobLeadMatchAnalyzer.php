@@ -4,6 +4,12 @@ namespace App\Services;
 
 class JobLeadMatchAnalyzer
 {
+    public function __construct(
+        private readonly ResumeDiscoverySignalBuilder $resumeDiscoverySignalBuilder,
+        private readonly TechnicalKeywordSignalQuality $technicalKeywordSignalQuality,
+    ) {
+    }
+
     /**
      * @param list<string> $jobKeywords
      * @param list<string> $coreSkills
@@ -12,7 +18,7 @@ class JobLeadMatchAnalyzer
     public function analyze(array $jobKeywords, ?string $baseResumeText, array $coreSkills): array
     {
         $normalizedJobKeywords = array_values(array_unique(array_filter(
-            array_map(fn (string $keyword): ?string => $this->normalizeText($keyword), $jobKeywords),
+            array_map(fn (string $keyword): ?string => $this->normalizeKeyword($keyword), $jobKeywords),
         )));
 
         if ($normalizedJobKeywords === []) {
@@ -23,12 +29,32 @@ class JobLeadMatchAnalyzer
             ];
         }
 
-        $profileCorpus = $this->profileCorpus($baseResumeText, $coreSkills);
+        $keywordQuality = $this->technicalKeywordSignalQuality->summarize($normalizedJobKeywords);
+        $explainableJobKeywords = $keywordQuality['explainable_keywords'];
+
+        if ($explainableJobKeywords === []) {
+            return [
+                'matched_keywords' => [],
+                'missing_keywords' => [],
+                'match_summary' => 'No strong technical job keywords are available yet for matching.',
+            ];
+        }
+
+        $resumeSignals = $this->resumeDiscoverySignalBuilder->matchSignals($baseResumeText, $coreSkills);
+
+        if ($resumeSignals === []) {
+            return [
+                'matched_keywords' => [],
+                'missing_keywords' => $explainableJobKeywords,
+                'match_summary' => $this->matchSummary([], $explainableJobKeywords),
+            ];
+        }
+
         $matchedKeywords = [];
         $missingKeywords = [];
 
-        foreach ($normalizedJobKeywords as $keyword) {
-            if ($this->matchesKeyword($keyword, $profileCorpus)) {
+        foreach ($explainableJobKeywords as $keyword) {
+            if (in_array($keyword, $resumeSignals, true)) {
                 $matchedKeywords[] = $keyword;
                 continue;
             }
@@ -41,38 +67,6 @@ class JobLeadMatchAnalyzer
             'missing_keywords' => $missingKeywords,
             'match_summary' => $this->matchSummary($matchedKeywords, $missingKeywords),
         ];
-    }
-
-    /**
-     * @param list<string> $coreSkills
-     */
-    private function profileCorpus(?string $baseResumeText, array $coreSkills): string
-    {
-        return trim(implode(' ', array_filter([
-            $this->normalizeText($baseResumeText),
-            $this->normalizeText(implode(' ', $coreSkills)),
-        ])));
-    }
-
-    private function matchesKeyword(string $keyword, string $profileCorpus): bool
-    {
-        if ($profileCorpus === '') {
-            return false;
-        }
-
-        if (str_contains($profileCorpus, $keyword)) {
-            return true;
-        }
-
-        $tokens = explode(' ', $keyword);
-
-        foreach ($tokens as $token) {
-            if (! str_contains($profileCorpus, $token)) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /**
@@ -89,15 +83,21 @@ class JobLeadMatchAnalyzer
         );
     }
 
-    private function normalizeText(?string $text): ?string
+    private function normalizeKeyword(?string $text): ?string
     {
         if ($text === null) {
             return null;
         }
 
         $normalizedText = strtolower(trim($text));
-        $normalizedText = preg_replace('/[^a-z0-9\s]+/', ' ', $normalizedText) ?? '';
-        $normalizedText = trim(preg_replace('/\s+/', ' ', $normalizedText) ?? '');
+        $canonicalKeyword = TechnicalKeywordTaxonomy::canonicalForExplicitSkill($normalizedText);
+
+        if ($canonicalKeyword !== null) {
+            return $canonicalKeyword;
+        }
+
+        $normalizedText = preg_replace('/[^a-z0-9]+/', '_', $normalizedText) ?? '';
+        $normalizedText = trim(preg_replace('/_+/', '_', $normalizedText) ?? '', '_');
 
         if ($normalizedText === '') {
             return null;

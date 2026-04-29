@@ -434,8 +434,13 @@ function discoveryTargetDetails(sourceResult) {
     return sourceResult.target_diagnostics.map((targetSummary) => {
         const targetName = targetSummary.target_name || targetSummary.target_identifier || 'Target';
         const platform = targetSummary.platform || targetName;
+        const detailOk = Number(targetSummary.detail_enrichment_succeeded || 0);
+        const detailFailed = Number(targetSummary.detail_enrichment_failed || 0);
+        const detailSuffix = detailOk > 0 || detailFailed > 0
+            ? ` · detail ok ${detailOk} · detail failed ${detailFailed}`
+            : '';
 
-        return `${targetName} (${platform}) — fetched ${targetSummary.fetched_candidates || 0} · matched ${targetSummary.matched_candidates || 0} · imported ${targetSummary.imported || 0} · duplicates ${targetSummary.deduplicated || 0} · skipped ${targetSummary.skipped_by_query || 0} · expired ${targetSummary.skipped_expired || 0} · missing company ${targetSummary.skipped_missing_company || 0} · failed ${targetSummary.failed || 0}`;
+        return `${targetName} (${platform}) — fetched ${targetSummary.fetched_candidates || 0} · matched ${targetSummary.matched_candidates || 0} · imported ${targetSummary.imported || 0} · duplicates ${targetSummary.deduplicated || 0} · skipped ${targetSummary.skipped_by_query || 0} · expired ${targetSummary.skipped_expired || 0} · missing company ${targetSummary.skipped_missing_company || 0} · failed ${targetSummary.failed || 0}${detailSuffix}`;
     });
 }
 
@@ -541,12 +546,36 @@ function keywordSummary(keywords) {
     return keywords.join(', ');
 }
 
+function matchedKeywordLabels(jobLead) {
+    return Array.isArray(jobLead.matched_keyword_labels)
+        ? jobLead.matched_keyword_labels
+        : jobLead.matched_keywords;
+}
+
+function missingKeywordLabels(jobLead) {
+    return Array.isArray(jobLead.missing_keyword_labels)
+        ? jobLead.missing_keyword_labels
+        : jobLead.missing_keywords;
+}
+
+function whyThisJobMatchedKeywordLabels(jobLead) {
+    return Array.isArray(jobLead.why_this_job?.matched_keyword_labels)
+        ? jobLead.why_this_job.matched_keyword_labels
+        : (jobLead.why_this_job?.matched_keywords || []);
+}
+
+function whyThisJobMissingKeywordLabels(jobLead) {
+    return Array.isArray(jobLead.why_this_job?.missing_keyword_labels)
+        ? jobLead.why_this_job.missing_keyword_labels
+        : (jobLead.why_this_job?.missing_keywords || []);
+}
+
 function visibleMatchedKeywords(jobLead) {
-    return jobLead.matched_keywords.slice(0, 5);
+    return matchedKeywordLabels(jobLead).slice(0, 5);
 }
 
 function hiddenMatchedKeywordCount(jobLead) {
-    return Math.max(0, jobLead.matched_keywords.length - 5);
+    return Math.max(0, matchedKeywordLabels(jobLead).length - 5);
 }
 
 function leadStatusActionClasses(jobLead, leadStatus) {
@@ -1143,7 +1172,7 @@ function setLeadStatus(jobLead, leadStatus) {
                                     <span class="font-semibold text-slateglass-200">
                                         {{ t('matched_jobs.matches', 'Matches') }}:
                                     </span>
-                                    {{ keywordSummary(jobLead.why_this_job.matched_keywords) }}
+                                    {{ keywordSummary(whyThisJobMatchedKeywordLabels(jobLead)) }}
                                 </p>
                                 <p
                                     v-if="jobLead.why_this_job.missing_keywords.length > 0"
@@ -1152,7 +1181,7 @@ function setLeadStatus(jobLead, leadStatus) {
                                     <span class="font-semibold text-slateglass-200">
                                         {{ t('matched_jobs.missing', 'Missing') }}:
                                     </span>
-                                    {{ keywordSummary(jobLead.why_this_job.missing_keywords) }}
+                                    {{ keywordSummary(whyThisJobMissingKeywordLabels(jobLead)) }}
                                 </p>
                             </div>
 
@@ -1183,11 +1212,11 @@ function setLeadStatus(jobLead, leadStatus) {
                                         {{ t('matched_jobs.missing_keywords', 'Missing keywords') }}
                                     </p>
                                     <div
-                                        v-if="jobLead.missing_keywords.length > 0"
+                                        v-if="missingKeywordLabels(jobLead).length > 0"
                                         class="mt-3 flex flex-wrap gap-2"
                                     >
                                         <span
-                                            v-for="keyword in jobLead.missing_keywords"
+                                            v-for="keyword in missingKeywordLabels(jobLead)"
                                             :key="keyword"
                                             class="rounded-full border border-gold-300/20 bg-gold-300/10 px-3 py-1 text-xs font-medium text-gold-200"
                                         >

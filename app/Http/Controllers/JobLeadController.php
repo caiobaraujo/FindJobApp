@@ -19,6 +19,7 @@ use App\Services\JobLeadMatchAnalyzer;
 use App\Services\JobSearchIntentParser;
 use App\Services\ResumeDiscoverySignalBuilder;
 use App\Services\ResumeDiscoveryQueryProfileResolver;
+use App\Services\TechnicalKeywordDisplay;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -1330,6 +1331,7 @@ class JobLeadController extends Controller
     private function jobCards($jobLeads, ?UserProfile $userProfile, bool $matchedOnly, array $detectedResumeSkills): array
     {
         $resumeReady = $this->resumeReady($userProfile);
+        $technicalKeywordDisplay = app(TechnicalKeywordDisplay::class);
 
         if ($matchedOnly && ! $resumeReady) {
             return [];
@@ -1348,12 +1350,15 @@ class JobLeadController extends Controller
                     'match_summary' => __('app.matched_jobs.match_summary_pending'),
                 ];
 
+            $matchedKeywordLabels = $technicalKeywordDisplay->displayKeywords($analysis['matched_keywords']);
+            $missingKeywordLabels = $technicalKeywordDisplay->displayKeywords($analysis['missing_keywords']);
+
             if ($matchedOnly && $analysis['matched_keywords'] === []) {
                 continue;
             }
 
             $preferenceFit = $this->preferenceFit($jobLead, $userProfile);
-            $whyThisJob = $this->whyThisJob($jobLead, $analysis, $preferenceFit);
+            $whyThisJob = $this->whyThisJob($analysis, $preferenceFit, $technicalKeywordDisplay);
             $resumeSkillOverlapCount = $this->resumeSkillOverlapCount($jobKeywords, $detectedResumeSkills);
 
             $rankedJobCards[] = [
@@ -1377,7 +1382,9 @@ class JobLeadController extends Controller
                     'resume_skills_used' => $detectedResumeSkills,
                     'job_keywords_used' => $jobKeywords,
                     'matched_keywords' => $analysis['matched_keywords'],
+                    'matched_keyword_labels' => $matchedKeywordLabels,
                     'missing_keywords' => $analysis['missing_keywords'],
+                    'missing_keyword_labels' => $missingKeywordLabels,
                     'match_summary' => $analysis['match_summary'],
                     'can_explain_match' => $detectedResumeSkills !== [] && $jobKeywords !== [],
                     'ats_hint' => $jobLead->ats_hints[0] ?? null,
@@ -1550,9 +1557,15 @@ class JobLeadController extends Controller
     /**
      * @param array{matched_keywords: list<string>, missing_keywords: list<string>, match_summary: string} $analysis
      * @param array{status: string, matched: list<string>, mismatched: list<string>}|null $preferenceFit
-     * @return array{matched_keywords: list<string>, missing_keywords: list<string>, preference_summary: string|null}|null
+     * @return array{
+     *     matched_keywords: list<string>,
+     *     matched_keyword_labels: list<string>,
+     *     missing_keywords: list<string>,
+     *     missing_keyword_labels: list<string>,
+     *     preference_summary: string|null
+     * }|null
      */
-    private function whyThisJob(JobLead $jobLead, array $analysis, ?array $preferenceFit): ?array
+    private function whyThisJob(array $analysis, ?array $preferenceFit, TechnicalKeywordDisplay $technicalKeywordDisplay): ?array
     {
         $matchedKeywords = array_slice($analysis['matched_keywords'], 0, 3);
         $missingKeywords = array_slice($analysis['missing_keywords'], 0, 3);
@@ -1567,7 +1580,9 @@ class JobLeadController extends Controller
 
         return [
             'matched_keywords' => $matchedKeywords,
+            'matched_keyword_labels' => $technicalKeywordDisplay->displayKeywords($matchedKeywords),
             'missing_keywords' => $missingKeywords,
+            'missing_keyword_labels' => $technicalKeywordDisplay->displayKeywords($missingKeywords),
             'preference_summary' => $preferenceSummary,
         ];
     }

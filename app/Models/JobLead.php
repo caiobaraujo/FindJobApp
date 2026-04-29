@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\TechnicalKeywordSignalQuality;
 use Database\Factories\JobLeadFactory;
 use Illuminate\Container\Container;
 use Illuminate\Database\Eloquent\Builder;
@@ -175,8 +176,21 @@ class JobLead extends Model
 
     public function hasMeaningfulAnalysis(): bool
     {
-        return Str::of((string) $this->description_text)->trim()->isNotEmpty()
-            && ($this->extracted_keywords ?? []) !== [];
+        if (Str::of((string) $this->description_text)->trim()->isEmpty()) {
+            return false;
+        }
+
+        $keywords = $this->extracted_keywords ?? [];
+
+        if ($keywords === []) {
+            return false;
+        }
+
+        $quality = Container::getInstance()
+            ->make(TechnicalKeywordSignalQuality::class)
+            ->summarize($keywords);
+
+        return $quality['has_strong_technical_signals'];
     }
 
     public function hasLimitedAnalysis(): bool

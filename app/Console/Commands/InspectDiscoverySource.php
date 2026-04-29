@@ -32,6 +32,7 @@ class InspectDiscoverySource extends Command
                 'job_discovery.use_fixture_responses' => true,
                 'job_discovery.company_career_targets' => config('job_discovery.fixture_company_career_targets', config('job_discovery.company_career_targets', [])),
                 'job_discovery.brazilian_tech_job_board_targets' => config('job_discovery.fixture_brazilian_tech_job_board_targets', config('job_discovery.brazilian_tech_job_board_targets', [])),
+                'job_discovery.gupy_public_job_targets' => config('job_discovery.fixture_gupy_public_job_targets', config('job_discovery.gupy_public_job_targets', [])),
             ]);
         }
 
@@ -67,10 +68,12 @@ class InspectDiscoverySource extends Command
                 $job = $source->enrichEntry($entry);
             } catch (Throwable) {
                 $targetDiagnostics = $this->incrementTargetMetric($targetDiagnostics, $targetIdentifier, 'failed');
+                $targetDiagnostics = $this->incrementTargetMetric($targetDiagnostics, $targetIdentifier, 'detail_enrichment_failed');
 
                 continue;
             }
 
+            $targetDiagnostics = $this->applyDetailEnrichmentMetrics($targetDiagnostics, $targetIdentifier, $job);
             $explanation = $jobDiscoveryQueryMatcher->explainWithProfiles(
                 $normalizedQuery,
                 $job,
@@ -120,7 +123,7 @@ class InspectDiscoverySource extends Command
                 (int) $targetSummary['skipped_expired'],
                 (int) $targetSummary['skipped_missing_company'],
                 (int) $targetSummary['failed'],
-            ));
+            ).$this->detailEnrichmentSuffix($targetSummary));
         }
 
         return SymfonyCommand::SUCCESS;
@@ -164,6 +167,8 @@ class InspectDiscoverySource extends Command
                 'skipped_by_query' => 0,
                 'skipped_expired' => (int) ($target['skipped_expired'] ?? 0),
                 'skipped_missing_company' => (int) ($target['skipped_missing_company'] ?? 0),
+                'detail_enrichment_succeeded' => (int) ($target['detail_enrichment_succeeded'] ?? 0),
+                'detail_enrichment_failed' => (int) ($target['detail_enrichment_failed'] ?? 0),
                 'failed' => (int) ($target['failed'] ?? 0),
             ];
         }
@@ -182,6 +187,34 @@ class InspectDiscoverySource extends Command
         }
 
         $targetDiagnostics[$targetIdentifier][$metric] = (int) $targetDiagnostics[$targetIdentifier][$metric] + 1;
+
+        return $targetDiagnostics;
+    }
+
+    /**
+     * @param array<string, array<string, int|string>> $targetDiagnostics
+     * @param array<string, mixed> $job
+     * @return array<string, array<string, int|string>>
+     */
+    private function applyDetailEnrichmentMetrics(array $targetDiagnostics, ?string $targetIdentifier, array $job): array
+    {
+        if ($targetIdentifier === null || ! isset($targetDiagnostics[$targetIdentifier])) {
+            return $targetDiagnostics;
+        }
+
+        $detailEnrichmentStatus = is_string($job['_detail_enrichment_status'] ?? null)
+            ? trim((string) $job['_detail_enrichment_status'])
+            : '';
+
+        if ($detailEnrichmentStatus === 'success') {
+            $targetDiagnostics[$targetIdentifier]['detail_enrichment_succeeded'] = (int) $targetDiagnostics[$targetIdentifier]['detail_enrichment_succeeded'] + 1;
+
+            return $targetDiagnostics;
+        }
+
+        if ($detailEnrichmentStatus === 'failed') {
+            $targetDiagnostics[$targetIdentifier]['detail_enrichment_failed'] = (int) $targetDiagnostics[$targetIdentifier]['detail_enrichment_failed'] + 1;
+        }
 
         return $targetDiagnostics;
     }
@@ -212,6 +245,21 @@ class InspectDiscoverySource extends Command
         $targetIdentifier = trim($targetIdentifier);
 
         return $targetIdentifier === '' ? null : $targetIdentifier;
+    }
+
+    /**
+     * @param array<string, int|string> $targetSummary
+     */
+    private function detailEnrichmentSuffix(array $targetSummary): string
+    {
+        $detailSucceeded = (int) ($targetSummary['detail_enrichment_succeeded'] ?? 0);
+        $detailFailed = (int) ($targetSummary['detail_enrichment_failed'] ?? 0);
+
+        if ($detailSucceeded === 0 && $detailFailed === 0) {
+            return '';
+        }
+
+        return sprintf(' · detail ok %d · detail failed %d', $detailSucceeded, $detailFailed);
     }
 
     private function stringOption(string $name): ?string

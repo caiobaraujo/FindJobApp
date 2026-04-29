@@ -19,6 +19,7 @@ class JobLeadDiscoveryRunner
         private readonly LaraJobsDiscoverySource $laraJobsDiscoverySource,
         private readonly CompanyCareerPagesDiscoverySource $companyCareerPagesDiscoverySource,
         private readonly BrazilianTechJobBoardsDiscoverySource $brazilianTechJobBoardsDiscoverySource,
+        private readonly GupyPublicJobsDiscoverySource $gupyPublicJobsDiscoverySource,
         private readonly JobDiscoveryQueryMatcher $jobDiscoveryQueryMatcher,
         private readonly JobLeadImportService $jobLeadImportService,
     ) {
@@ -106,10 +107,12 @@ class JobLeadDiscoveryRunner
                 $discoveredJob = $discoverySource->enrichEntry($entry);
             } catch (Throwable) {
                 $failedCount++;
+                $targetDiagnostics = $this->incrementTargetMetric($targetDiagnostics, $targetIdentifier, 'detail_enrichment_failed');
 
                 continue;
             }
 
+            $targetDiagnostics = $this->applyDetailEnrichmentMetrics($targetDiagnostics, $targetIdentifier, $discoveredJob);
             $queryExplanation = $this->jobDiscoveryQueryMatcher->explainWithProfiles(
                 $normalizedSearchQuery,
                 $discoveredJob,
@@ -289,6 +292,8 @@ class JobLeadDiscoveryRunner
                 'skipped_by_query' => (int) ($target['skipped_by_query'] ?? 0),
                 'skipped_expired' => (int) ($target['skipped_expired'] ?? 0),
                 'skipped_missing_company' => (int) ($target['skipped_missing_company'] ?? 0),
+                'detail_enrichment_succeeded' => (int) ($target['detail_enrichment_succeeded'] ?? 0),
+                'detail_enrichment_failed' => (int) ($target['detail_enrichment_failed'] ?? 0),
                 'hidden_by_default' => (int) ($target['hidden_by_default'] ?? 0),
                 'international_hidden' => (int) ($target['international_hidden'] ?? 0),
                 'failed' => (int) ($target['failed'] ?? 0),
@@ -325,6 +330,34 @@ class JobLeadDiscoveryRunner
         }
 
         $targetDiagnostics[$targetIdentifier][$metric] = (int) $targetDiagnostics[$targetIdentifier][$metric] + 1;
+
+        return $targetDiagnostics;
+    }
+
+    /**
+     * @param array<string, array<string, int|string>> $targetDiagnostics
+     * @param array<string, mixed> $discoveredJob
+     * @return array<string, array<string, int|string>>
+     */
+    private function applyDetailEnrichmentMetrics(array $targetDiagnostics, ?string $targetIdentifier, array $discoveredJob): array
+    {
+        if ($targetIdentifier === null || ! isset($targetDiagnostics[$targetIdentifier])) {
+            return $targetDiagnostics;
+        }
+
+        $detailEnrichmentStatus = is_string($discoveredJob['_detail_enrichment_status'] ?? null)
+            ? trim((string) $discoveredJob['_detail_enrichment_status'])
+            : '';
+
+        if ($detailEnrichmentStatus === 'success') {
+            $targetDiagnostics[$targetIdentifier]['detail_enrichment_succeeded'] = (int) $targetDiagnostics[$targetIdentifier]['detail_enrichment_succeeded'] + 1;
+
+            return $targetDiagnostics;
+        }
+
+        if ($detailEnrichmentStatus === 'failed') {
+            $targetDiagnostics[$targetIdentifier]['detail_enrichment_failed'] = (int) $targetDiagnostics[$targetIdentifier]['detail_enrichment_failed'] + 1;
+        }
 
         return $targetDiagnostics;
     }
@@ -396,6 +429,7 @@ class JobLeadDiscoveryRunner
             $this->laraJobsDiscoverySource->sourceKey() => $this->laraJobsDiscoverySource,
             $this->companyCareerPagesDiscoverySource->sourceKey() => $this->companyCareerPagesDiscoverySource,
             $this->brazilianTechJobBoardsDiscoverySource->sourceKey() => $this->brazilianTechJobBoardsDiscoverySource,
+            $this->gupyPublicJobsDiscoverySource->sourceKey() => $this->gupyPublicJobsDiscoverySource,
         ];
     }
 }

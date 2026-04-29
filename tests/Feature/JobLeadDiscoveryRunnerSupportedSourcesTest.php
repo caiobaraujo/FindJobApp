@@ -15,6 +15,7 @@ it('does not include remotive in the default supported sources list', function (
     expect(app(JobLeadDiscoveryRunner::class)->supportedSources())
         ->not->toContain('remotive')
         ->not->toContain('brazilian-tech-job-boards')
+        ->not->toContain('gupy-public-jobs')
         ->toContain('larajobs')
         ->toContain('company-career-pages');
 });
@@ -28,11 +29,13 @@ it('includes brazilian tech job boards when explicitly enabled in local discover
         'larajobs',
         'company-career-pages',
         'brazilian-tech-job-boards',
+        'gupy-public-jobs',
     ]);
 
     expect(app(JobLeadDiscoveryRunner::class)->supportedSources())
         ->not->toContain('remotive')
         ->toContain('brazilian-tech-job-boards')
+        ->toContain('gupy-public-jobs')
         ->toContain('larajobs')
         ->toContain('company-career-pages');
 });

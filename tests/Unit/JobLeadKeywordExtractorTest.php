@@ -3,7 +3,7 @@
 use App\Services\JobLeadKeywordExtractor;
 
 it('extracts meaningful keywords from a job description', function (): void {
-    $extractor = new JobLeadKeywordExtractor();
+    $extractor = app(JobLeadKeywordExtractor::class);
 
     $keywords = $extractor->extractKeywords(
         'We are hiring a Laravel engineer to build Laravel APIs, improve API performance, and own Vue dashboards. '
@@ -17,7 +17,7 @@ it('extracts meaningful keywords from a job description', function (): void {
 });
 
 it('filters english and portuguese stopwords from extracted keywords', function (): void {
-    $extractor = new JobLeadKeywordExtractor();
+    $extractor = app(JobLeadKeywordExtractor::class);
 
     $keywords = $extractor->extractKeywords(
         'The team and the role are focused on the product and the platform with the best outcomes for the team, '
@@ -33,7 +33,7 @@ it('filters english and portuguese stopwords from extracted keywords', function 
 });
 
 it('drops page and script noise while keeping technical terms', function (): void {
-    $extractor = new JobLeadKeywordExtractor();
+    $extractor = app(JobLeadKeywordExtractor::class);
 
     $keywords = $extractor->extractKeywords(
         'https://example.com/jobs backend role primaryImage breadcrumb dataLayer gtag schema.org png '
@@ -58,7 +58,7 @@ it('drops page and script noise while keeping technical terms', function (): voi
 });
 
 it('normalizes common technical aliases to canonical keywords', function (): void {
-    $extractor = new JobLeadKeywordExtractor();
+    $extractor = app(JobLeadKeywordExtractor::class);
 
     $keywords = $extractor->extractKeywords(
         'We need a VueJS and NodeJS engineer with Open AI, AngularJS, React.js, Postgres, and fullstack experience.',
@@ -76,7 +76,7 @@ it('normalizes common technical aliases to canonical keywords', function (): voi
 });
 
 it('extracts clean technical keywords from a nodejs nestjs aws backend description', function (): void {
-    $extractor = new JobLeadKeywordExtractor();
+    $extractor = app(JobLeadKeywordExtractor::class);
 
     $keywords = $extractor->extractKeywords(
         <<<'TEXT'
@@ -99,7 +99,7 @@ TEXT,
 });
 
 it('extracts useful technical terms from a golang backend description without treating ordinary go as golang', function (): void {
-    $extractor = new JobLeadKeywordExtractor();
+    $extractor = app(JobLeadKeywordExtractor::class);
 
     $keywords = $extractor->extractKeywords(
         <<<'TEXT'
@@ -116,7 +116,7 @@ TEXT,
 });
 
 it('extracts useful technical terms from php laravel and python django descriptions', function (): void {
-    $extractor = new JobLeadKeywordExtractor();
+    $extractor = app(JobLeadKeywordExtractor::class);
 
     $phpKeywords = $extractor->extractKeywords(
         'Backend role with PHP, Laravel, MySQL, REST API design, Docker, and Domain-Driven Design.',
@@ -142,7 +142,7 @@ it('extracts useful technical terms from php laravel and python django descripti
 });
 
 it('extracts useful technical terms from frontend and data descriptions', function (): void {
-    $extractor = new JobLeadKeywordExtractor();
+    $extractor = app(JobLeadKeywordExtractor::class);
 
     $frontendKeywords = $extractor->extractKeywords(
         'Frontend product team using React.js, TypeScript, GraphQL, Jest, Cypress and Tailwind CSS.',
@@ -167,8 +167,74 @@ it('extracts useful technical terms from frontend and data descriptions', functi
         ->and($dataKeywords)->toContain('airflow');
 });
 
+it('marks generic api and data only descriptions as limited analysis', function (): void {
+    $extractor = app(JobLeadKeywordExtractor::class);
+
+    $analysis = $extractor->analyze(
+        'Data-focused role supporting API integrations, cloud collaboration, and backend automation for internal workflows.',
+    );
+
+    expect($analysis['extracted_keywords'])->toContain('data')
+        ->and($analysis['extracted_keywords'])->toContain('api')
+        ->and($analysis['ats_hints'][0])->toBe('Only broad technical context was found. Add the full job posting to surface stronger stack-specific signals.')
+        ->and(implode(' ', $analysis['ats_hints']))->not->toContain('Likely ATS terms to reflect in your resume:');
+});
+
+it('keeps strong backend keywords while allowing specific rest api evidence to suppress generic api', function (): void {
+    $extractor = app(JobLeadKeywordExtractor::class);
+
+    $keywords = $extractor->extractAllKeywords(
+        'Backend role with Python, Django, PostgreSQL, REST API design, and cloud integrations.',
+    );
+
+    expect($keywords)->toContain('python')
+        ->and($keywords)->toContain('django')
+        ->and($keywords)->toContain('postgresql')
+        ->and($keywords)->toContain('rest_api')
+        ->and($keywords)->toContain('api');
+});
+
+it('treats short listing style generic text as limited analysis', function (): void {
+    $extractor = app(JobLeadKeywordExtractor::class);
+
+    $analysis = $extractor->analyze('API data role for cloud product.');
+
+    expect($analysis['extracted_keywords'])->toContain('api')
+        ->and($analysis['extracted_keywords'])->toContain('data')
+        ->and($analysis['ats_hints'])->toContain('Only broad technical context was found. Add the full job posting to surface stronger stack-specific signals.')
+        ->and($analysis['ats_hints'])->toContain('The description looks short. Add the full posting before tailoring your resume.');
+});
+
+it('extracts qa python automation keywords from a realistic brazilian job description', function (): void {
+    $extractor = app(JobLeadKeywordExtractor::class);
+    $description = file_get_contents(__DIR__.'/../Fixtures/brazilian_tech_job_boards_programathor_qa_python_detail.html');
+
+    expect($description)->toBeString();
+
+    $keywords = $extractor->extractAllKeywords($description);
+
+    expect($keywords)->toContain('python')
+        ->and($keywords)->toContain('qa')
+        ->and($keywords)->toContain('testing')
+        ->and($keywords)->toContain('pytest')
+        ->and($keywords)->toContain('robot_framework')
+        ->and($keywords)->toContain('selenium')
+        ->and($keywords)->toContain('playwright')
+        ->and($keywords)->toContain('rest_api')
+        ->and($keywords)->toContain('postman')
+        ->and($keywords)->toContain('git')
+        ->and($keywords)->toContain('ci_cd')
+        ->and($keywords)->toContain('github_actions')
+        ->and($keywords)->toContain('aws')
+        ->and($keywords)->toContain('microservices')
+        ->and($keywords)->toContain('owasp')
+        ->and($keywords)->toContain('rpa')
+        ->and($keywords)->toContain('ai_ml')
+        ->and($keywords)->not->toContain('javascript');
+});
+
 it('keeps rest and go context-aware instead of matching ordinary prose', function (): void {
-    $extractor = new JobLeadKeywordExtractor();
+    $extractor = app(JobLeadKeywordExtractor::class);
 
     $keywords = $extractor->extractKeywords(
         'We go above and beyond to support the team and let services rest overnight after incidents.',
@@ -178,8 +244,20 @@ it('keeps rest and go context-aware instead of matching ordinary prose', functio
         ->and($keywords)->not->toContain('rest_api');
 });
 
+it('does not treat ordinary go as golang when nearby resume prose also mentions engineer', function (): void {
+    $extractor = app(JobLeadKeywordExtractor::class);
+
+    $keywords = $extractor->extractKeywords(
+        'Full stack engineer with Node.js, Vue.js, Angular, Python, Django, PHP, Laravel, SQL, and MySQL experience. We go above and beyond to support the team.',
+    );
+
+    expect($keywords)->not->toContain('go')
+        ->and($keywords)->toContain('nodejs')
+        ->and($keywords)->toContain('vue');
+});
+
 it('keeps output deterministic unique and capped', function (): void {
-    $extractor = new JobLeadKeywordExtractor();
+    $extractor = app(JobLeadKeywordExtractor::class);
 
     $keywords = $extractor->extractKeywords(
         'React Vue Angular Laravel Django FastAPI NestJS PostgreSQL MySQL SQL Docker Kubernetes AWS GCP Azure GraphQL QA CI/CD.',
