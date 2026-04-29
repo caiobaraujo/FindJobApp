@@ -47,7 +47,11 @@ Principles:
 
 - Discovery is the primary value
 - Matching supports evaluation, not discovery
+- Discovery should include both resume-matched leads and broader IT opportunities
+- Unmatched IT leads are still valuable discovery output
+- A future workflow may adapt or generate resume/application material from a selected `JobLead`, but that is not part of the current phase
 - Applications are secondary
+- No AI should be introduced in the current phase unless explicitly approved later
 
 ---
 
@@ -247,11 +251,20 @@ Fixture mode:
 
 The workspace is a computed view over JobLead.
 
+The workspace now has three deterministic views over the same `JobLead` records:
+
+- matched leads
+- all discovered leads
+- unmatched technology leads
+
+This distinction is presentational only. It does not change import behavior, ranking, source parsing, or `JobLead` validity.
+
 Filters include:
 
 - ownership
 - lead status
 - discovery batch
+- lead group
 - analysis state
 - work mode
 - search
@@ -303,6 +316,17 @@ For matched-jobs workspace diagnostics, the UI now also exposes a deterministic 
     - search text filter
 
 These counts are diagnostic only. They do not change import behavior, matching logic, ranking, or source parsing.
+
+For both matched and broader discovered-lead views, the UI now also exposes a deterministic latest-discovery workspace split:
+
+- total discovered leads in the latest batch
+- matched leads in the latest batch
+- unmatched discovered leads in the latest batch
+- visible matched leads under the current workspace filters
+- visible unmatched leads under the current workspace filters
+- hidden international leads under Brazil-first defaults
+
+This makes it explicit that discovery output is broader than the currently matched subset.
 
 ---
 

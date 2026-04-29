@@ -36,19 +36,21 @@ class JobLeadController extends Controller
         $userProfile = $this->userProfile($request->user()->id);
         $filters = $this->normalizedFilters($this->filters($request), $userProfile);
         $matchedOnly = $request->routeIs('matched-jobs.index');
+        $workspaceView = $this->workspaceView($matchedOnly, $filters);
         $detectedResumeSkills = $this->detectedResumeSkills($userProfile);
         $jobLeads = $this->workspaceJobLeads($request->user()->id, $filters, $userProfile);
+        $displayJobLeads = $this->workspaceDisplayJobLeads($jobLeads, $userProfile, $matchedOnly, $filters);
 
         if ($filters['is_latest_discovery_view']) {
             Log::info('job lead workspace latest discovery view', [
                 'user_id' => $request->user()->id,
                 'resolved_discovery_batch_id' => $this->resolvedDiscoveryBatchId($filters['discovery_batch'] ?? null, $userProfile),
                 'filters' => $this->workspaceLogFilters($filters),
-                'visible_job_lead_ids' => $jobLeads->pluck('id')->all(),
+                'visible_job_lead_ids' => $displayJobLeads->pluck('id')->all(),
             ]);
         }
 
-        $matchedJobs = $this->jobCards($jobLeads, $userProfile, $matchedOnly, $detectedResumeSkills);
+        $matchedJobs = $this->jobCards($displayJobLeads, $userProfile, $matchedOnly, $detectedResumeSkills);
 
         return Inertia::render('JobLeads/Index', [
             'analysisStates' => JobLead::analysisStates(),
@@ -60,6 +62,7 @@ class JobLeadController extends Controller
                 'analysis_state' => $filters['analysis_state'] ?? '',
                 'discovery_batch' => $filters['discovery_batch'] ?? '',
                 'lead_status' => $filters['lead_status'] ?? '',
+                'lead_group' => $filters['lead_group'] ?? 'all',
                 'location_scope' => $filters['location_scope'],
                 'search' => $filters['search'] ?? '',
                 'show_ignored' => $filters['show_ignored'],
@@ -69,11 +72,17 @@ class JobLeadController extends Controller
             'hasResumeProfile' => $userProfile !== null,
             'leadStatuses' => JobLead::leadStatuses(),
             'leadStatusCounts' => $this->leadStatusCounts($request->user()->id),
-            'leadsMissingAnalysisCount' => $this->leadsMissingAnalysisCount($jobLeads),
+            'leadsMissingAnalysisCount' => $this->leadsMissingAnalysisCount($displayJobLeads),
             'matchedOnly' => $matchedOnly,
+            'workspaceView' => $workspaceView,
             'resumeReady' => $this->resumeReady($userProfile),
             'resumeNeedsTextInput' => $this->resumeNeedsTextInput($userProfile),
             'matchedJobs' => $matchedJobs,
+            'latestDiscoveryWorkspaceSplit' => $this->latestDiscoveryWorkspaceSplit(
+                $request->user()->id,
+                $filters,
+                $userProfile,
+            ),
             'latestDiscoveryMatchFunnel' => $matchedOnly
                 ? $this->latestDiscoveryMatchFunnel(
                     $request->user()->id,
@@ -454,6 +463,7 @@ class JobLeadController extends Controller
             'analysis_state' => ['nullable', 'string', Rule::in(JobLead::analysisStates())],
             'discovery_batch' => ['nullable', 'string', 'max:120'],
             'lead_status' => ['nullable', 'string', Rule::in(JobLead::leadStatuses())],
+            'lead_group' => ['nullable', 'string', Rule::in(['all', 'unmatched'])],
             'location_scope' => ['nullable', 'string', Rule::in(JobLead::locationScopes())],
             'search' => ['nullable', 'string', 'max:255'],
             'show_ignored' => ['nullable', 'boolean'],
@@ -465,6 +475,7 @@ class JobLeadController extends Controller
         }
 
         $filters['show_ignored'] = $request->boolean('show_ignored');
+        $filters['lead_group'] = $filters['lead_group'] ?? 'all';
         $filters['location_scope'] = $filters['location_scope'] ?? JobLead::LOCATION_SCOPE_BRAZIL;
 
         return $filters;
@@ -537,6 +548,7 @@ class JobLeadController extends Controller
             'analysis_state' => $filters['analysis_state'] ?? '',
             'discovery_batch' => $filters['discovery_batch'] ?? '',
             'lead_status' => $filters['lead_status'] ?? '',
+            'lead_group' => $filters['lead_group'] ?? 'all',
             'location_scope' => $filters['location_scope'] ?? '',
             'search' => $filters['search'] ?? '',
             'show_ignored' => $filters['show_ignored'] ?? false,
@@ -574,6 +586,65 @@ class JobLeadController extends Controller
             'hidden_ignored_count' => $this->hiddenIgnoredMatchedCount($matchedJobs, $filters),
             'hidden_international_count' => $this->hiddenInternationalMatchedCount($matchedJobs, $filters),
             'total_count' => $totalCount,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array{
+     *     latest_batch_id: string|null,
+     *     latest_batch_total_count: int,
+     *     matched_leads_count: int,
+     *     unmatched_leads_count: int,
+     *     visible_matched_count: int,
+     *     visible_unmatched_count: int,
+     *     hidden_international_count: int,
+     *     resume_ready: bool
+     * }|null
+     */
+    private function latestDiscoveryWorkspaceSplit(
+        int $userId,
+        array $filters,
+        ?UserProfile $userProfile,
+    ): ?array {
+        $latestBatchId = $userProfile?->last_discovery_batch_id;
+
+        if (! is_string($latestBatchId) || trim($latestBatchId) === '') {
+            return null;
+        }
+
+        $latestBatchJobLeads = JobLead::query()
+            ->where('user_id', $userId)
+            ->where('discovery_batch_id', $latestBatchId)
+            ->orderByPriority()
+            ->get();
+        $resumeReady = $this->resumeReady($userProfile);
+        $matchedLatestBatchJobLeads = $resumeReady
+            ? $this->matchedJobLeads($latestBatchJobLeads, $userProfile)
+            : $latestBatchJobLeads->take(0);
+        $filteredLatestBatchJobLeads = $this->filterJobLeadsByIgnoredVisibility($latestBatchJobLeads, $filters);
+        $filteredLatestBatchJobLeads = $this->filterJobLeadsByLeadStatus($filteredLatestBatchJobLeads, $filters['lead_status'] ?? null);
+        $filteredLatestBatchJobLeads = $this->filterJobLeadsByAnalysisReadiness($filteredLatestBatchJobLeads, $filters['analysis_readiness'] ?? null);
+        $filteredLatestBatchJobLeads = $this->filterJobLeadsByAnalysisState($filteredLatestBatchJobLeads, $filters['analysis_state'] ?? null);
+        $filteredLatestBatchJobLeads = $this->filterJobLeadsByWorkMode($filteredLatestBatchJobLeads, $filters['work_mode'] ?? null);
+        $filteredLatestBatchJobLeads = $this->filterJobLeadsBySearchText($filteredLatestBatchJobLeads, $filters['search'] ?? null);
+        $visibleLatestBatchJobLeads = $this->filterJobLeadsByLocationScope(
+            $filteredLatestBatchJobLeads,
+            $filters['location_scope'],
+        );
+        $visibleMatchedCount = $resumeReady
+            ? $this->matchedJobLeads($visibleLatestBatchJobLeads, $userProfile)->count()
+            : 0;
+
+        return [
+            'latest_batch_id' => $latestBatchId,
+            'latest_batch_total_count' => $latestBatchJobLeads->count(),
+            'matched_leads_count' => $matchedLatestBatchJobLeads->count(),
+            'unmatched_leads_count' => $latestBatchJobLeads->count() - $matchedLatestBatchJobLeads->count(),
+            'visible_matched_count' => $visibleMatchedCount,
+            'visible_unmatched_count' => $visibleLatestBatchJobLeads->count() - $visibleMatchedCount,
+            'hidden_international_count' => $filteredLatestBatchJobLeads->count() - $visibleLatestBatchJobLeads->count(),
+            'resume_ready' => $resumeReady,
         ];
     }
 
@@ -767,6 +838,29 @@ class JobLeadController extends Controller
 
     /**
      * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     * @return \Illuminate\Support\Collection<int, JobLead>
+     */
+    private function workspaceDisplayJobLeads($jobLeads, ?UserProfile $userProfile, bool $matchedOnly, array $filters)
+    {
+        if ($matchedOnly || ($filters['lead_group'] ?? 'all') !== 'unmatched') {
+            return $jobLeads;
+        }
+
+        if (! $this->resumeReady($userProfile)) {
+            return $jobLeads->take(0);
+        }
+
+        $matchedJobIds = collect($this->matchedJobs($jobLeads, $userProfile))
+            ->pluck('id')
+            ->all();
+
+        return $jobLeads
+            ->filter(fn (JobLead $jobLead): bool => ! in_array($jobLead->id, $matchedJobIds, true))
+            ->values();
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
      */
     private function matchedJobCount($jobLeads, ?UserProfile $userProfile): int
     {
@@ -801,6 +895,20 @@ class JobLeadController extends Controller
             $matchedJobs,
             fn (array $jobLead): bool => ($jobLead['location_classification'] ?? null) === JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL,
         ));
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     */
+    private function workspaceView(bool $matchedOnly, array $filters): string
+    {
+        if ($matchedOnly) {
+            return 'matched';
+        }
+
+        return ($filters['lead_group'] ?? 'all') === 'unmatched'
+            ? 'unmatched'
+            : 'all';
     }
 
     /**

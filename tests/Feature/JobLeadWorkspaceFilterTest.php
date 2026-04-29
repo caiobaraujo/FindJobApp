@@ -1004,6 +1004,163 @@ it('shows zero hidden matched job summary counts when ignored and international 
         );
 });
 
+it('separates matched and broader discovered leads in the all discovered workspace', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue and SQL experience.',
+        'core_skills' => ['Laravel', 'Vue', 'SQL'],
+        'last_discovery_batch_id' => 'latest-batch-split-1',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Brazil Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-split-1',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Broader Brazil Lead',
+        'job_title' => 'Python Engineer',
+        'location' => 'Remote Brazil',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['python'],
+        'discovery_batch_id' => 'latest-batch-split-1',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'International Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote, Canada',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-split-1',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('workspaceView', 'all')
+            ->where('filters.lead_group', 'all')
+            ->has('matchedJobs', 2)
+            ->where('matchedJobs.0.company_name', 'Brazil Match')
+            ->where('matchedJobs.1.company_name', 'Broader Brazil Lead')
+            ->where('latestDiscoveryWorkspaceSplit.latest_batch_total_count', 3)
+            ->where('latestDiscoveryWorkspaceSplit.matched_leads_count', 2)
+            ->where('latestDiscoveryWorkspaceSplit.unmatched_leads_count', 1)
+            ->where('latestDiscoveryWorkspaceSplit.visible_matched_count', 1)
+            ->where('latestDiscoveryWorkspaceSplit.visible_unmatched_count', 1)
+            ->where('latestDiscoveryWorkspaceSplit.hidden_international_count', 1)
+        )
+        ->assertSee('Brazil Match')
+        ->assertSee('Broader Brazil Lead')
+        ->assertDontSee('International Match');
+});
+
+it('shows unmatched technology leads in the broader workspace segment', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue and SQL experience.',
+        'core_skills' => ['Laravel', 'Vue', 'SQL'],
+        'last_discovery_batch_id' => 'latest-batch-split-2',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Matched Lead',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-split-2',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Unmatched Technology Lead',
+        'job_title' => 'Python Engineer',
+        'location' => 'Remote Brazil',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['python'],
+        'discovery_batch_id' => 'latest-batch-split-2',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'lead_group' => 'unmatched',
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('workspaceView', 'unmatched')
+            ->where('filters.lead_group', 'unmatched')
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Unmatched Technology Lead')
+        )
+        ->assertSee('Unmatched Technology Lead')
+        ->assertDontSee('Matched Lead');
+});
+
+it('updates broader workspace international visibility counts when international leads are enabled', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue and SQL experience.',
+        'core_skills' => ['Laravel', 'Vue', 'SQL'],
+        'last_discovery_batch_id' => 'latest-batch-split-3',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Brazil Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-split-3',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'International Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote, Germany',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-split-3',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('latestDiscoveryWorkspaceSplit.visible_matched_count', 1)
+            ->where('latestDiscoveryWorkspaceSplit.visible_unmatched_count', 0)
+            ->where('latestDiscoveryWorkspaceSplit.hidden_international_count', 1)
+        )
+        ->assertDontSee('International Match');
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 2)
+            ->where('latestDiscoveryWorkspaceSplit.visible_matched_count', 2)
+            ->where('latestDiscoveryWorkspaceSplit.visible_unmatched_count', 0)
+            ->where('latestDiscoveryWorkspaceSplit.hidden_international_count', 0)
+        )
+        ->assertSee('International Match');
+});
+
 it('shows latest discovery funnel counts for ignored status work mode and search filters', function (): void {
     $user = User::factory()->create();
 

@@ -58,6 +58,10 @@ const props = defineProps({
         type: Object,
         default: null,
     },
+    latestDiscoveryWorkspaceSplit: {
+        type: Object,
+        default: null,
+    },
     matchedJobsVisibilitySummary: {
         type: Object,
         default: null,
@@ -72,6 +76,10 @@ const props = defineProps({
     },
     workModes: {
         type: Array,
+        required: true,
+    },
+    workspaceView: {
+        type: String,
         required: true,
     },
 });
@@ -95,6 +103,7 @@ const filterForm = reactive({
     analysis_state: props.filters.analysis_state || '',
     discovery_batch: props.filters.discovery_batch || '',
     lead_status: props.filters.lead_status || '',
+    lead_group: props.filters.lead_group || 'all',
     location_scope: props.filters.location_scope || 'brazil',
     search: props.filters.search || '',
     show_ignored: Boolean(props.filters.show_ignored),
@@ -105,6 +114,7 @@ const defaultWorkspaceFilters = Object.freeze({
     analysis_readiness: '',
     analysis_state: '',
     lead_status: '',
+    lead_group: 'all',
     location_scope: 'brazil',
     search: '',
     show_ignored: false,
@@ -115,11 +125,7 @@ const leadStatusActions = ['saved', 'shortlisted', 'applied', 'ignored'];
 const leadStatusUpdates = reactive({});
 
 function workspaceRoute() {
-    if (route().current('job-leads.index')) {
-        return route('job-leads.index');
-    }
-
-    return route('matched-jobs.index');
+    return workspaceHrefForView(props.workspaceView);
 }
 
 function submitFilters() {
@@ -145,6 +151,7 @@ function resetFilters() {
     filterForm.analysis_state = defaultWorkspaceFilters.analysis_state;
     filterForm.discovery_batch = '';
     filterForm.lead_status = defaultWorkspaceFilters.lead_status;
+    filterForm.lead_group = props.workspaceView === 'unmatched' ? 'unmatched' : 'all';
     filterForm.location_scope = defaultWorkspaceFilters.location_scope;
     filterForm.search = defaultWorkspaceFilters.search;
     filterForm.show_ignored = defaultWorkspaceFilters.show_ignored;
@@ -152,11 +159,21 @@ function resetFilters() {
     submitFilters();
 }
 
-function workspaceHref(discoveryBatch = '', locationScope = filterForm.location_scope) {
+function routeNameForWorkspaceView(workspaceView) {
+    return workspaceView === 'matched' ? 'matched-jobs.index' : 'job-leads.index';
+}
+
+function paramsForWorkspaceView(workspaceView, discoveryBatch = '', locationScope = filterForm.location_scope) {
     const params = {
         ...filterForm,
         location_scope: locationScope,
     };
+
+    if (workspaceView === 'matched') {
+        delete params.lead_group;
+    } else {
+        params.lead_group = workspaceView === 'unmatched' ? 'unmatched' : 'all';
+    }
 
     if (discoveryBatch === '') {
         delete params.discovery_batch;
@@ -164,11 +181,22 @@ function workspaceHref(discoveryBatch = '', locationScope = filterForm.location_
         params.discovery_batch = discoveryBatch;
     }
 
-    return route(route().current('job-leads.index') ? 'job-leads.index' : 'matched-jobs.index', params);
+    return params;
+}
+
+function workspaceHrefForView(workspaceView, discoveryBatch = '', locationScope = filterForm.location_scope) {
+    return route(
+        routeNameForWorkspaceView(workspaceView),
+        paramsForWorkspaceView(workspaceView, discoveryBatch, locationScope),
+    );
+}
+
+function workspaceHref(discoveryBatch = '', locationScope = filterForm.location_scope) {
+    return workspaceHrefForView(props.workspaceView, discoveryBatch, locationScope);
 }
 
 function normalWorkspaceHref() {
-    return route(route().current('job-leads.index') ? 'job-leads.index' : 'matched-jobs.index');
+    return workspaceHrefForView(props.workspaceView);
 }
 
 function latestDiscoveryParams() {
@@ -246,10 +274,18 @@ const discoverySummary = computed(() => discoveryResults.value.reduce((summary, 
 
 const viewingLatestDiscoveryBatch = computed(() => props.isLatestDiscoveryView);
 const latestDiscoveryHref = computed(() => route(
-    route().current('job-leads.index') ? 'job-leads.index' : 'matched-jobs.index',
-    latestDiscoveryParams(),
+    routeNameForWorkspaceView(props.workspaceView),
+    {
+        ...latestDiscoveryParams(),
+        ...(props.workspaceView === 'matched' ? {} : {
+            lead_group: props.workspaceView === 'unmatched' ? 'unmatched' : 'all',
+        }),
+    },
 ));
 const allJobsHref = computed(() => normalWorkspaceHref());
+const matchedLeadsHref = computed(() => workspaceHrefForView('matched'));
+const allDiscoveredLeadsHref = computed(() => workspaceHrefForView('all'));
+const unmatchedLeadsHref = computed(() => workspaceHrefForView('unmatched'));
 const hiddenDiscoveryResults = computed(() => discoveryCreatedCount.value > 0 && props.matchedJobs.length === 0 && ! viewingLatestDiscoveryBatch.value);
 const matchedJobsVisibilitySummary = computed(() => props.matchedJobsVisibilitySummary || {
     visible_count: props.matchedJobs.length,
@@ -258,6 +294,86 @@ const matchedJobsVisibilitySummary = computed(() => props.matchedJobsVisibilityS
     total_count: props.matchedJobs.length,
 });
 const latestDiscoveryMatchFunnel = computed(() => props.latestDiscoveryMatchFunnel);
+const latestDiscoveryWorkspaceSplit = computed(() => props.latestDiscoveryWorkspaceSplit);
+const isMatchedWorkspace = computed(() => props.workspaceView === 'matched');
+const isAllDiscoveredWorkspace = computed(() => props.workspaceView === 'all');
+const isUnmatchedWorkspace = computed(() => props.workspaceView === 'unmatched');
+
+const pageTitle = computed(() => {
+    if (isMatchedWorkspace.value) {
+        return t('nav.matched_jobs', 'Matched Jobs');
+    }
+
+    if (isUnmatchedWorkspace.value) {
+        return t('job_leads.unmatched_title', 'Broader IT Leads');
+    }
+
+    return t('nav.job_leads', 'Job Leads');
+});
+
+const workspaceTitle = computed(() => {
+    if (isMatchedWorkspace.value) {
+        return t('matched_jobs.title', 'Matched jobs');
+    }
+
+    if (isUnmatchedWorkspace.value) {
+        return t('job_leads.unmatched_title', 'Broader IT leads');
+    }
+
+    return t('job_leads.all_discovered_title', 'All discovered leads');
+});
+
+const workspaceSubtitle = computed(() => {
+    if (isMatchedWorkspace.value) {
+        return t('matched_jobs.subtitle', 'See jobs that overlap with your resume, review matched and missing keywords, and go straight to the source listing.');
+    }
+
+    if (isUnmatchedWorkspace.value) {
+        return t('job_leads.unmatched_subtitle', 'Inspect discovered technology opportunities that do not currently overlap with your resume, but may still be worth evaluating later.');
+    }
+
+    return t('job_leads.all_discovered_subtitle', 'Review both resume-matched leads and broader technology opportunities discovered for your workspace.');
+});
+
+const filterTitle = computed(() => isMatchedWorkspace.value
+    ? t('matched_jobs.filter_title', 'Find a match faster')
+    : isUnmatchedWorkspace.value
+        ? t('job_leads.unmatched_filter_title', 'Refine broader IT leads')
+        : t('job_leads.filter_title', 'Refine discovered leads'));
+
+const filterDescription = computed(() => {
+    if (isMatchedWorkspace.value) {
+        return t('matched_jobs.filter_description', 'Search by company or role. The list is already narrowed to jobs with at least one detected match when your resume is ready.');
+    }
+
+    if (isUnmatchedWorkspace.value) {
+        return t('job_leads.unmatched_filter_description', 'Search broader discovered technology leads that do not currently overlap with your resume.');
+    }
+
+    return t('job_leads.filter_description', 'Search across all discovered leads, including matched leads and broader technology opportunities.');
+});
+
+const resultsTitle = computed(() => isMatchedWorkspace.value
+    ? t('matched_jobs.results_title', 'Matching results')
+    : isUnmatchedWorkspace.value
+        ? t('job_leads.unmatched_results_title', 'Broader IT results')
+        : t('job_leads.results_title', 'Discovered lead results'));
+
+const resultsDescription = computed(() => {
+    if (isMatchedWorkspace.value) {
+        return t('matched_jobs.results_description', 'Job cards are simplified to the signals that matter most right now: overlap, gaps, and direct source access.');
+    }
+
+    if (isUnmatchedWorkspace.value) {
+        return t('job_leads.unmatched_results_description', 'These leads look like technology opportunities, but they do not currently overlap with your resume signals.');
+    }
+
+    return t('job_leads.results_description', 'This workspace includes both resume-matched leads and broader technology opportunities discovered from deterministic sources.');
+});
+
+function resumeOverlapState(jobLead) {
+    return jobLead.matched_keywords.length > 0 ? 'matched' : 'broader';
+}
 
 function discoveryPrimaryMessage(summary) {
     if (discoveryCreatedCount.value > 0) {
@@ -480,13 +596,13 @@ function setLeadStatus(jobLead, leadStatus) {
 </script>
 
 <template>
-    <Head :title="t('nav.matched_jobs', 'Matched Jobs')" />
+    <Head :title="pageTitle" />
 
     <AuthenticatedLayout>
         <template #header>
             <AppShell
-                :title="t('matched_jobs.title', 'Matched jobs')"
-                :subtitle="t('matched_jobs.subtitle', 'See jobs that overlap with your resume, review matched and missing keywords, and go straight to the source listing.')"
+                :title="workspaceTitle"
+                :subtitle="workspaceSubtitle"
             >
                 <template #actions>
                     <div class="mt-6 flex flex-wrap gap-3">
@@ -510,6 +626,36 @@ function setLeadStatus(jobLead, leadStatus) {
         </template>
 
         <AppShell>
+            <div class="mb-6 flex flex-wrap gap-3">
+                <Link
+                    :href="matchedLeadsHref"
+                    class="rounded-full border px-4 py-2 text-sm font-medium transition"
+                    :class="isMatchedWorkspace
+                        ? 'border-gold-300/20 bg-gold-300/10 text-gold-200'
+                        : 'border-white/10 bg-black/20 text-slateglass-300 hover:border-white/20 hover:text-white'"
+                >
+                    {{ t('job_leads.segment_matched', 'Matched leads') }}
+                </Link>
+                <Link
+                    :href="allDiscoveredLeadsHref"
+                    class="rounded-full border px-4 py-2 text-sm font-medium transition"
+                    :class="isAllDiscoveredWorkspace
+                        ? 'border-gold-300/20 bg-gold-300/10 text-gold-200'
+                        : 'border-white/10 bg-black/20 text-slateglass-300 hover:border-white/20 hover:text-white'"
+                >
+                    {{ t('job_leads.segment_all_discovered', 'All discovered leads') }}
+                </Link>
+                <Link
+                    :href="unmatchedLeadsHref"
+                    class="rounded-full border px-4 py-2 text-sm font-medium transition"
+                    :class="isUnmatchedWorkspace
+                        ? 'border-gold-300/20 bg-gold-300/10 text-gold-200'
+                        : 'border-white/10 bg-black/20 text-slateglass-300 hover:border-white/20 hover:text-white'"
+                >
+                    {{ t('job_leads.segment_unmatched', 'Broader IT leads') }}
+                </Link>
+            </div>
+
             <div class="mb-8 flex flex-wrap items-end justify-between gap-6">
                 <div class="w-full max-w-xl">
                     <form
@@ -559,8 +705,8 @@ function setLeadStatus(jobLead, leadStatus) {
             </div>
 
             <SectionCard
-                :title="t('matched_jobs.filter_title', 'Find a match faster')"
-                :description="t('matched_jobs.filter_description', 'Search by company or role. The list is already narrowed to jobs with at least one detected match when your resume is ready.')"
+                :title="filterTitle"
+                :description="filterDescription"
             >
                 <div
                     v-if="discoveryResults.length"
@@ -763,7 +909,9 @@ function setLeadStatus(jobLead, leadStatus) {
                                     false-value="brazil"
                                     class="h-4 w-4 rounded border-white/20 bg-black/20 text-gold-300 focus:ring-gold-300/40"
                                 >
-                                <span>{{ t('matched_jobs.include_international_jobs', 'Include international jobs') }}</span>
+                                <span>{{ isMatchedWorkspace
+                                    ? t('matched_jobs.include_international_jobs', 'Include international jobs')
+                                    : t('job_leads.include_international_discovered', 'Include international discovered leads') }}</span>
                             </label>
                             <label class="flex items-center gap-3 text-sm text-slateglass-300">
                                 <input
@@ -795,8 +943,8 @@ function setLeadStatus(jobLead, leadStatus) {
             </SectionCard>
 
             <SectionCard
-                :title="t('matched_jobs.results_title', 'Matching results')"
-                :description="t('matched_jobs.results_description', 'Job cards are simplified to the signals that matter most right now: overlap, gaps, and direct source access.')"
+                :title="resultsTitle"
+                :description="resultsDescription"
                 :padded="false"
             >
                 <template #actions>
@@ -806,8 +954,42 @@ function setLeadStatus(jobLead, leadStatus) {
                 </template>
 
                 <div
-                    v-if="resumeReady"
-                    class="mx-6 mt-6 rounded-3xl border border-white/10 bg-black/20 px-5 py-4 text-sm leading-7 text-slateglass-200"
+                    v-if="latestDiscoveryWorkspaceSplit"
+                    class="mx-6 mt-6 rounded-3xl border border-sky-400/15 bg-sky-400/5 px-5 py-4 text-sm leading-7 text-slateglass-200"
+                >
+                    <p class="font-semibold text-white">
+                        {{ t(
+                            'job_leads.latest_discovery_workspace_split_title',
+                            'Latest discovery batch: :total discovered, :matched matched, :unmatched broader IT leads.',
+                            {
+                                total: latestDiscoveryWorkspaceSplit.latest_batch_total_count,
+                                matched: latestDiscoveryWorkspaceSplit.matched_leads_count,
+                                unmatched: latestDiscoveryWorkspaceSplit.unmatched_leads_count,
+                            },
+                        ) }}
+                    </p>
+                    <p class="mt-1 text-slateglass-300">
+                        {{ t(
+                            'job_leads.latest_discovery_workspace_split_visibility',
+                            'Visible now under the current filters: :matched visible matched leads and :unmatched visible broader IT leads. :international hidden outside Brazil-first view.',
+                            {
+                                matched: latestDiscoveryWorkspaceSplit.visible_matched_count,
+                                unmatched: latestDiscoveryWorkspaceSplit.visible_unmatched_count,
+                                international: latestDiscoveryWorkspaceSplit.hidden_international_count,
+                            },
+                        ) }}
+                    </p>
+                    <p
+                        v-if="filterForm.location_scope === 'brazil' && latestDiscoveryWorkspaceSplit.hidden_international_count > 0"
+                        class="mt-1 text-xs leading-6 text-sky-200/90"
+                    >
+                        {{ t('job_leads.latest_discovery_workspace_split_note', 'Enable international leads to review the hidden international portion in both matched and broader views.') }}
+                    </p>
+                </div>
+
+                <div
+                    v-if="isMatchedWorkspace && resumeReady"
+                    class="mx-6 mt-4 rounded-3xl border border-white/10 bg-black/20 px-5 py-4 text-sm leading-7 text-slateglass-200"
                 >
                     <p class="font-semibold text-white">
                         {{ t(
@@ -879,9 +1061,11 @@ function setLeadStatus(jobLead, leadStatus) {
                 <EmptyState
                     v-if="!resumeReady"
                     :title="t('matched_jobs.empty_resume_title', 'Matching starts after resume upload')"
-                    :description="resumeNeedsTextInput
+                    :description="isMatchedWorkspace
+                        ? (resumeNeedsTextInput
                         ? t('matched_jobs.empty_resume_needs_text_description', 'Your resume file is saved, but matching still needs extracted or pasted resume text. TXT, PDF, and DOCX can extract locally when readable; for DOC or failed extraction, paste resume text or add core skills first.')
-                        : t('matched_jobs.empty_resume_description', 'Upload your resume first. Once it is ready, this page will surface only jobs with detected overlap.')"
+                        : t('matched_jobs.empty_resume_description', 'Upload your resume first. Once it is ready, this page will surface only jobs with detected overlap.'))
+                        : t('job_leads.empty_resume_broader_description', 'Upload your resume to separate matched leads from broader technology opportunities. All discovered leads remain available in the meantime.')"
                 >
                     <Link
                         :href="route('resume-profile.show')"
@@ -893,8 +1077,16 @@ function setLeadStatus(jobLead, leadStatus) {
 
                 <EmptyState
                     v-else-if="matchedJobs.length === 0"
-                    :title="t('matched_jobs.empty_matches_title', 'No matched jobs yet')"
-                    :description="t('matched_jobs.empty_matches_description', 'Your resume is ready, but there are no leads with detected overlap right now.')"
+                    :title="isMatchedWorkspace
+                        ? t('matched_jobs.empty_matches_title', 'No matched jobs yet')
+                        : isUnmatchedWorkspace
+                            ? t('job_leads.empty_unmatched_title', 'No broader IT leads right now')
+                            : t('job_leads.empty_all_title', 'No discovered leads right now')"
+                    :description="isMatchedWorkspace
+                        ? t('matched_jobs.empty_matches_description', 'Your resume is ready, but there are no leads with detected overlap right now.')
+                        : isUnmatchedWorkspace
+                            ? t('job_leads.empty_unmatched_description', 'Your current discovered leads all overlap with the resume, or they are hidden by the active filters.')
+                            : t('job_leads.empty_all_description', 'No discovered leads match the current workspace filters right now.')"
                 >
                     <Link
                         :href="route('job-leads.create')"
@@ -953,6 +1145,17 @@ function setLeadStatus(jobLead, leadStatus) {
                                     class="rounded-full border border-white/10 bg-black/20 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-slateglass-400"
                                 >
                                     {{ workModeLabel(jobLead.work_mode) }}
+                                </span>
+                                <span
+                                    v-if="resumeReady && !isMatchedWorkspace"
+                                    class="rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]"
+                                    :class="resumeOverlapState(jobLead) === 'matched'
+                                        ? 'border-emerald-400/20 bg-emerald-400/10 text-emerald-200'
+                                        : 'border-sky-400/20 bg-sky-400/10 text-sky-200'"
+                                >
+                                    {{ resumeOverlapState(jobLead) === 'matched'
+                                        ? t('job_leads.card_matched_lead', 'Matched lead')
+                                        : t('job_leads.card_broader_lead', 'Broader IT lead') }}
                                 </span>
                                 <span
                                     v-if="locationClassificationLabel(jobLead.location_classification)"
