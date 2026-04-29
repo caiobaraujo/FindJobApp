@@ -61,6 +61,33 @@ class DiscoverJobLeads extends Command
             $this->line(sprintf('Listing HTTP status: %d', $summary['listing_status_code']));
             $this->line(sprintf('Candidate links found: %d', $summary['candidate_links']));
             $this->line(sprintf('Parsed jobs after filtering: %d', $summary['parsed_jobs']));
+
+            foreach (($summary['target_diagnostics'] ?? []) as $targetSummary) {
+                if (! is_array($targetSummary)) {
+                    continue;
+                }
+
+                $targetName = is_string($targetSummary['target_name'] ?? null)
+                    ? trim((string) $targetSummary['target_name'])
+                    : 'unknown';
+                $platform = is_string($targetSummary['platform'] ?? null)
+                    ? trim((string) $targetSummary['platform'])
+                    : $targetName;
+
+                $this->line(sprintf(
+                    'Target %s (%s): fetched %d · matched %d · imported %d · duplicates %d · query-skipped %d · expired %d · missing company %d · failed %d',
+                    $targetName,
+                    $platform,
+                    (int) ($targetSummary['fetched_candidates'] ?? 0),
+                    (int) ($targetSummary['matched_candidates'] ?? 0),
+                    (int) ($targetSummary['imported'] ?? 0),
+                    (int) ($targetSummary['deduplicated'] ?? 0),
+                    (int) ($targetSummary['skipped_by_query'] ?? 0),
+                    (int) ($targetSummary['skipped_expired'] ?? 0),
+                    (int) ($targetSummary['skipped_missing_company'] ?? 0),
+                    (int) ($targetSummary['failed'] ?? 0),
+                ));
+            }
         }
 
         if ($summary['parsed_jobs'] === 0) {

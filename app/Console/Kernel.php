@@ -12,6 +12,7 @@ class Kernel extends ConsoleKernel
      */
     protected $commands = [
         Commands\CalibrateDiscovery::class,
+        Commands\InspectDiscoverySource::class,
     ];
 
     protected function schedule(Schedule $schedule): void

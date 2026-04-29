@@ -1,6 +1,7 @@
 <?php
 
 $useFixtureResponses = (bool) env('JOB_DISCOVERY_USE_FIXTURES', false);
+$enableBrazilianTechJobBoards = (bool) env('JOB_DISCOVERY_ENABLE_BRAZILIAN_TECH_JOB_BOARDS', env('APP_ENV', 'production') === 'local');
 
 $fixtureCompanyCareerTargets = [
     [
@@ -95,19 +96,40 @@ $fixtureCompanyCareerTargets = [
     ],
 ];
 
+$fixtureBrazilianTechJobBoardTargets = [
+    [
+        'platform' => 'programathor',
+        'name' => 'ProgramaThor',
+        'parser_strategy' => 'programathor_cards',
+        'listing_urls' => [
+            'https://fixtures.programathor.com.br/jobs',
+        ],
+    ],
+    [
+        'platform' => 'remotar',
+        'name' => 'Remotar',
+        'parser_strategy' => 'remotar_cards',
+        'listing_urls' => [
+            'https://fixtures.remotar.com.br/vagas-tecnologia-remoto',
+        ],
+    ],
+];
+
 return [
     'fixture_supported_sources' => ['larajobs', 'company-career-pages'],
     'supported_sources' => $useFixtureResponses
         ? ['larajobs', 'company-career-pages']
-        : [
+        : array_values(array_filter([
             'python-job-board',
             'django-community-jobs',
             'we-work-remotely',
             'larajobs',
             'company-career-pages',
-        ],
+            $enableBrazilianTechJobBoards ? 'brazilian-tech-job-boards' : null,
+        ])),
     'use_fixture_responses' => $useFixtureResponses,
     'fixture_company_career_targets' => $fixtureCompanyCareerTargets,
+    'fixture_brazilian_tech_job_board_targets' => $fixtureBrazilianTechJobBoardTargets,
     'fixture_responses' => [
         'larajobs' => base_path('tests/Fixtures/larajobs_listing.html'),
         'company_career_pages' => [
@@ -121,6 +143,10 @@ return [
             'https://fixtures.quintoandar.com.br/carreiras' => base_path('tests/Fixtures/company_career_page_brazil_strong.html'),
             'https://fixtures.olx.com.br/vagas' => base_path('tests/Fixtures/company_career_page_brazil_weak.html'),
             'https://fixtures.magalu.com.br/carreiras' => base_path('tests/Fixtures/company_career_page_generic.html'),
+        ],
+        'brazilian_tech_job_boards' => [
+            'https://fixtures.programathor.com.br/jobs' => base_path('tests/Fixtures/brazilian_tech_job_boards_programathor.html'),
+            'https://fixtures.remotar.com.br/vagas-tecnologia-remoto' => base_path('tests/Fixtures/brazilian_tech_job_boards_remotar.html'),
         ],
     ],
     'company_career_targets' => $useFixtureResponses ? $fixtureCompanyCareerTargets : [
@@ -212,6 +238,24 @@ return [
             'parser_strategy' => 'structured_lists',
             'career_urls' => [
                 'https://carreiras.magazineluiza.com.br/vagas/',
+            ],
+        ],
+    ],
+    'brazilian_tech_job_board_targets' => $useFixtureResponses ? $fixtureBrazilianTechJobBoardTargets : [
+        [
+            'platform' => 'programathor',
+            'name' => 'ProgramaThor',
+            'parser_strategy' => 'programathor_cards',
+            'listing_urls' => [
+                'https://programathor.com.br/jobs',
+            ],
+        ],
+        [
+            'platform' => 'remotar',
+            'name' => 'Remotar',
+            'parser_strategy' => 'remotar_cards',
+            'listing_urls' => [
+                'https://blog.remotar.com.br/tag/vagas-tecnologia/',
             ],
         ],
     ],

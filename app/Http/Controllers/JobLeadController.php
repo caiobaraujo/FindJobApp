@@ -11,10 +11,12 @@ use App\Http\Requests\UpdateJobLeadRequest;
 use App\Models\JobLead;
 use App\Models\UserProfile;
 use App\Services\JobDiscovery\DiscoverySourceObservability;
+use App\Services\JobDiscovery\JobDiscoveryQueryMatcher;
 use App\Services\JobDiscovery\JobLeadDiscoveryRunner;
 use App\Services\JobLeadKeywordExtractor;
 use App\Services\JobLeadImportService;
 use App\Services\JobLeadMatchAnalyzer;
+use App\Services\JobSearchIntentParser;
 use App\Services\ResumeDiscoverySignalBuilder;
 use App\Services\ResumeDiscoveryQueryProfileResolver;
 use Illuminate\Http\JsonResponse;
@@ -31,21 +33,32 @@ class JobLeadController extends Controller
 {
     private const BULK_IMPORT_LIMIT = 50;
 
-    public function index(Request $request): Response
+    public function index(
+        Request $request,
+        JobSearchIntentParser $jobSearchIntentParser,
+        JobDiscoveryQueryMatcher $jobDiscoveryQueryMatcher,
+    ): Response
     {
         $userProfile = $this->userProfile($request->user()->id);
         $filters = $this->normalizedFilters($this->filters($request), $userProfile);
         $matchedOnly = $request->routeIs('matched-jobs.index');
         $workspaceView = $this->workspaceView($matchedOnly, $filters);
+        $searchIntent = $jobSearchIntentParser->parse($filters['search'] ?? null);
+        $effectiveFilters = $this->filtersWithSearchIntent($filters, $searchIntent);
         $detectedResumeSkills = $this->detectedResumeSkills($userProfile);
-        $jobLeads = $this->workspaceJobLeads($request->user()->id, $filters, $userProfile);
+        $jobLeads = $this->workspaceJobLeads(
+            $request->user()->id,
+            $effectiveFilters,
+            $userProfile,
+            $jobDiscoveryQueryMatcher,
+        );
         $displayJobLeads = $this->workspaceDisplayJobLeads($jobLeads, $userProfile, $matchedOnly, $filters);
 
         if ($filters['is_latest_discovery_view']) {
             Log::info('job lead workspace latest discovery view', [
                 'user_id' => $request->user()->id,
                 'resolved_discovery_batch_id' => $this->resolvedDiscoveryBatchId($filters['discovery_batch'] ?? null, $userProfile),
-                'filters' => $this->workspaceLogFilters($filters),
+                'filters' => $this->workspaceLogFilters($effectiveFilters),
                 'visible_job_lead_ids' => $displayJobLeads->pluck('id')->all(),
             ]);
         }
@@ -62,7 +75,7 @@ class JobLeadController extends Controller
                 'analysis_state' => $filters['analysis_state'] ?? '',
                 'discovery_batch' => $filters['discovery_batch'] ?? '',
                 'lead_status' => $filters['lead_status'] ?? '',
-                'lead_group' => $filters['lead_group'] ?? 'all',
+                'lead_group' => $workspaceView,
                 'location_scope' => $filters['location_scope'],
                 'search' => $filters['search'] ?? '',
                 'show_ignored' => $filters['show_ignored'],
@@ -80,20 +93,20 @@ class JobLeadController extends Controller
             'matchedJobs' => $matchedJobs,
             'latestDiscoveryWorkspaceSplit' => $this->latestDiscoveryWorkspaceSplit(
                 $request->user()->id,
-                $filters,
+                $effectiveFilters,
                 $userProfile,
             ),
             'latestDiscoveryMatchFunnel' => $matchedOnly
                 ? $this->latestDiscoveryMatchFunnel(
                     $request->user()->id,
-                    $filters,
+                    $effectiveFilters,
                     $userProfile,
                 )
                 : null,
             'matchedJobsVisibilitySummary' => $matchedOnly
                 ? $this->matchedJobsVisibilitySummary(
                     $request->user()->id,
-                    $filters,
+                    $effectiveFilters,
                     $userProfile,
                     count($matchedJobs),
                 )
@@ -108,7 +121,12 @@ class JobLeadController extends Controller
         $user = $request->user();
         $userProfile = $this->userProfile($user->id);
         $matchedJobsCount = count($this->matchedJobs(
-            $this->workspaceJobLeads($user->id, $this->defaultMatchedJobsFilters(), $userProfile),
+            $this->workspaceJobLeads(
+                $user->id,
+                $this->defaultMatchedJobsFilters(),
+                $userProfile,
+                app(JobDiscoveryQueryMatcher::class),
+            ),
             $userProfile,
         ));
 
@@ -253,6 +271,7 @@ class JobLeadController extends Controller
         JobLeadDiscoveryRunner $jobLeadDiscoveryRunner,
         DiscoverySourceObservability $discoverySourceObservability,
         ResumeDiscoveryQueryProfileResolver $resumeDiscoveryQueryProfileResolver,
+        JobSearchIntentParser $jobSearchIntentParser,
     ): RedirectResponse
     {
         $validatedData = $request->validate([
@@ -260,9 +279,11 @@ class JobLeadController extends Controller
         ]);
         $searchQuery = Str::of((string) ($validatedData['search_query'] ?? ''))->squish()->value();
         $searchQuery = $searchQuery === '' ? null : $searchQuery;
+        $searchIntent = $jobSearchIntentParser->parse($searchQuery);
+        $normalizedSearchQuery = $searchIntent['query'];
         $userProfile = $this->userProfile($request->user()->id);
         $queryProfiles = $resumeDiscoveryQueryProfileResolver->resolve(
-            $searchQuery,
+            $normalizedSearchQuery,
             $userProfile?->base_resume_text,
             $userProfile?->core_skills ?? [],
         );
@@ -284,7 +305,7 @@ class JobLeadController extends Controller
                 $sourceSummary = $jobLeadDiscoveryRunner->discoverForUser(
                     $request->user()->id,
                     $source,
-                    $searchQuery,
+                    $normalizedSearchQuery,
                     $discoveryBatchId,
                     $queryProfiles,
                 );
@@ -299,12 +320,13 @@ class JobLeadController extends Controller
                     'skipped_not_matching_query' => 0,
                     'invalid' => 0,
                     'failed' => 1,
-                    'query_used' => $searchQuery !== null,
+                    'query_used' => $normalizedSearchQuery !== null,
                     'query_profile_keys' => [],
                     'matched_by_query_profiles' => 0,
                     'created_by_query_profiles' => 0,
                     'created_match_details' => [],
                     'discovery_batch_id' => $discoveryBatchId,
+                    'target_diagnostics' => [],
                 ];
 
                 continue;
@@ -333,6 +355,7 @@ class JobLeadController extends Controller
                 'created_by_query_profiles' => $sourceSummary['created_by_query_profiles'],
                 'created_match_details' => $sourceSummary['created_match_details'],
                 'discovery_batch_id' => $sourceSummary['discovery_batch_id'],
+                'target_diagnostics' => $sourceSummary['target_diagnostics'] ?? [],
             ];
         }
 
@@ -347,6 +370,7 @@ class JobLeadController extends Controller
         Log::info('job discovery completed', [
             'user_id' => $request->user()->id,
             'search_query' => $searchQuery,
+            'search_intent' => $searchIntent,
             'query_profile_keys' => array_values(array_unique(array_merge(
                 [],
                 ...array_map(
@@ -510,6 +534,27 @@ class JobLeadController extends Controller
     }
 
     /**
+     * @param array<string, mixed> $filters
+     * @param array{location: string|null, query: string|null, work_mode: string|null} $searchIntent
+     * @return array<string, mixed>
+     */
+    private function filtersWithSearchIntent(array $filters, array $searchIntent): array
+    {
+        $effectiveFilters = $filters;
+        $effectiveFilters['search_query'] = $searchIntent['query'];
+
+        if (($searchIntent['location'] ?? null) === JobLead::LOCATION_SCOPE_BRAZIL) {
+            $effectiveFilters['location_scope'] = JobLead::LOCATION_SCOPE_BRAZIL;
+        }
+
+        if (blank($effectiveFilters['work_mode'] ?? null) && filled($searchIntent['work_mode'] ?? null)) {
+            $effectiveFilters['work_mode'] = $searchIntent['work_mode'];
+        }
+
+        return $effectiveFilters;
+    }
+
+    /**
      * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
      * @return \Illuminate\Support\Collection<int, JobLead>
      */
@@ -576,7 +621,12 @@ class JobLeadController extends Controller
             $this->filtersIncludingIgnored($filters),
         );
         $matchedJobs = $this->matchedJobs(
-            $this->workspaceJobLeads($userId, $allLocationFilters, $userProfile),
+            $this->workspaceJobLeads(
+                $userId,
+                $allLocationFilters,
+                $userProfile,
+                app(JobDiscoveryQueryMatcher::class),
+            ),
             $userProfile,
         );
         $totalCount = count($matchedJobs);
@@ -819,7 +869,12 @@ class JobLeadController extends Controller
      * @param array<string, mixed> $filters
      * @return \Illuminate\Support\Collection<int, JobLead>
      */
-    private function workspaceJobLeads(int $userId, array $filters, ?UserProfile $userProfile)
+    private function workspaceJobLeads(
+        int $userId,
+        array $filters,
+        ?UserProfile $userProfile,
+        JobDiscoveryQueryMatcher $jobDiscoveryQueryMatcher,
+    )
     {
         $jobLeads = JobLead::query()
             ->where('user_id', $userId)
@@ -830,10 +885,15 @@ class JobLeadController extends Controller
             ->workMode($filters['work_mode'] ?? null)
             ->analysisState($filters['analysis_state'] ?? null)
             ->orderByPriority()
-            ->search($filters['search'] ?? null)
             ->get();
 
-        return $this->filterJobLeadsByLocationScope($jobLeads, $filters['location_scope']);
+        $jobLeads = $this->filterJobLeadsByLocationScope($jobLeads, $filters['location_scope']);
+
+        return $this->filterJobLeadsBySearchText(
+            $jobLeads,
+            $filters['search_query'] ?? ($filters['search'] ?? null),
+            $jobDiscoveryQueryMatcher,
+        );
     }
 
     /**
@@ -1032,20 +1092,46 @@ class JobLeadController extends Controller
     /**
      * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
      */
-    private function filterJobLeadsBySearchText($jobLeads, ?string $search)
+    private function filterJobLeadsBySearchText(
+        $jobLeads,
+        ?string $search,
+        ?JobDiscoveryQueryMatcher $jobDiscoveryQueryMatcher = null,
+    )
     {
         if (blank($search)) {
             return $jobLeads->values();
         }
 
-        $search = mb_strtolower((string) $search);
+        $jobDiscoveryQueryMatcher ??= app(JobDiscoveryQueryMatcher::class);
 
         return $jobLeads
-            ->filter(function (JobLead $jobLead) use ($search): bool {
-                return str_contains(mb_strtolower((string) $jobLead->company_name), $search)
-                    || str_contains(mb_strtolower((string) $jobLead->job_title), $search);
-            })
+            ->filter(fn (JobLead $jobLead): bool => $jobDiscoveryQueryMatcher->matches(
+                $search,
+                $this->jobLeadMatcherData($jobLead),
+            ))
             ->values();
+    }
+
+    /**
+     * @return array{
+     *     company_name: string|null,
+     *     description_text: string|null,
+     *     extracted_keywords: array<int, string>|null,
+     *     job_title: string|null,
+     *     location: string|null,
+     *     work_mode: string|null
+     * }
+     */
+    private function jobLeadMatcherData(JobLead $jobLead): array
+    {
+        return [
+            'company_name' => $jobLead->company_name,
+            'description_text' => $jobLead->description_text,
+            'extracted_keywords' => is_array($jobLead->extracted_keywords) ? $jobLead->extracted_keywords : null,
+            'job_title' => $jobLead->job_title,
+            'location' => $jobLead->location,
+            'work_mode' => $jobLead->work_mode,
+        ];
     }
 
     /**

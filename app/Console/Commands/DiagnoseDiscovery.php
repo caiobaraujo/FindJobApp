@@ -47,6 +47,7 @@ class DiagnoseDiscovery extends Command
                 'job_discovery.use_fixture_responses' => true,
                 'job_discovery.supported_sources' => config('job_discovery.fixture_supported_sources', config('job_discovery.supported_sources', [])),
                 'job_discovery.company_career_targets' => config('job_discovery.fixture_company_career_targets', config('job_discovery.company_career_targets', [])),
+                'job_discovery.brazilian_tech_job_board_targets' => config('job_discovery.fixture_brazilian_tech_job_board_targets', config('job_discovery.brazilian_tech_job_board_targets', [])),
             ]);
         }
 

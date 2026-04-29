@@ -11,69 +11,29 @@ class JobLeadKeywordExtractor
     /**
      * @var array<string, true>
      */
-    private const ROLE_TERMS = [
-        'analyst' => true,
-        'arquiteto' => true,
-        'designer' => true,
-        'developer' => true,
-        'desenvolvedor' => true,
-        'engineer' => true,
-        'engenheiro' => true,
-        'manager' => true,
-        'specialist' => true,
-    ];
-
-    /**
-     * @var list<string>
-     */
-    private const IMPORTANT_TERMS = [
-        'api',
-        'apis',
-        'angular',
-        'aws',
-        'backend',
-        'django',
-        'cloud',
-        'css',
-        'data',
-        'design',
-        'devops',
-        'docker',
-        'full stack',
-        'frontend',
-        'graphql',
-        'java',
-        'javascript',
-        'llm',
-        'kubernetes',
-        'laravel',
-        'mysql',
-        'node',
-        'nlp',
-        'openai',
-        'php',
-        'postgresql',
-        'product',
-        'python',
-        'react',
-        'resume',
-        'sql',
-        'tailwind',
-        'testing',
-        'typescript',
-        'vue',
-    ];
-
-    /**
-     * @var array<string, string>
-     */
-    private const SKILL_ALIASES = [
-        'apis' => 'api',
-        'angularjs' => 'angular',
-        'fullstack' => 'full stack',
-        'nodejs' => 'node',
-        'open ai' => 'openai',
-        'vuejs' => 'vue',
+    private const NOISE_TOKENS = [
+        '@context' => true,
+        '@type' => true,
+        'analytics' => true,
+        'breadcrumb' => true,
+        'contenturl' => true,
+        'datalayer' => true,
+        'document' => true,
+        'function' => true,
+        'googletagmanager' => true,
+        'gtag' => true,
+        'itemlist' => true,
+        'itemprop' => true,
+        'itemtype' => true,
+        'onclick' => true,
+        'primaryimage' => true,
+        'return' => true,
+        'sameas' => true,
+        'schema' => true,
+        'schema.org' => true,
+        'srcset' => true,
+        'thumbnailurl' => true,
+        'window' => true,
     ];
 
     /**
@@ -261,18 +221,7 @@ class JobLeadKeywordExtractor
             return [];
         }
 
-        $words = $this->filteredWords($normalizedDescriptionText);
-
-        if ($words === []) {
-            return [];
-        }
-
-        $keywords = array_merge(
-            $this->sortedCandidates($this->counts($words), false),
-            $this->sortedCandidates($this->counts($this->phrases($words)), true),
-        );
-
-        return array_slice(array_values(array_unique($keywords)), 0, self::MAX_KEYWORDS);
+        return array_slice($this->taxonomyKeywords($normalizedDescriptionText), 0, self::MAX_KEYWORDS);
     }
 
     private function normalizeDescriptionText(?string $descriptionText): ?string
@@ -282,105 +231,153 @@ class JobLeadKeywordExtractor
         }
 
         $normalizedDescriptionText = $this->normalizeUnicode($descriptionText);
+        $normalizedDescriptionText = html_entity_decode(strip_tags($normalizedDescriptionText), ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $normalizedDescriptionText = strtolower($normalizedDescriptionText);
-        $normalizedDescriptionText = preg_replace('/[^a-z0-9\s]+/', ' ', $normalizedDescriptionText) ?? '';
-        $normalizedDescriptionText = preg_replace('/\bopen\s+ai\b/', 'openai', $normalizedDescriptionText) ?? $normalizedDescriptionText;
+        $normalizedDescriptionText = preg_replace('/https?:\/\/\S+|www\.\S+/u', ' ', $normalizedDescriptionText) ?? $normalizedDescriptionText;
+        $normalizedDescriptionText = preg_replace('/\b\S+\.(?:png|jpg|jpeg|gif|svg|webp|ico)\b/u', ' ', $normalizedDescriptionText) ?? $normalizedDescriptionText;
+        $normalizedDescriptionText = preg_replace('/\b[a-z0-9_-]{25,}\b/u', ' ', $normalizedDescriptionText) ?? $normalizedDescriptionText;
+        $normalizedDescriptionText = str_replace(['=>', '::', '{}', '[]', '();'], ' ', $normalizedDescriptionText);
+        $normalizedDescriptionText = preg_replace('/[^a-z0-9\s\.\#\/\-\+\(\)]+/u', ' ', $normalizedDescriptionText) ?? $normalizedDescriptionText;
         $normalizedDescriptionText = trim(preg_replace('/\s+/', ' ', $normalizedDescriptionText) ?? '');
 
         if ($normalizedDescriptionText === '') {
             return null;
         }
 
-        return $normalizedDescriptionText;
+        return $this->removeNoiseTokens($normalizedDescriptionText);
     }
 
     /**
      * @return list<string>
      */
-    private function filteredWords(string $descriptionText): array
+    private function taxonomyKeywords(string $descriptionText): array
     {
-        $words = preg_split('/\s+/', $descriptionText) ?: [];
+        $matches = [];
 
-        return array_values(array_filter(
-            $words,
-            fn (string $word): bool => $this->isUsefulWord($word),
-        ));
-    }
+        foreach (TechnicalKeywordTaxonomy::definitions() as $canonical => $definition) {
+            $firstPosition = $this->firstMatchPosition($descriptionText, $definition['aliases'], $definition['requires_context'] ?? []);
 
-    /**
-     * @param list<string> $items
-     * @return array<string, int>
-     */
-    private function counts(array $items): array
-    {
-        $counts = [];
-
-        foreach ($items as $item) {
-            $counts[$item] = ($counts[$item] ?? 0) + 1;
-        }
-
-        return $counts;
-    }
-
-    /**
-     * @param list<string> $words
-     * @return list<string>
-     */
-    private function phrases(array $words): array
-    {
-        $phrases = [];
-
-        for ($index = 0; $index < count($words) - 1; $index++) {
-            $phrases[] = $words[$index].' '.$words[$index + 1];
-        }
-
-        return $phrases;
-    }
-
-    /**
-     * @param array<string, int> $counts
-     * @return list<string>
-     */
-    private function sortedCandidates(array $counts, bool $phrases): array
-    {
-        $candidates = [];
-
-        foreach ($counts as $keyword => $count) {
-            $normalizedKeyword = $this->normalizeCandidateKeyword($keyword);
-
-            if ($normalizedKeyword === null) {
+            if ($firstPosition === null) {
                 continue;
             }
 
-            if (! $this->shouldKeepCandidate($normalizedKeyword, $count, $phrases)) {
-                continue;
-            }
-
-            $candidates[$normalizedKeyword] = max($candidates[$normalizedKeyword] ?? 0, $count);
+            $matches[] = [
+                'canonical' => $canonical,
+                'position' => $firstPosition,
+                'specificity' => $this->specificity($definition['aliases']),
+            ];
         }
 
-        uksort($candidates, fn (string $left, string $right): int => $this->compareCandidates(
-            $left,
-            $right,
-            $candidates,
-        ));
+        usort($matches, function (array $left, array $right): int {
+            $positionComparison = $left['position'] <=> $right['position'];
 
-        return array_keys($candidates);
+            if ($positionComparison !== 0) {
+                return $positionComparison;
+            }
+
+            $specificityComparison = $right['specificity'] <=> $left['specificity'];
+
+            if ($specificityComparison !== 0) {
+                return $specificityComparison;
+            }
+
+            return strcmp($left['canonical'], $right['canonical']);
+        });
+
+        return array_values(array_unique(array_column($matches, 'canonical')));
+    }
+
+    private function removeNoiseTokens(string $descriptionText): ?string
+    {
+        $tokens = preg_split('/\s+/', $descriptionText) ?: [];
+        $cleanTokens = array_values(array_filter($tokens, function (string $token): bool {
+            if (isset(self::STOPWORDS[$token])) {
+                return false;
+            }
+
+            if (isset(self::NOISE_TOKENS[$token])) {
+                return false;
+            }
+
+            return ! preg_match('/^[\.\#\/\-\+\(\)]+$/', $token);
+        }));
+
+        if ($cleanTokens === []) {
+            return null;
+        }
+
+        return implode(' ', $cleanTokens);
     }
 
     /**
-     * @param array<string, int> $counts
+     * @param list<string> $aliases
+     * @param list<string> $requiredContext
      */
-    private function compareCandidates(string $left, string $right, array $counts): int
+    private function firstMatchPosition(string $descriptionText, array $aliases, array $requiredContext): ?int
     {
-        $scoreComparison = $this->candidateScore($counts[$right], $right)
-            <=> $this->candidateScore($counts[$left], $left);
+        $firstPosition = null;
 
-        if ($scoreComparison !== 0) {
-            return $scoreComparison;
+        foreach ($aliases as $alias) {
+            $pattern = $this->aliasPattern($alias);
+
+            if (preg_match($pattern, $descriptionText, $matches, PREG_OFFSET_CAPTURE) !== 1) {
+                continue;
+            }
+
+            $matchedText = (string) $matches[0][0];
+            $position = (int) $matches[0][1];
+
+            if (! $this->hasRequiredContext($descriptionText, $position, strlen($matchedText), $requiredContext)) {
+                continue;
+            }
+
+            if ($firstPosition === null || $position < $firstPosition) {
+                $firstPosition = $position;
+            }
         }
 
-        return strcmp($left, $right);
+        return $firstPosition;
+    }
+
+    private function aliasPattern(string $alias): string
+    {
+        $quotedAlias = preg_quote(strtolower($alias), '/');
+        $quotedAlias = str_replace('\ ', '\s+', $quotedAlias);
+
+        return '/(?<![a-z0-9])'.$quotedAlias.'(?![a-z0-9])/u';
+    }
+
+    /**
+     * @param list<string> $requiredContext
+     */
+    private function hasRequiredContext(string $descriptionText, int $position, int $matchLength, array $requiredContext): bool
+    {
+        if ($requiredContext === []) {
+            return true;
+        }
+
+        $contextWindow = substr($descriptionText, max(0, $position - 100), $matchLength + 200) ?: $descriptionText;
+
+        foreach ($requiredContext as $contextTerm) {
+            $quotedContextTerm = preg_quote(strtolower($contextTerm), '/');
+            $quotedContextTerm = str_replace('\ ', '\s+', $quotedContextTerm);
+
+            if (preg_match('/(?<![a-z0-9])'.$quotedContextTerm.'(?![a-z0-9])/u', $contextWindow) === 1) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param list<string> $aliases
+     */
+    private function specificity(array $aliases): int
+    {
+        return collect($aliases)
+            ->map(fn (string $alias): int => strlen($alias))
+            ->max() ?? 0;
     }
 
     /**
@@ -399,13 +396,8 @@ class JobLeadKeywordExtractor
             $hints[] = 'The description looks short. Add the full posting before tailoring your resume.';
         }
 
-        $importantTerms = array_values(array_filter(
-            self::IMPORTANT_TERMS,
-            fn (string $term): bool => str_contains($descriptionText, $term),
-        ));
-
-        if ($importantTerms !== []) {
-            $hints[] = 'Likely ATS terms to reflect in your resume: '.implode(', ', array_slice($importantTerms, 0, 6)).'.';
+        if ($keywords !== []) {
+            $hints[] = 'Likely ATS terms to reflect in your resume: '.implode(', ', array_slice($keywords, 0, 6)).'.';
         }
 
         if ($hints === []) {
@@ -432,104 +424,5 @@ class JobLeadKeywordExtractor
         }
 
         return $transliteratedText;
-    }
-
-    private function isUsefulWord(string $word): bool
-    {
-        if (strlen($word) < 3) {
-            return false;
-        }
-
-        if (isset(self::STOPWORDS[$word])) {
-            return false;
-        }
-
-        return preg_match('/^[a-z0-9]+$/', $word) === 1;
-    }
-
-    private function shouldKeepCandidate(string $keyword, int $count, bool $phrases): bool
-    {
-        if ($phrases) {
-            if ($this->isImportantTerm($keyword)) {
-                return true;
-            }
-
-            if ($count >= 2) {
-                return true;
-            }
-
-            return $this->isMeaningfulPhrase($keyword);
-        }
-
-        if ($count >= 2) {
-            return true;
-        }
-
-        return $this->isImportantTerm($keyword);
-    }
-
-    private function normalizeCandidateKeyword(string $keyword): ?string
-    {
-        $normalizedKeyword = strtolower(trim(preg_replace('/\s+/', ' ', $keyword) ?? $keyword));
-
-        if ($normalizedKeyword === '') {
-            return null;
-        }
-
-        if (isset(self::SKILL_ALIASES[$normalizedKeyword])) {
-            return self::SKILL_ALIASES[$normalizedKeyword];
-        }
-
-        return $normalizedKeyword;
-    }
-
-    private function candidateScore(int $count, string $keyword): int
-    {
-        $score = $count * 10;
-
-        if ($this->containsImportantTerm($keyword)) {
-            $score += 100;
-        }
-
-        if (str_contains($keyword, ' ')) {
-            $score += 20;
-        }
-
-        return $score;
-    }
-
-    private function isImportantTerm(string $keyword): bool
-    {
-        return in_array($keyword, self::IMPORTANT_TERMS, true);
-    }
-
-    private function containsImportantTerm(string $keyword): bool
-    {
-        foreach (self::IMPORTANT_TERMS as $importantTerm) {
-            if (str_contains($keyword, $importantTerm)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private function isMeaningfulPhrase(string $keyword): bool
-    {
-        [$firstWord, $secondWord] = explode(' ', $keyword, 2);
-
-        if ($this->isImportantTerm($firstWord) && $this->isImportantTerm($secondWord)) {
-            return true;
-        }
-
-        if ($this->isImportantTerm($firstWord) && isset(self::ROLE_TERMS[$secondWord])) {
-            return true;
-        }
-
-        if ($this->isImportantTerm($secondWord) && isset(self::ROLE_TERMS[$firstWord])) {
-            return true;
-        }
-
-        return false;
     }
 }

@@ -189,3 +189,27 @@ it('supports an optional query filter for discovery imports', function (): void 
 
     $this->assertDatabaseCount('job_leads', 1);
 });
+
+it('prints verbose target diagnostics for brazilian tech job board discovery', function (): void {
+    $user = User::factory()->create();
+
+    config()->set('job_discovery.use_fixture_responses', true);
+    config()->set('job_discovery.brazilian_tech_job_board_targets', config('job_discovery.fixture_brazilian_tech_job_board_targets'));
+
+    $this->artisan('job-leads:discover', [
+        'user_id' => $user->id,
+        'source' => 'brazilian-tech-job-boards',
+        '--verbose' => true,
+    ])
+        ->expectsOutput('Listing HTTP status: 200')
+        ->expectsOutput('Candidate links found: 6')
+        ->expectsOutput('Parsed jobs after filtering: 3')
+        ->expectsOutput('Target ProgramaThor (programathor): fetched 4 · matched 2 · imported 2 · duplicates 0 · query-skipped 0 · expired 1 · missing company 1 · failed 0')
+        ->expectsOutput('Target Remotar (remotar): fetched 2 · matched 1 · imported 1 · duplicates 0 · query-skipped 0 · expired 1 · missing company 0 · failed 0')
+        ->expectsOutput('Fetched: 6')
+        ->expectsOutput('Created: 3')
+        ->expectsOutput('Duplicates skipped: 0')
+        ->expectsOutput('Invalid skipped: 0')
+        ->expectsOutput('Failed: 0')
+        ->assertExitCode(0);
+});

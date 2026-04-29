@@ -1161,6 +1161,61 @@ it('updates broader workspace international visibility counts when international
         ->assertSee('International Match');
 });
 
+it('filters existing job leads with deterministic search intent terms', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Python backend engineer.',
+        'core_skills' => ['Python'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Brazil Python Remote',
+        'job_title' => 'Python Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => 'Python backend role.',
+        'extracted_keywords' => ['python', 'backend'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Brazil Python Hybrid',
+        'job_title' => 'Python Engineer',
+        'location' => 'Sao Paulo, Brazil',
+        'work_mode' => JobLead::WORK_MODE_HYBRID,
+        'description_text' => 'Python hybrid role.',
+        'extracted_keywords' => ['python'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'International Python Remote',
+        'job_title' => 'Python Engineer',
+        'location' => 'Remote, Portugal',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => 'Python remote role.',
+        'extracted_keywords' => ['python'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index', [
+            'lead_group' => 'all',
+            'search' => 'python remote brazil',
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.lead_group', 'all')
+            ->where('filters.search', 'python remote brazil')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_BRAZIL)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Brazil Python Remote')
+        )
+        ->assertSee('Brazil Python Remote')
+        ->assertDontSee('Brazil Python Hybrid')
+        ->assertDontSee('International Python Remote');
+});
+
 it('shows latest discovery funnel counts for ignored status work mode and search filters', function (): void {
     $user = User::factory()->create();
 

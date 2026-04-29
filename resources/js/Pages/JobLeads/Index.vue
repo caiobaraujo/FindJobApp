@@ -99,25 +99,17 @@ watch(discoverySearchQuery, (value) => {
 });
 
 const filterForm = reactive({
-    analysis_readiness: props.filters.analysis_readiness || '',
-    analysis_state: props.filters.analysis_state || '',
     discovery_batch: props.filters.discovery_batch || '',
-    lead_status: props.filters.lead_status || '',
-    lead_group: props.filters.lead_group || 'all',
+    lead_group: props.filters.lead_group || 'matched',
     location_scope: props.filters.location_scope || 'brazil',
     search: props.filters.search || '',
-    show_ignored: Boolean(props.filters.show_ignored),
     work_mode: props.filters.work_mode || '',
 });
 
 const defaultWorkspaceFilters = Object.freeze({
-    analysis_readiness: '',
-    analysis_state: '',
-    lead_status: '',
     lead_group: 'all',
     location_scope: 'brazil',
     search: '',
-    show_ignored: false,
     work_mode: '',
 });
 
@@ -125,11 +117,11 @@ const leadStatusActions = ['saved', 'shortlisted', 'applied', 'ignored'];
 const leadStatusUpdates = reactive({});
 
 function workspaceRoute() {
-    return workspaceHrefForView(props.workspaceView);
+    return route(routeNameForWorkspaceView(filterForm.lead_group));
 }
 
 function submitFilters() {
-    router.get(workspaceRoute(), filterForm, {
+    router.get(workspaceRoute(), paramsForWorkspaceView(filterForm.lead_group), {
         preserveState: true,
         preserveScroll: true,
         replace: true,
@@ -147,14 +139,10 @@ function runDiscovery() {
 }
 
 function resetFilters() {
-    filterForm.analysis_readiness = defaultWorkspaceFilters.analysis_readiness;
-    filterForm.analysis_state = defaultWorkspaceFilters.analysis_state;
     filterForm.discovery_batch = '';
-    filterForm.lead_status = defaultWorkspaceFilters.lead_status;
-    filterForm.lead_group = props.workspaceView === 'unmatched' ? 'unmatched' : 'all';
+    filterForm.lead_group = props.workspaceView;
     filterForm.location_scope = defaultWorkspaceFilters.location_scope;
     filterForm.search = defaultWorkspaceFilters.search;
-    filterForm.show_ignored = defaultWorkspaceFilters.show_ignored;
     filterForm.work_mode = defaultWorkspaceFilters.work_mode;
     submitFilters();
 }
@@ -175,13 +163,16 @@ function paramsForWorkspaceView(workspaceView, discoveryBatch = '', locationScop
         params.lead_group = workspaceView === 'unmatched' ? 'unmatched' : 'all';
     }
 
+    delete params.discovery_batch;
+
     if (discoveryBatch === '') {
-        delete params.discovery_batch;
-    } else {
-        params.discovery_batch = discoveryBatch;
+        return params;
     }
 
-    return params;
+    return {
+        ...params,
+        discovery_batch: discoveryBatch,
+    };
 }
 
 function workspaceHrefForView(workspaceView, discoveryBatch = '', locationScope = filterForm.location_scope) {
@@ -201,13 +192,9 @@ function normalWorkspaceHref() {
 
 function latestDiscoveryParams() {
     return {
-        analysis_readiness: '',
-        analysis_state: '',
         discovery_batch: 'latest',
-        lead_status: '',
         location_scope: 'all',
         search: '',
-        show_ignored: 1,
         work_mode: '',
     };
 }
@@ -244,14 +231,6 @@ function locationClassificationClasses(locationClassification) {
     return '';
 }
 
-function analysisStateLabel(analysisState) {
-    return t(`matched_jobs.analysis_states.${analysisState}`, analysisState);
-}
-
-function analysisReadinessLabel(analysisReadiness) {
-    return t(`matched_jobs.analysis_readiness.${analysisReadiness}`, analysisReadiness);
-}
-
 function discoverySourceLabel(source) {
     return t(`job_discovery.sources.${source.replaceAll('-', '_')}`, source);
 }
@@ -282,10 +261,7 @@ const latestDiscoveryHref = computed(() => route(
         }),
     },
 ));
-const allJobsHref = computed(() => normalWorkspaceHref());
-const matchedLeadsHref = computed(() => workspaceHrefForView('matched'));
-const allDiscoveredLeadsHref = computed(() => workspaceHrefForView('all'));
-const unmatchedLeadsHref = computed(() => workspaceHrefForView('unmatched'));
+const allJobsHref = computed(() => workspaceHrefForView('all'));
 const hiddenDiscoveryResults = computed(() => discoveryCreatedCount.value > 0 && props.matchedJobs.length === 0 && ! viewingLatestDiscoveryBatch.value);
 const matchedJobsVisibilitySummary = computed(() => props.matchedJobsVisibilitySummary || {
     visible_count: props.matchedJobs.length,
@@ -320,7 +296,7 @@ const workspaceTitle = computed(() => {
         return t('job_leads.unmatched_title', 'Broader IT leads');
     }
 
-    return t('job_leads.all_discovered_title', 'All discovered leads');
+    return t('job_leads.all_discovered_title', 'Job leads');
 });
 
 const workspaceSubtitle = computed(() => {
@@ -335,22 +311,13 @@ const workspaceSubtitle = computed(() => {
     return t('job_leads.all_discovered_subtitle', 'Review both resume-matched leads and broader technology opportunities discovered for your workspace.');
 });
 
-const filterTitle = computed(() => isMatchedWorkspace.value
-    ? t('matched_jobs.filter_title', 'Find a match faster')
-    : isUnmatchedWorkspace.value
-        ? t('job_leads.unmatched_filter_title', 'Refine broader IT leads')
-        : t('job_leads.filter_title', 'Refine discovered leads'));
+const filterTitle = computed(() => t('job_leads.filter_title', 'Refine discovered leads'));
 
 const filterDescription = computed(() => {
-    if (isMatchedWorkspace.value) {
-        return t('matched_jobs.filter_description', 'Search by company or role. The list is already narrowed to jobs with at least one detected match when your resume is ready.');
-    }
-
-    if (isUnmatchedWorkspace.value) {
-        return t('job_leads.unmatched_filter_description', 'Search broader discovered technology leads that do not currently overlap with your resume.');
-    }
-
-    return t('job_leads.filter_description', 'Search across all discovered leads, including matched leads and broader technology opportunities.');
+    return t(
+        'job_leads.filter_description',
+        'This section only filters existing JobLead records in your workspace. It does not run discovery again.',
+    );
 });
 
 const resultsTitle = computed(() => isMatchedWorkspace.value
@@ -459,10 +426,27 @@ function discoveryDetailsRow(sourceResult) {
     );
 }
 
+function discoveryTargetDetails(sourceResult) {
+    if (!Array.isArray(sourceResult.target_diagnostics)) {
+        return [];
+    }
+
+    return sourceResult.target_diagnostics.map((targetSummary) => {
+        const targetName = targetSummary.target_name || targetSummary.target_identifier || 'Target';
+        const platform = targetSummary.platform || targetName;
+
+        return `${targetName} (${platform}) — fetched ${targetSummary.fetched_candidates || 0} · matched ${targetSummary.matched_candidates || 0} · imported ${targetSummary.imported || 0} · duplicates ${targetSummary.deduplicated || 0} · skipped ${targetSummary.skipped_by_query || 0} · expired ${targetSummary.skipped_expired || 0} · missing company ${targetSummary.skipped_missing_company || 0} · failed ${targetSummary.failed || 0}`;
+    });
+}
+
 function analysisStateFor(jobLead) {
     return jobLead.job_keywords_used.length > 0
         ? 'analyzed'
         : 'missing';
+}
+
+function analysisStateLabel(analysisState) {
+    return t(`matched_jobs.analysis_states.${analysisState}`, analysisState);
 }
 
 function matchQualityFor(jobLead) {
@@ -626,38 +610,28 @@ function setLeadStatus(jobLead, leadStatus) {
         </template>
 
         <AppShell>
-            <div class="mb-6 flex flex-wrap gap-3">
-                <Link
-                    :href="matchedLeadsHref"
-                    class="rounded-full border px-4 py-2 text-sm font-medium transition"
-                    :class="isMatchedWorkspace
-                        ? 'border-gold-300/20 bg-gold-300/10 text-gold-200'
-                        : 'border-white/10 bg-black/20 text-slateglass-300 hover:border-white/20 hover:text-white'"
-                >
-                    {{ t('job_leads.segment_matched', 'Matched leads') }}
-                </Link>
-                <Link
-                    :href="allDiscoveredLeadsHref"
-                    class="rounded-full border px-4 py-2 text-sm font-medium transition"
-                    :class="isAllDiscoveredWorkspace
-                        ? 'border-gold-300/20 bg-gold-300/10 text-gold-200'
-                        : 'border-white/10 bg-black/20 text-slateglass-300 hover:border-white/20 hover:text-white'"
-                >
-                    {{ t('job_leads.segment_all_discovered', 'All discovered leads') }}
-                </Link>
-                <Link
-                    :href="unmatchedLeadsHref"
-                    class="rounded-full border px-4 py-2 text-sm font-medium transition"
-                    :class="isUnmatchedWorkspace
-                        ? 'border-gold-300/20 bg-gold-300/10 text-gold-200'
-                        : 'border-white/10 bg-black/20 text-slateglass-300 hover:border-white/20 hover:text-white'"
-                >
-                    {{ t('job_leads.segment_unmatched', 'Broader IT leads') }}
-                </Link>
-            </div>
+            <div class="mb-8 rounded-[2rem] border border-gold-300/15 bg-[radial-gradient(circle_at_top_left,rgba(255,215,140,0.14),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-6 py-6 shadow-panel sm:px-8">
+                <div class="flex flex-wrap items-start justify-between gap-6">
+                    <div class="max-w-3xl">
+                        <p class="text-xs font-semibold uppercase tracking-[0.26em] text-gold-300/80">
+                            {{ t('job_discovery.search_new_jobs', 'Search new jobs') }}
+                        </p>
+                        <h2 class="mt-3 text-2xl font-semibold text-white sm:text-3xl">
+                            {{ t('job_discovery.search_new_jobs_headline', 'Run discovery from a simple job search') }}
+                        </h2>
+                        <p class="mt-3 max-w-2xl text-sm leading-7 text-slateglass-300">
+                            {{ t('job_discovery.search_new_jobs_description', 'Type a natural query and FindJobApp will run deterministic discovery across the configured sources. Examples: “python remote brazil”, “javascript or laravel”, “django backend remote”.') }}
+                        </p>
+                    </div>
+                    <Link
+                        :href="route('job-leads.create')"
+                        class="premium-button-secondary"
+                    >
+                        {{ t('buttons.add_job', 'Add job') }}
+                    </Link>
+                </div>
 
-            <div class="mb-8 flex flex-wrap items-end justify-between gap-6">
-                <div class="w-full max-w-xl">
+                <div class="mt-6">
                     <form
                         class="space-y-3"
                         @submit.prevent="runDiscovery"
@@ -674,8 +648,8 @@ function setLeadStatus(jobLead, leadStatus) {
                                 v-model="discoveryForm.search_query"
                                 data-testid="discovery-search-input"
                                 type="text"
-                                class="mt-2 block w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white placeholder:text-slateglass-400 focus:border-gold-300/40 focus:outline-none focus:ring-2 focus:ring-gold-300/20"
-                                :placeholder="t('job_discovery.search_new_jobs_placeholder', 'Laravel, Vue, remote, Belo Horizonte...')"
+                                class="mt-2 block w-full rounded-3xl border border-gold-300/20 bg-black/20 px-5 py-4 text-base text-white placeholder:text-slateglass-400 focus:border-gold-300/50 focus:outline-none focus:ring-2 focus:ring-gold-300/20"
+                                :placeholder="t('job_discovery.search_new_jobs_placeholder', 'python remote brazil · javascript or laravel · django backend remote')"
                             >
                             <InputError
                                 class="mt-2"
@@ -686,7 +660,7 @@ function setLeadStatus(jobLead, leadStatus) {
                             <button
                                 type="submit"
                                 data-testid="find-jobs-button"
-                                class="premium-button-secondary justify-center disabled:cursor-not-allowed disabled:opacity-60"
+                                class="premium-button-primary justify-center disabled:cursor-not-allowed disabled:opacity-60"
                                 :disabled="discoveryForm.processing"
                             >
                                 {{ discoveryForm.processing
@@ -696,12 +670,6 @@ function setLeadStatus(jobLead, leadStatus) {
                         </div>
                     </form>
                 </div>
-                <Link
-                    :href="route('job-leads.create')"
-                    class="premium-button-secondary"
-                >
-                    {{ t('buttons.add_job', 'Add job') }}
-                </Link>
             </div>
 
             <SectionCard
@@ -746,13 +714,20 @@ function setLeadStatus(jobLead, leadStatus) {
                             {{ t('job_discovery.technical_details', 'Technical details') }}
                         </summary>
                         <div class="mt-3 space-y-2">
-                            <p
+                            <div
                                 v-for="sourceResult in discoveryResults"
                                 :key="sourceResult.source"
-                                class="text-xs leading-6 text-slateglass-300"
+                                class="space-y-1 text-xs leading-6 text-slateglass-300"
                             >
-                                {{ discoveryDetailsRow(sourceResult) }}
-                            </p>
+                                <p>{{ discoveryDetailsRow(sourceResult) }}</p>
+                                <p
+                                    v-for="targetLine in discoveryTargetDetails(sourceResult)"
+                                    :key="`${sourceResult.source}-${targetLine}`"
+                                    class="pl-3 text-[11px] text-slateglass-400"
+                                >
+                                    {{ targetLine }}
+                                </p>
+                            </div>
                         </div>
                     </details>
                 </div>
@@ -815,7 +790,20 @@ function setLeadStatus(jobLead, leadStatus) {
                     </Link>
                 </div>
 
-                <form @submit.prevent="submitFilters" class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_repeat(4,minmax(0,180px))]">
+                <form @submit.prevent="submitFilters" class="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_repeat(3,minmax(0,180px))]">
+                    <div>
+                        <label for="lead_group" class="premium-input-label">{{ t('job_leads.lead_group_filter', 'Lead group') }}</label>
+                        <select
+                            id="lead_group"
+                            v-model="filterForm.lead_group"
+                            class="mt-2 block w-full"
+                        >
+                            <option value="matched">{{ t('job_leads.segment_matched', 'Matched leads') }}</option>
+                            <option value="all">{{ t('job_leads.segment_all_discovered', 'Job leads') }}</option>
+                            <option value="unmatched">{{ t('job_leads.segment_unmatched', 'Broader IT leads') }}</option>
+                        </select>
+                    </div>
+
                     <div>
                         <label for="search" class="premium-input-label">{{ t('matched_jobs.search', 'Search') }}</label>
                         <input
@@ -823,62 +811,8 @@ function setLeadStatus(jobLead, leadStatus) {
                             v-model="filterForm.search"
                             type="text"
                             class="mt-2 block w-full"
-                            :placeholder="t('matched_jobs.search_placeholder', 'Company or job title')"
+                            :placeholder="t('job_leads.search_placeholder', 'python remote brazil · javascript or laravel · django backend remote')"
                         >
-                    </div>
-
-                    <div>
-                        <label for="lead_status" class="premium-input-label">{{ t('matched_jobs.lead_status_filter', 'Lead status') }}</label>
-                        <select
-                            id="lead_status"
-                            v-model="filterForm.lead_status"
-                            class="mt-2 block w-full"
-                        >
-                            <option value="">{{ t('matched_jobs.all_lead_statuses', 'All statuses') }}</option>
-                            <option
-                                v-for="leadStatus in leadStatuses"
-                                :key="leadStatus"
-                                :value="leadStatus"
-                            >
-                                {{ leadStatusLabel(leadStatus) }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="analysis_readiness" class="premium-input-label">{{ t('matched_jobs.analysis_readiness_filter', 'Analysis readiness') }}</label>
-                        <select
-                            id="analysis_readiness"
-                            v-model="filterForm.analysis_readiness"
-                            class="mt-2 block w-full"
-                        >
-                            <option value="">{{ t('matched_jobs.all_analysis_readiness', 'All leads') }}</option>
-                            <option
-                                v-for="analysisReadiness in analysisReadinessOptions"
-                                :key="analysisReadiness"
-                                :value="analysisReadiness"
-                            >
-                                {{ analysisReadinessLabel(analysisReadiness) }}
-                            </option>
-                        </select>
-                    </div>
-
-                    <div>
-                        <label for="analysis_state" class="premium-input-label">{{ t('matched_jobs.analysis_state_filter', 'Analysis state') }}</label>
-                        <select
-                            id="analysis_state"
-                            v-model="filterForm.analysis_state"
-                            class="mt-2 block w-full"
-                        >
-                            <option value="">{{ t('matched_jobs.all_analysis_states', 'All analysis states') }}</option>
-                            <option
-                                v-for="analysisState in analysisStates"
-                                :key="analysisState"
-                                :value="analysisState"
-                            >
-                                {{ analysisStateLabel(analysisState) }}
-                            </option>
-                        </select>
                     </div>
 
                     <div>
@@ -899,7 +833,7 @@ function setLeadStatus(jobLead, leadStatus) {
                         </select>
                     </div>
 
-                    <div class="xl:col-span-5 flex flex-wrap items-center justify-between gap-3">
+                    <div class="lg:col-span-4 flex flex-wrap items-center justify-between gap-3">
                         <div class="flex flex-wrap items-center gap-4">
                             <label class="flex items-center gap-3 text-sm text-slateglass-300">
                                 <input
@@ -909,17 +843,7 @@ function setLeadStatus(jobLead, leadStatus) {
                                     false-value="brazil"
                                     class="h-4 w-4 rounded border-white/20 bg-black/20 text-gold-300 focus:ring-gold-300/40"
                                 >
-                                <span>{{ isMatchedWorkspace
-                                    ? t('matched_jobs.include_international_jobs', 'Include international jobs')
-                                    : t('job_leads.include_international_discovered', 'Include international discovered leads') }}</span>
-                            </label>
-                            <label class="flex items-center gap-3 text-sm text-slateglass-300">
-                                <input
-                                    v-model="filterForm.show_ignored"
-                                    type="checkbox"
-                                    class="h-4 w-4 rounded border-white/20 bg-black/20 text-gold-300 focus:ring-gold-300/40"
-                                >
-                                <span>{{ t('matched_jobs.show_ignored', 'Show ignored leads') }}</span>
+                                <span>{{ t('job_leads.show_international_jobs', 'Show international jobs') }}</span>
                             </label>
                         </div>
 

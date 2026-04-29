@@ -47,6 +47,9 @@ Principles:
 
 - Discovery is the primary value
 - Matching supports evaluation, not discovery
+- The primary user interaction is search-first discovery
+- Workspace filtering must stay clearly separate from discovery
+- Increasing Brazilian/national technology job volume is now a priority discovery goal
 - Discovery should include both resume-matched leads and broader IT opportunities
 - Unmatched IT leads are still valuable discovery output
 - A future workflow may adapt or generate resume/application material from a selected `JobLead`, but that is not part of the current phase
@@ -98,6 +101,7 @@ Important:
 
 - URL-only leads must remain valid
 - The system must never invent missing data
+- Extracted keywords must come from deterministic taxonomy-based analysis of job-specific text only
 
 ---
 
@@ -167,12 +171,14 @@ Core services:
 Flow:
 
 1. Controller starts a discovery run
+    - manual discovery starts from a simple user search query
 2. A `discovery_batch_id` is generated
 3. Runner selects enabled sources from config
 4. For each source:
     - fetch entries
     - enrich entries if needed
     - apply deterministic query matching
+    - normalize simple natural-query intent deterministically
     - when a user provides a manual discovery query, expand eligibility with applicable deterministic resume-derived query profiles
     - import via JobLeadImportService
 5. Import service:
@@ -202,6 +208,7 @@ Implemented:
 - Remotive
 - LaraJobs
 - CompanyCareerPages
+- BrazilianTechJobBoards
 
 `CompanyCareerPages` is now a curated Brazil-first source set, not generic crawling.
 
@@ -226,6 +233,20 @@ Implemented:
     - job URL required
     - company name required
 
+`BrazilianTechJobBoards` is a curated Brazil-first public board source set, not generic scraping.
+
+- Fixed public listing URLs only
+- Fixed platform parser strategies only:
+    - `programathor_cards`
+    - `remotar_cards`
+- Import eligibility remains strict:
+    - job title required
+    - job URL required
+    - company name required
+- Current curated platforms:
+    - ProgramaThor
+    - Remotar
+
 Enabled by default:
 
 - python-job-board
@@ -233,6 +254,14 @@ Enabled by default:
 - we-work-remotely
 - larajobs
 - company-career-pages
+
+Enabled by default in local/development:
+
+- brazilian-tech-job-boards
+
+Local enablement is controlled by:
+
+- `JOB_DISCOVERY_ENABLE_BRAZILIAN_TECH_JOB_BOARDS=true|false`
 
 Disabled but available:
 
@@ -242,8 +271,11 @@ Fixture mode:
 
 - larajobs
 - company-career-pages
+- brazilian-tech-job-boards
 
 `company-career-pages` fixture mode now uses the curated Brazil-first target set above and deterministic per-company HTML fixtures so import counts, deduplication, and per-target diagnostics remain repeatable.
+
+`brazilian-tech-job-boards` fixture mode now uses deterministic ProgramaThor and Remotar HTML fixtures so import counts, deduplication, per-platform diagnostics, and resume-derived query-profile matching remain repeatable.
 
 ---
 
@@ -254,21 +286,35 @@ The workspace is a computed view over JobLead.
 The workspace now has three deterministic views over the same `JobLead` records:
 
 - matched leads
-- all discovered leads
+- job leads
 - unmatched technology leads
 
 This distinction is presentational only. It does not change import behavior, ranking, source parsing, or `JobLead` validity.
 
+The workspace is now search-first:
+
+- `Search new jobs` triggers discovery against configured sources
+- `Refine discovered leads` filters existing `JobLead` records only
+- filtering must not be confused with source discovery
+- unmatched technology leads remain visible and useful even when they do not overlap with the current resume
+
 Filters include:
 
 - ownership
-- lead status
 - discovery batch
 - lead group
-- analysis state
 - work mode
 - search
 - location scope
+
+Natural-query workspace filtering now supports a small deterministic intent layer:
+
+- canonical technology keywords
+- basic `or` intent
+- `brazil` location intent
+- `remote`/`hybrid`/`onsite` work mode intent
+
+This same deterministic intent normalization is reused for manual discovery queries.
 
 Ranking prioritizes:
 
@@ -339,6 +385,7 @@ php artisan job-leads:discover
 php artisan job-leads:discover-all
 php artisan discovery:calibrate
 php artisan discovery:diagnose
+php artisan discovery:inspect-source
 ```
 
 Tests cover:
@@ -348,6 +395,7 @@ Tests cover:
 - discovery commands
 - UI discovery flow
 - deterministic resume-derived discovery signal mapping
+- deterministic taxonomy-based technical keyword extraction
 
 Regular workspace discovery now also exposes, per source and per discovery batch, deterministic observability from existing `JobLead` fields only:
 
@@ -359,6 +407,34 @@ Regular workspace discovery now also exposes, per source and per discovery batch
 - missing-description and missing-keyword counts
 
 These metrics are emitted in the discovery flash payload and structured discovery logs without changing import behavior.
+
+`JobLead` keyword extraction now uses a deterministic general technology taxonomy instead of a short example-led allowlist.
+
+- The taxonomy is grouped by categories such as:
+    - programming languages
+    - frontend frameworks
+    - backend frameworks
+    - databases
+    - cloud
+    - devops
+    - testing
+    - data
+    - mobile
+    - architecture
+    - AI/ML
+- Canonicalization is alias-driven, for example:
+    - `go`, `golang` -> `go` only when technical context is present
+    - `node.js`, `nodejs`, `node js` -> `nodejs`
+    - `vue.js`, `vuejs` -> `vue`
+    - `react.js`, `reactjs` -> `react`
+    - `postgres`, `postgresql` -> `postgresql`
+    - `ci/cd`, `cicd` -> `ci_cd`
+    - `domain-driven design`, `ddd` -> `ddd`
+- Extraction prefers upstream description cleanup first:
+    - strip raw URLs
+    - strip image file references
+    - strip obvious page/schema/analytics/script tokens
+- A small deterministic safety net removes obvious page or JavaScript chrome noise, but extraction is not driven by one-off blacklists
 
 Resume profile inspection now also exposes deterministic resume-derived discovery signals from `UserProfile` input only:
 
@@ -409,7 +485,34 @@ For `company-career-pages`, `discovery:diagnose` also measures per curated targe
 
 The target diagnostics also preserve the configured parser strategy for each curated company target.
 
+For `brazilian-tech-job-boards`, source diagnostics now also preserve per-platform target metrics:
+
+- target platform
+- fetched candidate count
+- matched candidate count
+- imported lead count
+- deduplicated count
+- skipped-by-query count
+- skipped-expired count
+- skipped-missing-company count
+- failed count
+
 `discovery:diagnose --fixture` now forces the fixture-backed source set and fixture career targets deterministically from the command flag.
+
+`discovery:inspect-source` now provides a no-import dry run for one source so local development can distinguish:
+
+- page fetch failures
+- zero parsed candidates
+- query skips
+- expired skips
+- missing-company skips
+
+Use it for Brazilian board diagnosis with commands like:
+
+```bash
+php artisan discovery:inspect-source brazilian-tech-job-boards --query=laravel
+php artisan discovery:inspect-source brazilian-tech-job-boards --query=frontend --resume-text="Vue.js engineer" --skill=Vue.js
+```
 
 ---
 
@@ -428,6 +531,7 @@ Improving these measurements is the current priority.
 ## Known Bottlenecks
 
 - Limited number of enabled sources
+- Brazilian/national source coverage is still small even after curated expansion
 - Strict parsers reduce recall
 - Company page coverage depends on manual curation
 - Deduplication may collapse valid variants
@@ -439,25 +543,25 @@ Improving these measurements is the current priority.
 
 ## Current Next Step
 
-Improve discovery observability BEFORE:
+Increase deterministic Brazilian/national discovery volume BEFORE:
 
-- enabling more sources
-- relaxing filters
-- introducing new ingestion logic
+- introducing broad scraping
+- relaxing import honesty rules
+- changing ranking logic
 
 Focus on:
 
+- adding curated Brazil-first sources
 - measuring leads per source
-- measuring leads per curated company target
+- measuring leads per curated target or platform
 - measuring hidden leads
-- measuring limited-analysis leads
 - comparing source effectiveness
 
 ---
 
 ## Evolution Rule
 
-Do not expand discovery before measuring it properly.
+Do not expand discovery recklessly before measuring it properly.
 
 Measurement must come before expansion.
 

@@ -18,6 +18,7 @@ class JobLeadDiscoveryRunner
         private readonly RemotiveDiscoverySource $remotiveDiscoverySource,
         private readonly LaraJobsDiscoverySource $laraJobsDiscoverySource,
         private readonly CompanyCareerPagesDiscoverySource $companyCareerPagesDiscoverySource,
+        private readonly BrazilianTechJobBoardsDiscoverySource $brazilianTechJobBoardsDiscoverySource,
         private readonly JobDiscoveryQueryMatcher $jobDiscoveryQueryMatcher,
         private readonly JobLeadImportService $jobLeadImportService,
     ) {
@@ -134,6 +135,7 @@ class JobLeadDiscoveryRunner
             $result = $this->jobLeadImportService->importForUser($userId, $discoveredJob['source_url'], [
                 'source_name' => $discoverySource->sourceName(),
                 'source_type' => JobLead::SOURCE_TYPE_JOB_BOARD,
+                'source_platform' => $discoveredJob['source_platform'] ?? null,
                 'company_name' => $discoveredJob['company_name'],
                 'job_title' => $discoveredJob['job_title'],
                 'location' => $discoveredJob['location'],
@@ -175,6 +177,7 @@ class JobLeadDiscoveryRunner
 
         return [
             'source' => $discoverySource->sourceKey(),
+            'source_name' => $discoverySource->sourceName(),
             'listing_status_code' => $listing['status_code'],
             'candidate_links' => $listing['candidate_links'],
             'parsed_jobs' => $listing['parsed_jobs'],
@@ -268,20 +271,27 @@ class JobLeadDiscoveryRunner
             }
 
             $diagnostics[$targetIdentifier] = [
+                ...$target,
                 'target_identifier' => $targetIdentifier,
                 'target_name' => is_string($target['target_name'] ?? null) && trim((string) $target['target_name']) !== ''
                     ? trim((string) $target['target_name'])
+                    : $targetIdentifier,
+                'platform' => is_string($target['platform'] ?? null) && trim((string) $target['platform']) !== ''
+                    ? trim((string) $target['platform'])
                     : $targetIdentifier,
                 'parser_strategy' => is_string($target['parser_strategy'] ?? null) && trim((string) $target['parser_strategy']) !== ''
                     ? trim((string) $target['parser_strategy'])
                     : 'structured_lists',
                 'fetched_candidates' => (int) ($target['candidate_links'] ?? 0),
-                'matched_candidates' => 0,
-                'imported' => 0,
-                'deduplicated' => 0,
-                'skipped_by_query' => 0,
-                'hidden_by_default' => 0,
-                'international_hidden' => 0,
+                'matched_candidates' => (int) ($target['matched_candidates'] ?? 0),
+                'imported' => (int) ($target['imported'] ?? 0),
+                'deduplicated' => (int) ($target['deduplicated'] ?? 0),
+                'skipped_by_query' => (int) ($target['skipped_by_query'] ?? 0),
+                'skipped_expired' => (int) ($target['skipped_expired'] ?? 0),
+                'skipped_missing_company' => (int) ($target['skipped_missing_company'] ?? 0),
+                'hidden_by_default' => (int) ($target['hidden_by_default'] ?? 0),
+                'international_hidden' => (int) ($target['international_hidden'] ?? 0),
+                'failed' => (int) ($target['failed'] ?? 0),
             ];
         }
 
@@ -385,6 +395,7 @@ class JobLeadDiscoveryRunner
             $this->remotiveDiscoverySource->sourceKey() => $this->remotiveDiscoverySource,
             $this->laraJobsDiscoverySource->sourceKey() => $this->laraJobsDiscoverySource,
             $this->companyCareerPagesDiscoverySource->sourceKey() => $this->companyCareerPagesDiscoverySource,
+            $this->brazilianTechJobBoardsDiscoverySource->sourceKey() => $this->brazilianTechJobBoardsDiscoverySource,
         ];
     }
 }

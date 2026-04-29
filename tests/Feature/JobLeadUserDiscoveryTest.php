@@ -325,6 +325,42 @@ it('supports alias-based discovery queries for imported jobs', function (): void
         ->and(JobLead::query()->where('user_id', $user->id)->sole()->job_title)->toBe('Senior Laravel Engineer');
 });
 
+it('supports basic or search intent during discovery without changing deterministic imports', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Resume text',
+        'auto_discover_jobs' => false,
+    ]);
+
+    Http::fake([
+        'https://www.python.org/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_listing.html')), 200),
+        'https://www.python.org/jobs/1001/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_ready.html')), 200),
+        'https://www.python.org/jobs/1002/' => Http::response(file_get_contents(base_path('tests/Fixtures/python_job_board_detail_limited.html')), 200),
+        'https://www.djangoproject.com/community/jobs/' => Http::response(file_get_contents(base_path('tests/Fixtures/django_community_jobs_listing.html')), 200),
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('job-leads.discover'), [
+            'search_query' => 'javascript or laravel',
+        ])
+        ->assertRedirect(route('job-leads.index'))
+        ->assertSessionHas('success', __('app.job_discovery.new_jobs_found_single'))
+        ->assertSessionHas('discovery_search_query', 'javascript or laravel');
+
+    $discovery = session('discovery');
+
+    expect($discovery)->toHaveCount(2)
+        ->and($discovery[0]['created'])->toBe(1)
+        ->and($discovery[0]['skipped_not_matching_query'])->toBe(1)
+        ->and($discovery[1]['created'])->toBe(0)
+        ->and($discovery[1]['skipped_not_matching_query'])->toBe(2);
+
+    expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(1)
+        ->and(JobLead::query()->where('user_id', $user->id)->sole()->job_title)->toBe('Senior Laravel Engineer');
+});
+
 it('keeps the discovery search query in flash after redirect', function (): void {
     $user = User::factory()->create();
 

@@ -41,6 +41,16 @@ it('renders the main authenticated pages with shared translation props', functio
         ->assertInertia(fn (Assert $page) => $page
             ->component('JobLeads/Index')
             ->has('translations.matched_jobs')
+            ->where('workspaceView', 'matched')
+        );
+
+    $this->actingAs($user)
+        ->get(route('job-leads.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('translations.matched_jobs')
+            ->where('workspaceView', 'all')
         );
 
     $this->actingAs($user)
