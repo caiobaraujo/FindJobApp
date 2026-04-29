@@ -54,6 +54,14 @@ const props = defineProps({
         type: Array,
         required: true,
     },
+    latestDiscoveryMatchFunnel: {
+        type: Object,
+        default: null,
+    },
+    matchedJobsVisibilitySummary: {
+        type: Object,
+        default: null,
+    },
     resumeReady: {
         type: Boolean,
         required: true,
@@ -243,6 +251,13 @@ const latestDiscoveryHref = computed(() => route(
 ));
 const allJobsHref = computed(() => normalWorkspaceHref());
 const hiddenDiscoveryResults = computed(() => discoveryCreatedCount.value > 0 && props.matchedJobs.length === 0 && ! viewingLatestDiscoveryBatch.value);
+const matchedJobsVisibilitySummary = computed(() => props.matchedJobsVisibilitySummary || {
+    visible_count: props.matchedJobs.length,
+    hidden_ignored_count: 0,
+    hidden_international_count: 0,
+    total_count: props.matchedJobs.length,
+});
+const latestDiscoveryMatchFunnel = computed(() => props.latestDiscoveryMatchFunnel);
 
 function discoveryPrimaryMessage(summary) {
     if (discoveryCreatedCount.value > 0) {
@@ -305,16 +320,25 @@ function discoverySecondaryMessages(summary) {
 }
 
 function discoveryDetailsRow(sourceResult) {
+    const profileDetails = Array.isArray(sourceResult.query_profile_keys) && sourceResult.query_profile_keys.length > 0
+        ? ` · profiles ${sourceResult.query_profile_keys.join(', ')} · profile-created ${sourceResult.created_by_query_profiles || 0}`
+        : '';
+
     return t(
         'job_discovery.details_row',
-        ':source — found :fetched · new :created · duplicates :duplicates · skipped :skipped · failed :failed',
+        ':source — found :fetched · new :created · duplicates :duplicates · hidden :hidden · limited :limited · missing description :missingDescription · missing keywords :missingKeywords · skipped :skipped · failed :failed:profileDetails',
         {
             source: discoverySourceLabel(sourceResult.source),
             fetched: sourceResult.fetched || 0,
             created: sourceResult.created || 0,
             duplicates: sourceResult.duplicates || 0,
+            hidden: sourceResult.hidden_by_default || 0,
+            limited: sourceResult.limited_analysis || 0,
+            missingDescription: sourceResult.missing_description || 0,
+            missingKeywords: sourceResult.missing_keywords || 0,
             skipped: sourceResult.skipped_not_matching_query || 0,
             failed: sourceResult.failed || 0,
+            profileDetails,
         },
     );
 }
@@ -780,6 +804,77 @@ function setLeadStatus(jobLead, leadStatus) {
                         {{ matchedJobs.length }} {{ t('matched_jobs.visible', 'visible') }}
                     </span>
                 </template>
+
+                <div
+                    v-if="resumeReady"
+                    class="mx-6 mt-6 rounded-3xl border border-white/10 bg-black/20 px-5 py-4 text-sm leading-7 text-slateglass-200"
+                >
+                    <p class="font-semibold text-white">
+                        {{ t(
+                            'matched_jobs.visibility_summary',
+                            ':visible visible matched leads. :total total matched leads before default hiding.',
+                            {
+                                visible: matchedJobsVisibilitySummary.visible_count,
+                                total: matchedJobsVisibilitySummary.total_count,
+                            },
+                        ) }}
+                    </p>
+                    <p class="mt-1 text-slateglass-300">
+                        {{ t(
+                            'matched_jobs.visibility_hidden_summary',
+                            ':international hidden outside Brazil-first view. :ignored hidden because ignored leads stay off by default.',
+                            {
+                                international: matchedJobsVisibilitySummary.hidden_international_count,
+                                ignored: matchedJobsVisibilitySummary.hidden_ignored_count,
+                            },
+                        ) }}
+                    </p>
+                    <p
+                        v-if="matchedJobsVisibilitySummary.hidden_international_count > 0 && matchedJobsVisibilitySummary.hidden_ignored_count > 0"
+                        class="mt-1 text-xs leading-6 text-slateglass-400"
+                    >
+                        {{ t('matched_jobs.visibility_overlap_note', 'A matched lead can appear in both hidden groups.') }}
+                    </p>
+                </div>
+
+                <div
+                    v-if="resumeReady && latestDiscoveryMatchFunnel"
+                    class="mx-6 mt-4 rounded-3xl border border-emerald-400/15 bg-emerald-400/5 px-5 py-4 text-sm leading-7 text-slateglass-200"
+                >
+                    <p class="font-semibold text-white">
+                        {{ t(
+                            'matched_jobs.latest_discovery_funnel_title',
+                            'Latest discovery batch: :imported imported, :matched matched before default hiding, :visible visible now.',
+                            {
+                                imported: latestDiscoveryMatchFunnel.latest_batch_total_count,
+                                matched: latestDiscoveryMatchFunnel.matched_before_default_hiding_count,
+                                visible: latestDiscoveryMatchFunnel.visible_matched_count,
+                            },
+                        ) }}
+                    </p>
+                    <p class="mt-1 text-slateglass-300">
+                        {{ t(
+                            'matched_jobs.latest_discovery_funnel_hidden',
+                            ':notMatched imported but not considered matched. Hidden now: :international international, :ignored ignored, :status status filter, :readiness readiness filter, :analysis analysis state filter, :workMode work mode filter, :search search filter.',
+                            {
+                                notMatched: latestDiscoveryMatchFunnel.imported_not_matched_count,
+                                international: latestDiscoveryMatchFunnel.hidden_international_count,
+                                ignored: latestDiscoveryMatchFunnel.hidden_ignored_count,
+                                status: latestDiscoveryMatchFunnel.hidden_status_filter_count,
+                                readiness: latestDiscoveryMatchFunnel.hidden_analysis_readiness_filter_count,
+                                analysis: latestDiscoveryMatchFunnel.hidden_analysis_state_filter_count,
+                                workMode: latestDiscoveryMatchFunnel.hidden_work_mode_filter_count,
+                                search: latestDiscoveryMatchFunnel.hidden_search_text_filter_count,
+                            },
+                        ) }}
+                    </p>
+                    <p
+                        v-if="filterForm.location_scope === 'brazil' && latestDiscoveryMatchFunnel.hidden_international_count > 0"
+                        class="mt-1 text-xs leading-6 text-emerald-200/90"
+                    >
+                        {{ t('matched_jobs.latest_discovery_include_international_note', 'Enable “include international jobs” to move eligible international matches from hidden to visible.') }}
+                    </p>
+                </div>
 
                 <EmptyState
                     v-if="!resumeReady"

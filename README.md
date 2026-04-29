@@ -2,7 +2,7 @@
 
 ## Overview
 
-Resume-first job matching workspace built with Laravel, Vue, and Inertia.
+Resume-first job discovery platform built with Laravel, Vue, and Inertia. The current focus is finding useful job opportunities users would not easily surface through their normal search flow, then layering deterministic matching on top of those leads.
 
 ## Tech Stack
 
@@ -52,10 +52,10 @@ Resume-first job matching workspace built with Laravel, Vue, and Inertia.
 
 ## Product Direction
 
-- Discover relevant jobs across the internet.
-- Let users paste one base resume and get value faster.
-- Surface matched jobs with clear overlap and gap signals.
-- Prepare for future tailored resumes and cover-letter customization.
+- Discover hard-to-find job leads from deterministic, explicitly configured sources.
+- Let users save one resume profile and evaluate discovered leads quickly.
+- Use deterministic keyword matching to show overlap and gaps without opaque scoring.
+- Validate discovery volume and lead usefulness before expanding product scope.
 - Keep application tracking secondary to discovery and matching.
 
 ## Run

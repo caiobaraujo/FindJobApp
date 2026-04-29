@@ -6,7 +6,7 @@ use App\Http\Requests\StoreUserProfileRequest;
 use App\Http\Requests\UpdateUserProfileRequest;
 use App\Models\JobLead;
 use App\Models\UserProfile;
-use App\Services\JobLeadKeywordExtractor;
+use App\Services\ResumeDiscoverySignalBuilder;
 use App\Services\ResumeTextExtractor;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Http\RedirectResponse;
@@ -26,6 +26,7 @@ class UserProfileController extends Controller
         return Inertia::render('Profile/ResumeProfile', [
             'hasResumeProfile' => $userProfile !== null,
             'detectedResumeSkills' => $this->detectedResumeSkills($userProfile),
+            'resumeDiscoverySignals' => $this->resumeDiscoverySignals($userProfile),
             'userProfile' => $this->userProfileData($userProfile),
             'workModes' => JobLead::workModes(),
         ]);
@@ -40,6 +41,7 @@ class UserProfileController extends Controller
         return Inertia::render('Profile/CreateResume', [
             'hasResumeProfile' => $userProfile !== null,
             'detectedResumeSkills' => $this->detectedResumeSkills($userProfile),
+            'resumeDiscoverySignals' => $this->resumeDiscoverySignals($userProfile),
             'userProfile' => $this->userProfileData($userProfile),
             'workModes' => JobLead::workModes(),
         ]);
@@ -314,34 +316,26 @@ class UserProfileController extends Controller
             return [];
         }
 
-        $skills = [];
+        return app(ResumeDiscoverySignalBuilder::class)->detectedSkills(
+            $userProfile->base_resume_text,
+            $userProfile->core_skills ?? [],
+        );
+    }
 
-        foreach ($userProfile->core_skills ?? [] as $skill) {
-            if (! is_string($skill)) {
-                continue;
-            }
-
-            $normalizedSkill = $this->nullableString($skill);
-
-            if ($normalizedSkill === null) {
-                continue;
-            }
-
-            $skills[] = mb_strtolower($normalizedSkill);
-        }
-
-        if (filled($userProfile->base_resume_text)) {
-            $analysis = app(JobLeadKeywordExtractor::class)->analyze($userProfile->base_resume_text);
-
-            foreach ($analysis['extracted_keywords'] as $keyword) {
-                if (! is_string($keyword)) {
-                    continue;
-                }
-
-                $skills[] = $keyword;
-            }
-        }
-
-        return array_slice(array_values(array_unique($skills)), 0, 10);
+    /**
+     * @return array{
+     *     detected_skills: list<string>,
+     *     role_families: list<string>,
+     *     canonical_skills: list<string>,
+     *     aliases: list<string>,
+     *     query_profiles: list<array{key: string, label: string, signals: list<string>, aliases: list<string>, query: string}>
+     * }
+     */
+    private function resumeDiscoverySignals(?UserProfile $userProfile): array
+    {
+        return app(ResumeDiscoverySignalBuilder::class)->build(
+            $userProfile?->base_resume_text,
+            $userProfile?->core_skills ?? [],
+        );
     }
 }

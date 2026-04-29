@@ -1,0 +1,7 @@
+Full Stack Software Engineer with 8+ years building product and platform systems.
+
+Core experience across PHP, Laravel, Python, Django, Vue.js, Angular, Docker, SQL, and MySQL.
+Built backend APIs, frontend applications, and internal tools for distributed teams.
+
+Recent work includes Node.js services, OpenAI-powered assistants, chatbot workflows, NLP pipelines,
+and LLM evaluation tooling for customer support and operations use cases.

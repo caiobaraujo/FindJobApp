@@ -1,7 +1,9 @@
 <?php
 
+use App\Models\JobLead;
 use App\Models\Application;
 use App\Models\User;
+use App\Models\UserProfile;
 use Inertia\Testing\AssertableInertia as Assert;
 
 it('renders dashboard metrics for the authenticated user', function (): void {
@@ -126,4 +128,65 @@ it('shows only the current users latest five applications in recent applications
         )
         ->assertDontSee('Other Users Latest')
         ->assertDontSee('Oldest Co');
+});
+
+it('counts only default visible matched jobs on the dashboard', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue and SQL experience.',
+        'core_skills' => ['Laravel', 'Vue', 'SQL'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Visible Match Co',
+        'location' => 'Remote Brazil',
+        'extracted_keywords' => ['laravel', 'vue'],
+    ]);
+
+    JobLead::factory()->for($user)->ignored()->create([
+        'company_name' => 'Ignored Match Co',
+        'location' => 'Remote Brazil',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'International Match Co',
+        'location' => 'Remote, United States',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Unmatched Visible Co',
+        'location' => 'Remote Brazil',
+        'extracted_keywords' => ['python'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Missing Analysis Co',
+        'location' => 'Remote Brazil',
+        'extracted_keywords' => [],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('dashboard'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Dashboard')
+            ->where('matchedJobsCount', 1)
+        );
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('filters.location_scope', JobLead::LOCATION_SCOPE_BRAZIL)
+            ->where('filters.show_ignored', false)
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Visible Match Co')
+        )
+        ->assertDontSee('Ignored Match Co')
+        ->assertDontSee('International Match Co');
 });

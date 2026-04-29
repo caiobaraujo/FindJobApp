@@ -87,6 +87,7 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
         $candidateCount = 0;
         $invalidCount = 0;
         $entries = [];
+        $targets = [];
 
         foreach (config('job_discovery.company_career_targets', []) as $target) {
             if (! is_array($target)) {
@@ -119,11 +120,25 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
                     'company_name' => $this->nullableString($target['name'] ?? null),
                     'region' => $this->nullableString($target['region'] ?? null),
                     'website_url' => $this->nullableString($target['website_url'] ?? null),
+                    'parser_strategy' => $this->parserStrategy($target),
+                ]);
+                $targetIdentifier = $this->targetIdentifier([
+                    'career_url' => $careerUrl,
+                    'company_name' => $this->nullableString($target['name'] ?? null),
                 ]);
 
                 $candidateCount += $parsed['candidate_links'];
                 $invalidCount += $parsed['invalid_links'];
                 $entries = array_merge($entries, $parsed['entries']);
+                $targets[$targetIdentifier] = [
+                    'target_identifier' => $targetIdentifier,
+                    'target_name' => $this->nullableString($target['name'] ?? null) ?? $careerUrl,
+                    'career_url' => $careerUrl,
+                    'parser_strategy' => $this->parserStrategy($target),
+                    'candidate_links' => ($targets[$targetIdentifier]['candidate_links'] ?? 0) + $parsed['candidate_links'],
+                    'invalid_links' => ($targets[$targetIdentifier]['invalid_links'] ?? 0) + $parsed['invalid_links'],
+                    'parsed_jobs' => ($targets[$targetIdentifier]['parsed_jobs'] ?? 0) + count($parsed['entries']),
+                ];
             }
         }
 
@@ -132,6 +147,7 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
             'candidate_links' => $candidateCount,
             'parsed_jobs' => count($entries),
             'invalid_links' => $invalidCount,
+            'targets' => array_values($targets),
             'entries' => $entries,
         ];
     }
@@ -145,6 +161,8 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
             'location' => $this->nullableString($entry['location'] ?? null),
             'work_mode' => $this->nullableWorkMode($entry['work_mode'] ?? null),
             'description_text' => $this->nullableString($entry['description_text'] ?? null),
+            'target_identifier' => $this->nullableString($entry['target_identifier'] ?? null),
+            'target_name' => $this->nullableString($entry['target_name'] ?? null),
         ];
     }
 
@@ -153,7 +171,8 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
      *     career_url: string,
      *     company_name: string|null,
      *     region: string|null,
-     *     website_url: string|null
+     *     website_url: string|null,
+     *     parser_strategy?: string|null
      * } $target
      * @return array{
      *     candidate_links: int,
@@ -170,6 +189,7 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
      */
     public function parseCareerPageHtmlWithDiagnostics(string $html, array $target): array
     {
+        $parserStrategy = $this->parserStrategy($target);
         $xpath = $this->xpath($html);
         $links = $xpath->query('//a[@href]');
 
@@ -177,7 +197,7 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
             return [
                 'candidate_links' => 0,
                 'invalid_links' => 0,
-                'entries' => $this->fallbackPageEntry($html, $target),
+                'entries' => $this->fallbackPageEntry($html, $target, $parserStrategy),
             ];
         }
 
@@ -191,7 +211,7 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
                 continue;
             }
 
-            $entry = $this->entryFromLink($xpath, $link, $target);
+            $entry = $this->entryFromLink($xpath, $link, $target, $parserStrategy);
 
             if ($entry === null) {
                 continue;
@@ -224,11 +244,11 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
         return [
             'candidate_links' => $candidateCount,
             'invalid_links' => $invalidCount,
-            'entries' => $this->fallbackPageEntry($html, $target),
+            'entries' => $this->fallbackPageEntry($html, $target, $parserStrategy),
         ];
     }
 
-    private function entryFromLink(DOMXPath $xpath, DOMElement $link, array $target): ?array
+    private function entryFromLink(DOMXPath $xpath, DOMElement $link, array $target, string $parserStrategy): ?array
     {
         $href = $this->nullableString($link->getAttribute('href'));
 
@@ -244,13 +264,17 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
             return null;
         }
 
-        if (! $this->isPotentialJobLink($detailUrl, $normalizedContext, $link->textContent)) {
+        if (! $this->isPotentialJobLink($detailUrl, $normalizedContext, $link->textContent, $parserStrategy)) {
             return null;
         }
 
         $jobTitle = $this->jobTitleFromLink($link->textContent);
         $location = $this->locationFromContext($normalizedContext, $target['region']);
         $workMode = $this->nullableWorkMode($normalizedContext);
+
+        if (! $this->isCompleteEntry($detailUrl, $jobTitle, $target['company_name'])) {
+            return null;
+        }
 
         return [
             'detail_url' => $detailUrl,
@@ -259,6 +283,8 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
             'location' => $location,
             'work_mode' => $workMode,
             'description_text' => Str::limit($contextText, 1600, ''),
+            'target_identifier' => $this->targetIdentifier($target),
+            'target_name' => $target['company_name'] ?? $target['career_url'],
         ];
     }
 
@@ -272,8 +298,12 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
      *     description_text: string|null
      * }>
      */
-    private function fallbackPageEntry(string $html, array $target): array
+    private function fallbackPageEntry(string $html, array $target, string $parserStrategy): array
     {
+        if ($parserStrategy === 'ats_board') {
+            return [];
+        }
+
         $pageText = $this->pageText($html);
         $normalizedPageText = $this->normalizeText($pageText);
 
@@ -285,14 +315,30 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
             return [];
         }
 
+        $jobTitle = $this->jobTitleFromPageText($pageText);
+
+        if (! $this->isCompleteEntry($target['career_url'], $jobTitle, $target['company_name'])) {
+            return [];
+        }
+
         return [[
             'detail_url' => $target['career_url'],
-            'job_title' => $this->jobTitleFromPageText($pageText),
+            'job_title' => $jobTitle,
             'company_name' => $target['company_name'],
             'location' => $this->locationFromContext($normalizedPageText, $target['region']),
             'work_mode' => $this->nullableWorkMode($normalizedPageText),
             'description_text' => Str::limit($pageText, 1600, ''),
+            'target_identifier' => $this->targetIdentifier($target),
+            'target_name' => $target['company_name'] ?? $target['career_url'],
         ]];
+    }
+
+    /**
+     * @param array{career_url: string, company_name: string|null} $target
+     */
+    private function targetIdentifier(array $target): string
+    {
+        return $target['company_name'] ?? $target['career_url'];
     }
 
     private function xpath(string $html): DOMXPath
@@ -395,16 +441,21 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
         return "{$scheme}://{$host}{$href}";
     }
 
-    private function isPotentialJobLink(string $detailUrl, string $normalizedContext, string $linkText): bool
+    private function isPotentialJobLink(string $detailUrl, string $normalizedContext, string $linkText, string $parserStrategy): bool
     {
         $normalizedUrl = $this->normalizeText($detailUrl) ?? '';
         $normalizedLinkText = $this->normalizeText($linkText) ?? '';
+        $knownAtsUrl = $this->knownApplicantTrackingSystemUrl($detailUrl);
 
         if (! $this->hasSoftwareSignal($normalizedContext) && ! $this->hasSoftwareSignal($normalizedLinkText)) {
             return false;
         }
 
-        if ($this->knownApplicantTrackingSystemUrl($detailUrl)) {
+        if ($parserStrategy === 'ats_board') {
+            return $knownAtsUrl;
+        }
+
+        if ($knownAtsUrl) {
             return true;
         }
 
@@ -429,6 +480,25 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $target
+     */
+    private function parserStrategy(array $target): string
+    {
+        return $this->nullableString($target['parser_strategy'] ?? null) === 'ats_board'
+            ? 'ats_board'
+            : 'structured_lists';
+    }
+
+    private function isCompleteEntry(?string $detailUrl, ?string $jobTitle, ?string $companyName): bool
+    {
+        if ($detailUrl === null || ! filter_var($detailUrl, FILTER_VALIDATE_URL)) {
+            return false;
+        }
+
+        return $jobTitle !== null && $companyName !== null;
     }
 
     private function knownApplicantTrackingSystemUrl(string $detailUrl): bool

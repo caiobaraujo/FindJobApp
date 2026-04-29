@@ -1,4 +1,5 @@
 <script setup>
+import ResumeDiscoverySignalsCard from '@/Components/ResumeDiscoverySignalsCard.vue';
 import UserProfileForm from '@/Components/UserProfileForm.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
 import { useI18n } from '@/composables/useI18n';
@@ -10,6 +11,10 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 const props = defineProps({
     hasResumeProfile: {
         type: Boolean,
+        required: true,
+    },
+    resumeDiscoverySignals: {
+        type: Object,
         required: true,
     },
     userProfile: {
@@ -73,7 +78,10 @@ function submit() {
         </template>
 
         <AppShell>
+            <ResumeDiscoverySignalsCard :signals="resumeDiscoverySignals" />
+
             <SectionCard
+                class="mt-6"
                 :title="t('resume.create_title', 'Create resume')"
                 :description="t('resume.create_card_description', 'Fill the basics only. The goal is to get enough resume content into the system to start matching jobs quickly.')"
             >

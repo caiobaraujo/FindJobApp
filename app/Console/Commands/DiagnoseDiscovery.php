@@ -7,6 +7,7 @@ use App\Models\User;
 use App\Models\UserProfile;
 use App\Services\JobDiscovery\JobLeadDiscoveryRunner;
 use Illuminate\Console\Command;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -42,7 +43,11 @@ class DiagnoseDiscovery extends Command
     public function handle(JobLeadDiscoveryRunner $jobLeadDiscoveryRunner): int
     {
         if ($this->option('fixture')) {
-            config(['job_discovery.use_fixture_responses' => true]);
+            config([
+                'job_discovery.use_fixture_responses' => true,
+                'job_discovery.supported_sources' => config('job_discovery.fixture_supported_sources', config('job_discovery.supported_sources', [])),
+                'job_discovery.company_career_targets' => config('job_discovery.fixture_company_career_targets', config('job_discovery.company_career_targets', [])),
+            ]);
         }
 
         $user = $this->resolvedUser();
@@ -57,6 +62,7 @@ class DiagnoseDiscovery extends Command
 
         $scenarioResults = [];
         $sourcePerformance = [];
+        $companyCareerTargetPerformance = [];
         $usingSyntheticUser = $this->argument('user_id') === null;
 
         foreach (self::SCENARIOS as $scenario) {
@@ -67,11 +73,19 @@ class DiagnoseDiscovery extends Command
             $scenarioResult = $this->runScenario($jobLeadDiscoveryRunner, $user, $scenario);
             $scenarioResults[] = $scenarioResult;
             $sourcePerformance = $this->mergeSourcePerformance($sourcePerformance, $scenarioResult['sources']);
+            $companyCareerTargetPerformance = $this->mergeCompanyCareerTargetPerformance($companyCareerTargetPerformance, $scenarioResult['sources']);
         }
 
         $warnings = $this->warnings($scenarioResults, $sourcePerformance);
         $recommendations = $this->recommendations($scenarioResults, $sourcePerformance, $warnings);
-        $report = $this->markdownReport($user->id, $scenarioResults, $sourcePerformance, $warnings, $recommendations);
+        $report = $this->markdownReport(
+            $user->id,
+            $scenarioResults,
+            $sourcePerformance,
+            $companyCareerTargetPerformance,
+            $warnings,
+            $recommendations,
+        );
         $reportPath = storage_path(self::REPORT_RELATIVE_PATH);
 
         File::ensureDirectoryExists(dirname($reportPath));
@@ -152,6 +166,8 @@ class DiagnoseDiscovery extends Command
      *     created_lead_ids: list<int>,
      *     location_counts: array<string, int>,
      *     visibility: array<string, int|bool>,
+     *     analysis: array<string, int>,
+     *     source_observability: list<array<string, int|string>>,
      *     warnings: list<string>,
      *     batch_id: string
      * }
@@ -172,9 +188,11 @@ class DiagnoseDiscovery extends Command
         foreach ($jobLeadDiscoveryRunner->supportedSources() as $source) {
             try {
                 $summary = $jobLeadDiscoveryRunner->discoverForUser($user->id, $source, $query, $discoveryBatchId);
+                $summary['source_name'] = $jobLeadDiscoveryRunner->source($source)->sourceName();
             } catch (Throwable $throwable) {
                 $summary = [
                     'source' => $source,
+                    'source_name' => $jobLeadDiscoveryRunner->source($source)->sourceName(),
                     'fetched' => 0,
                     'created' => 0,
                     'duplicates' => 0,
@@ -220,6 +238,36 @@ class DiagnoseDiscovery extends Command
             ->count();
 
         $allWorkspaceVisibleCount = $createdJobLeads->count();
+        $hiddenByStatusCount = $createdJobLeads
+            ->filter(fn (JobLead $jobLead): bool => $jobLead->lead_status === JobLead::STATUS_IGNORED)
+            ->count();
+        $hiddenByLocationCount = $createdJobLeads
+            ->filter(fn (JobLead $jobLead): bool => $jobLead->locationClassification() === JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL)
+            ->count();
+        $hiddenByBothCount = $createdJobLeads
+            ->filter(fn (JobLead $jobLead): bool => $jobLead->lead_status === JobLead::STATUS_IGNORED)
+            ->filter(fn (JobLead $jobLead): bool => $jobLead->locationClassification() === JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL)
+            ->count();
+        $analysis = $this->analysisCounts($createdJobLeads);
+        $sourceObservability = $this->sourceObservability($createdJobLeads, $sources);
+        $sources = array_map(function (array $sourceSummary) use ($sourceObservability): array {
+            $observability = collect($sourceObservability)
+                ->firstWhere('source', (string) $sourceSummary['source']);
+
+            if (! is_array($observability)) {
+                return $sourceSummary;
+            }
+
+            return [
+                ...$sourceSummary,
+                'visible_by_default' => $observability['visible_by_default'],
+                'hidden_by_default' => $observability['hidden_by_default'],
+                'ready_analysis' => $observability['ready_analysis'],
+                'limited_analysis' => $observability['limited_analysis'],
+                'missing_description' => $observability['missing_description'],
+                'missing_keywords' => $observability['missing_keywords'],
+            ];
+        }, $sources);
 
         return [
             'query' => $query,
@@ -231,8 +279,14 @@ class DiagnoseDiscovery extends Command
                 'latest_batch' => $createdJobLeads->count(),
                 'default_brazil' => $defaultWorkspaceVisibleCount,
                 'all_workspace' => $allWorkspaceVisibleCount,
+                'hidden_total' => $allWorkspaceVisibleCount - $defaultWorkspaceVisibleCount,
+                'hidden_by_status' => $hiddenByStatusCount,
+                'hidden_by_location' => $hiddenByLocationCount,
+                'hidden_by_both' => $hiddenByBothCount,
                 'hidden_by_default' => $aggregate['created'] > 0 && $defaultWorkspaceVisibleCount < $aggregate['created'],
             ],
+            'analysis' => $analysis,
+            'source_observability' => $sourceObservability,
             'warnings' => $this->scenarioWarnings($query, $aggregate, $sources, $locationCounts, $defaultWorkspaceVisibleCount),
             'batch_id' => $discoveryBatchId,
         ];
@@ -257,6 +311,12 @@ class DiagnoseDiscovery extends Command
                     'invalid' => 0,
                     'failed' => 0,
                     'skipped_not_matching_query' => 0,
+                    'visible_by_default' => 0,
+                    'hidden_by_default' => 0,
+                    'ready_analysis' => 0,
+                    'limited_analysis' => 0,
+                    'missing_description' => 0,
+                    'missing_keywords' => 0,
                 ];
             }
 
@@ -266,11 +326,80 @@ class DiagnoseDiscovery extends Command
             $sourcePerformance[$sourceKey]['invalid'] += (int) ($sourceSummary['invalid'] ?? 0);
             $sourcePerformance[$sourceKey]['failed'] += (int) ($sourceSummary['failed'] ?? 0);
             $sourcePerformance[$sourceKey]['skipped_not_matching_query'] += (int) ($sourceSummary['skipped_not_matching_query'] ?? 0);
+
+            foreach ([
+                'visible_by_default',
+                'hidden_by_default',
+                'ready_analysis',
+                'limited_analysis',
+                'missing_description',
+                'missing_keywords',
+            ] as $metric) {
+                $sourcePerformance[$sourceKey][$metric] += (int) ($sourceSummary[$metric] ?? 0);
+            }
         }
 
         ksort($sourcePerformance);
 
         return $sourcePerformance;
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $targetPerformance
+     * @param list<array<string, mixed>> $sources
+     * @return array<string, array<string, mixed>>
+     */
+    private function mergeCompanyCareerTargetPerformance(array $targetPerformance, array $sources): array
+    {
+        foreach ($sources as $sourceSummary) {
+            if ((string) ($sourceSummary['source'] ?? '') !== 'company-career-pages') {
+                continue;
+            }
+
+            foreach (($sourceSummary['target_diagnostics'] ?? []) as $targetSummary) {
+                if (! is_array($targetSummary)) {
+                    continue;
+                }
+
+                $targetIdentifier = is_string($targetSummary['target_identifier'] ?? null)
+                    ? trim((string) $targetSummary['target_identifier'])
+                    : '';
+
+                if ($targetIdentifier === '') {
+                    continue;
+                }
+
+                if (! isset($targetPerformance[$targetIdentifier])) {
+                    $targetPerformance[$targetIdentifier] = [
+                        'target_identifier' => $targetIdentifier,
+                        'target_name' => $targetSummary['target_name'] ?? $targetIdentifier,
+                        'fetched_candidates' => 0,
+                        'matched_candidates' => 0,
+                        'imported' => 0,
+                        'deduplicated' => 0,
+                        'skipped_by_query' => 0,
+                        'hidden_by_default' => 0,
+                        'international_hidden' => 0,
+                    ];
+                }
+
+                foreach ([
+                    'fetched_candidates',
+                    'matched_candidates',
+                    'imported',
+                    'deduplicated',
+                    'skipped_by_query',
+                    'hidden_by_default',
+                    'international_hidden',
+                ] as $metric) {
+                    $targetPerformance[$targetIdentifier][$metric] += (int) ($targetSummary[$metric] ?? 0);
+                }
+            }
+        }
+
+        uasort($targetPerformance, fn (array $left, array $right): int => strcmp((string) $left['target_name'], (string) $right['target_name']));
+
+        return $targetPerformance;
     }
 
     /**
@@ -312,6 +441,15 @@ class DiagnoseDiscovery extends Command
             $warnings[] = sprintf('Search "%s" created leads hidden from the default Brazil workspace.', $query);
         }
 
+        if ($aggregate['created'] > 0) {
+            $limitedAnalysisCount = collect($sources)
+                ->sum(fn (array $sourceSummary): int => (int) ($sourceSummary['limited_analysis'] ?? 0));
+
+            if ($limitedAnalysisCount >= max(2, (int) ceil($aggregate['created'] / 2))) {
+                $warnings[] = sprintf('Search "%s" created many leads with limited analysis.', $query);
+            }
+        }
+
         foreach ($sources as $sourceSummary) {
             $source = (string) $sourceSummary['source'];
             $fetched = (int) ($sourceSummary['fetched'] ?? 0);
@@ -324,6 +462,13 @@ class DiagnoseDiscovery extends Command
 
             if ($fetched > 0 && $invalid >= max(3, (int) ceil($fetched / 2))) {
                 $warnings[] = sprintf('Source %s returned mostly invalid links during search "%s".', $source, $query);
+            }
+
+            if (
+                (int) ($sourceSummary['created'] ?? 0) > 0
+                && (int) ($sourceSummary['limited_analysis'] ?? 0) >= max(2, (int) ceil((int) $sourceSummary['created'] / 2))
+            ) {
+                $warnings[] = sprintf('Source %s created mostly limited-analysis leads during search "%s".', $source, $query);
             }
         }
 
@@ -380,6 +525,10 @@ class DiagnoseDiscovery extends Command
                 $recommendations[] = 'Created leads hidden by default: review location classification or default filter behavior.';
             }
 
+            if ((int) $scenarioResult['analysis']['limited'] > 0) {
+                $recommendations[] = 'Limited-analysis leads are reducing lead usefulness: preserve URL-only leads but prioritize deterministic detail coverage in current sources.';
+            }
+
             if (
                 (int) $scenarioResult['aggregate']['created'] > 0
                 && (int) $scenarioResult['location_counts'][JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL] > (int) $scenarioResult['aggregate']['created'] / 2
@@ -391,6 +540,13 @@ class DiagnoseDiscovery extends Command
         foreach ($sourcePerformance as $sourceSummary) {
             if ((int) $sourceSummary['failed'] > 0) {
                 $recommendations[] = sprintf('Source %s failed: inspect the source URL or parser.', $sourceSummary['source']);
+            }
+
+            if (
+                (int) $sourceSummary['created'] > 0
+                && (int) $sourceSummary['limited_analysis'] >= max(2, (int) ceil((int) $sourceSummary['created'] / 2))
+            ) {
+                $recommendations[] = sprintf('Source %s creates many limited-analysis leads: improve deterministic detail capture before adding new sources.', $sourceSummary['source']);
             }
         }
 
@@ -404,6 +560,7 @@ class DiagnoseDiscovery extends Command
     /**
      * @param list<array<string, mixed>> $scenarioResults
      * @param array<string, array<string, mixed>> $sourcePerformance
+     * @param array<string, array<string, mixed>> $companyCareerTargetPerformance
      * @param list<string> $warnings
      * @param list<string> $recommendations
      */
@@ -411,6 +568,7 @@ class DiagnoseDiscovery extends Command
         int $userId,
         array $scenarioResults,
         array $sourcePerformance,
+        array $companyCareerTargetPerformance,
         array $warnings,
         array $recommendations,
     ): string {
@@ -422,13 +580,13 @@ class DiagnoseDiscovery extends Command
             '',
             '## Scenario Summary',
             '',
-            '| Search | Fetched | Created | Duplicates | Invalid | Failed | Skipped | Brazil | International | Unknown | Latest batch | Default Brazil | All workspace | Hidden by default |',
-            '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
+            '| Search | Fetched | Imported | Deduplicated | Invalid | Failed | Skipped | Brazil | International | Unknown | Latest batch | Default Brazil | Hidden total | Limited analysis | Ready analysis | Hidden by default |',
+            '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |',
         ];
 
         foreach ($scenarioResults as $scenarioResult) {
             $lines[] = sprintf(
-                '| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %s |',
+                '| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %s |',
                 $scenarioResult['query'],
                 $scenarioResult['aggregate']['fetched'],
                 $scenarioResult['aggregate']['created'],
@@ -441,7 +599,9 @@ class DiagnoseDiscovery extends Command
                 $scenarioResult['location_counts'][JobLead::LOCATION_CLASSIFICATION_UNKNOWN],
                 $scenarioResult['visibility']['latest_batch'],
                 $scenarioResult['visibility']['default_brazil'],
-                $scenarioResult['visibility']['all_workspace'],
+                $scenarioResult['visibility']['hidden_total'],
+                $scenarioResult['analysis']['limited'],
+                $scenarioResult['analysis']['ready'],
                 $scenarioResult['visibility']['hidden_by_default'] ? 'yes' : 'no',
             );
         }
@@ -449,12 +609,12 @@ class DiagnoseDiscovery extends Command
         $lines[] = '';
         $lines[] = '## Source Performance';
         $lines[] = '';
-        $lines[] = '| Source | Fetched | Created | Duplicates | Invalid | Failed | Skipped |';
-        $lines[] = '| --- | ---: | ---: | ---: | ---: | ---: | ---: |';
+        $lines[] = '| Source | Fetched | Imported | Deduplicated | Invalid | Failed | Skipped | Visible by default | Hidden by default | Ready analysis | Limited analysis |';
+        $lines[] = '| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
 
         foreach ($sourcePerformance as $sourceSummary) {
             $lines[] = sprintf(
-                '| %s | %d | %d | %d | %d | %d | %d |',
+                '| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |',
                 $sourceSummary['source'],
                 $sourceSummary['fetched'],
                 $sourceSummary['created'],
@@ -462,7 +622,47 @@ class DiagnoseDiscovery extends Command
                 $sourceSummary['invalid'],
                 $sourceSummary['failed'],
                 $sourceSummary['skipped_not_matching_query'],
+                $sourceSummary['visible_by_default'],
+                $sourceSummary['hidden_by_default'],
+                $sourceSummary['ready_analysis'],
+                $sourceSummary['limited_analysis'],
             );
+        }
+
+        if ($companyCareerTargetPerformance !== []) {
+            $lines[] = '';
+            $lines[] = '## Company Career Page Target Performance';
+            $lines[] = '';
+            $lines[] = '| Target | Bucket | Action | Fetched | Matched | Imported | Deduplicated | Skipped | Hidden by default | International hidden | Query skip rate | Import rate |';
+            $lines[] = '| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
+
+            foreach ($companyCareerTargetPerformance as $targetSummary) {
+                $classification = $this->classifyCompanyCareerTarget($targetSummary);
+
+                $lines[] = sprintf(
+                    '| %s | %s | %s | %d | %d | %d | %d | %d | %d | %d | %s | %s |',
+                    $targetSummary['target_name'],
+                    $classification['bucket'],
+                    $classification['action'],
+                    $targetSummary['fetched_candidates'],
+                    $targetSummary['matched_candidates'],
+                    $targetSummary['imported'],
+                    $targetSummary['deduplicated'],
+                    $targetSummary['skipped_by_query'],
+                    $targetSummary['hidden_by_default'],
+                    $targetSummary['international_hidden'],
+                    $this->percentage((int) $targetSummary['skipped_by_query'], (int) $targetSummary['fetched_candidates']),
+                    $this->percentage((int) $targetSummary['imported'], (int) $targetSummary['fetched_candidates']),
+                );
+            }
+
+            $lines[] = '';
+            $lines[] = '## Company Career Page Target Recommendations';
+            $lines[] = '';
+
+            foreach ($this->companyCareerTargetRecommendations($companyCareerTargetPerformance) as $recommendation) {
+                $lines[] = sprintf('- %s', $recommendation);
+            }
         }
 
         $lines[] = '';
@@ -475,26 +675,72 @@ class DiagnoseDiscovery extends Command
             $lines[] = sprintf('- Batch ID: `%s`', $scenarioResult['batch_id']);
             $lines[] = sprintf('- Created lead IDs: %s', $scenarioResult['created_lead_ids'] === [] ? 'none' : implode(', ', $scenarioResult['created_lead_ids']));
             $lines[] = sprintf(
-                '- Visibility: latest batch %d, default Brazil %d, all workspace %d',
+                '- Visibility: latest batch %d, default Brazil %d, hidden total %d',
                 $scenarioResult['visibility']['latest_batch'],
                 $scenarioResult['visibility']['default_brazil'],
-                $scenarioResult['visibility']['all_workspace'],
+                $scenarioResult['visibility']['hidden_total'],
             );
             $lines[] = '';
-            $lines[] = '| Source | Fetched | Created | Duplicates | Invalid | Failed | Skipped |';
+            $lines[] = 'Batch observability:';
+            $lines[] = sprintf('- Imported vs deduplicated: %d imported, %d deduplicated', $scenarioResult['aggregate']['created'], $scenarioResult['aggregate']['duplicates']);
+            $lines[] = sprintf(
+                '- Hidden by default filters: %d total, %d ignored, %d international, %d both',
+                $scenarioResult['visibility']['hidden_total'],
+                $scenarioResult['visibility']['hidden_by_status'],
+                $scenarioResult['visibility']['hidden_by_location'],
+                $scenarioResult['visibility']['hidden_by_both'],
+            );
+            $lines[] = sprintf(
+                '- Analysis coverage: %d ready, %d limited, %d missing description, %d missing keywords',
+                $scenarioResult['analysis']['ready'],
+                $scenarioResult['analysis']['limited'],
+                $scenarioResult['analysis']['missing_description'],
+                $scenarioResult['analysis']['missing_keywords'],
+            );
+            $lines[] = '';
+            $lines[] = '| Source | Imported | Deduplicated | Visible by default | Hidden by default | Ready analysis | Limited analysis |';
             $lines[] = '| --- | ---: | ---: | ---: | ---: | ---: | ---: |';
 
-            foreach ($scenarioResult['sources'] as $sourceSummary) {
+            foreach ($scenarioResult['source_observability'] as $sourceSummary) {
                 $lines[] = sprintf(
                     '| %s | %d | %d | %d | %d | %d | %d |',
                     $sourceSummary['source'],
-                    $sourceSummary['fetched'],
-                    $sourceSummary['created'],
+                    $sourceSummary['imported'],
                     $sourceSummary['duplicates'],
-                    $sourceSummary['invalid'],
-                    $sourceSummary['failed'],
-                    $sourceSummary['skipped_not_matching_query'],
+                    $sourceSummary['visible_by_default'],
+                    $sourceSummary['hidden_by_default'],
+                    $sourceSummary['ready_analysis'],
+                    $sourceSummary['limited_analysis'],
                 );
+            }
+
+            $companyCareerTargets = $this->companyCareerTargetDiagnostics($scenarioResult['sources']);
+
+            if ($companyCareerTargets !== []) {
+                $lines[] = '';
+                $lines[] = 'Company career page targets:';
+                $lines[] = '';
+                $lines[] = '| Target | Bucket | Fetched | Matched | Imported | Deduplicated | Skipped | Hidden by default | International hidden | Query skip rate | Import rate |';
+                $lines[] = '| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |';
+
+                foreach ($companyCareerTargets as $targetSummary) {
+                    $classification = $this->classifyCompanyCareerTarget($targetSummary);
+
+                    $lines[] = sprintf(
+                        '| %s | %s | %d | %d | %d | %d | %d | %d | %d | %s | %s |',
+                        $targetSummary['target_name'],
+                        $classification['bucket'],
+                        $targetSummary['fetched_candidates'],
+                        $targetSummary['matched_candidates'],
+                        $targetSummary['imported'],
+                        $targetSummary['deduplicated'],
+                        $targetSummary['skipped_by_query'],
+                        $targetSummary['hidden_by_default'],
+                        $targetSummary['international_hidden'],
+                        $targetSummary['query_skip_rate'],
+                        $targetSummary['import_rate'],
+                    );
+                }
             }
 
             if ($scenarioResult['warnings'] !== []) {
@@ -543,16 +789,15 @@ class DiagnoseDiscovery extends Command
         $this->line(sprintf('Discovery diagnostics for user %d', $userId));
 
         $this->table(
-            ['Search', 'Fetched', 'Created', 'Duplicates', 'Invalid', 'Failed', 'Hidden by default'],
+            ['Search', 'Fetched', 'Imported', 'Deduplicated', 'Limited analysis', 'Hidden by default'],
             array_map(
                 fn (array $scenarioResult): array => [
                     $scenarioResult['query'],
                     $scenarioResult['aggregate']['fetched'],
                     $scenarioResult['aggregate']['created'],
                     $scenarioResult['aggregate']['duplicates'],
-                    $scenarioResult['aggregate']['invalid'],
-                    $scenarioResult['aggregate']['failed'],
-                    $scenarioResult['visibility']['hidden_by_default'] ? 'yes' : 'no',
+                    $scenarioResult['analysis']['limited'],
+                    $scenarioResult['visibility']['hidden_total'],
                 ],
                 $scenarioResults,
             ),
@@ -573,5 +818,188 @@ class DiagnoseDiscovery extends Command
                 $this->line(sprintf('- %s', $recommendation));
             }
         }
+    }
+
+    /**
+     * @param Collection<int, JobLead> $createdJobLeads
+     * @return array{ready: int, limited: int, missing_description: int, missing_keywords: int}
+     */
+    private function analysisCounts(Collection $createdJobLeads): array
+    {
+        $readyCount = $createdJobLeads
+            ->filter(fn (JobLead $jobLead): bool => ! $jobLead->hasLimitedAnalysis())
+            ->count();
+        $missingDescriptionCount = $createdJobLeads
+            ->filter(fn (JobLead $jobLead): bool => ! Str::of((string) $jobLead->description_text)->trim()->isNotEmpty())
+            ->count();
+        $missingKeywordsCount = $createdJobLeads
+            ->filter(fn (JobLead $jobLead): bool => ($jobLead->extracted_keywords ?? []) === [])
+            ->count();
+
+        return [
+            'ready' => $readyCount,
+            'limited' => $createdJobLeads->count() - $readyCount,
+            'missing_description' => $missingDescriptionCount,
+            'missing_keywords' => $missingKeywordsCount,
+        ];
+    }
+
+    /**
+     * @param Collection<int, JobLead> $createdJobLeads
+     * @param list<array<string, mixed>> $sources
+     * @return list<array<string, int|string>>
+     */
+    private function sourceObservability(Collection $createdJobLeads, array $sources): array
+    {
+        $observability = [];
+
+        foreach ($sources as $sourceSummary) {
+            $sourceKey = (string) $sourceSummary['source'];
+            $sourceName = (string) ($sourceSummary['source_name'] ?? $sourceKey);
+            $sourceJobLeads = $createdJobLeads
+                ->filter(fn (JobLead $jobLead): bool => $jobLead->source_name === $sourceName)
+                ->values();
+            $visibleByDefaultCount = $sourceJobLeads
+                ->filter(fn (JobLead $jobLead): bool => $jobLead->lead_status !== JobLead::STATUS_IGNORED)
+                ->filter(fn (JobLead $jobLead): bool => $jobLead->locationClassification() !== JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL)
+                ->count();
+            $analysis = $this->analysisCounts($sourceJobLeads);
+            $sourceSummary['visible_by_default'] = $visibleByDefaultCount;
+            $sourceSummary['hidden_by_default'] = $sourceJobLeads->count() - $visibleByDefaultCount;
+            $sourceSummary['ready_analysis'] = $analysis['ready'];
+            $sourceSummary['limited_analysis'] = $analysis['limited'];
+            $sourceSummary['missing_description'] = $analysis['missing_description'];
+            $sourceSummary['missing_keywords'] = $analysis['missing_keywords'];
+
+            $observability[] = [
+                'source' => $sourceKey,
+                'imported' => $sourceJobLeads->count(),
+                'duplicates' => (int) ($sourceSummary['duplicates'] ?? 0),
+                'visible_by_default' => (int) $sourceSummary['visible_by_default'],
+                'hidden_by_default' => (int) $sourceSummary['hidden_by_default'],
+                'ready_analysis' => (int) $sourceSummary['ready_analysis'],
+                'limited_analysis' => (int) $sourceSummary['limited_analysis'],
+                'missing_description' => (int) $sourceSummary['missing_description'],
+                'missing_keywords' => (int) $sourceSummary['missing_keywords'],
+            ];
+        }
+
+        return $observability;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $sources
+     * @return list<array<string, mixed>>
+     */
+    private function companyCareerTargetDiagnostics(array $sources): array
+    {
+        foreach ($sources as $sourceSummary) {
+            if ((string) ($sourceSummary['source'] ?? '') !== 'company-career-pages') {
+                continue;
+            }
+
+            $targetDiagnostics = $sourceSummary['target_diagnostics'] ?? [];
+
+            return is_array($targetDiagnostics) ? $targetDiagnostics : [];
+        }
+
+        return [];
+    }
+
+    /**
+     * @param array<string, mixed> $targetSummary
+     * @return array{bucket: string, action: string}
+     */
+    public function classifyCompanyCareerTarget(array $targetSummary): array
+    {
+        $fetchedCandidates = (int) ($targetSummary['fetched_candidates'] ?? 0);
+        $matchedCandidates = (int) ($targetSummary['matched_candidates'] ?? 0);
+        $imported = (int) ($targetSummary['imported'] ?? 0);
+        $hiddenByDefault = (int) ($targetSummary['hidden_by_default'] ?? 0);
+        $querySkipRate = $this->percentageValue((int) ($targetSummary['skipped_by_query'] ?? 0), $fetchedCandidates);
+        $importRate = $this->percentageValue($imported, $fetchedCandidates);
+
+        if ($fetchedCandidates === 0 || ($matchedCandidates === 0 && $imported === 0)) {
+            return [
+                'bucket' => 'no-signal',
+                'action' => 'investigate no-signal targets',
+            ];
+        }
+
+        if ($imported >= 3 && $importRate >= 35.0 && $hiddenByDefault === 0) {
+            return [
+                'bucket' => 'strong',
+                'action' => 'keep strong targets',
+            ];
+        }
+
+        if ($imported >= 1 && $matchedCandidates >= 2 && $importRate >= 15.0) {
+            return [
+                'bucket' => 'promising',
+                'action' => 'review promising targets',
+            ];
+        }
+
+        if ($matchedCandidates > 0 || $querySkipRate < 100.0) {
+            return [
+                'bucket' => 'weak',
+                'action' => 'deprioritize weak targets',
+            ];
+        }
+
+        return [
+            'bucket' => 'no-signal',
+            'action' => 'investigate no-signal targets',
+        ];
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $companyCareerTargetPerformance
+     * @return list<string>
+     */
+    private function companyCareerTargetRecommendations(array $companyCareerTargetPerformance): array
+    {
+        $targetsByBucket = [
+            'strong' => [],
+            'promising' => [],
+            'weak' => [],
+            'no-signal' => [],
+        ];
+
+        foreach ($companyCareerTargetPerformance as $targetSummary) {
+            $classification = $this->classifyCompanyCareerTarget($targetSummary);
+            $targetsByBucket[$classification['bucket']][] = (string) $targetSummary['target_name'];
+        }
+
+        $recommendations = [];
+
+        foreach ([
+            'strong' => 'Keep strong targets:',
+            'promising' => 'Review promising targets:',
+            'weak' => 'Deprioritize weak targets:',
+            'no-signal' => 'Investigate no-signal targets:',
+        ] as $bucket => $prefix) {
+            if ($targetsByBucket[$bucket] === []) {
+                continue;
+            }
+
+            $recommendations[] = sprintf('%s %s', $prefix, implode(', ', $targetsByBucket[$bucket]));
+        }
+
+        return $recommendations;
+    }
+
+    private function percentageValue(int $count, int $total): float
+    {
+        if ($total <= 0) {
+            return 0.0;
+        }
+
+        return round(($count / $total) * 100, 1);
+    }
+
+    private function percentage(int $count, int $total): string
+    {
+        return number_format($this->percentageValue($count, $total), 1).'%';
     }
 }

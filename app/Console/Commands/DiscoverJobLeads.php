@@ -3,7 +3,9 @@
 namespace App\Console\Commands;
 
 use App\Models\User;
+use App\Models\UserProfile;
 use App\Services\JobDiscovery\JobLeadDiscoveryRunner;
+use App\Services\ResumeDiscoveryQueryProfileResolver;
 use Illuminate\Console\Command;
 use Illuminate\Support\Str;
 use Symfony\Component\Console\Command\Command as SymfonyCommand;
@@ -17,6 +19,7 @@ class DiscoverJobLeads extends Command
 
     public function handle(
         JobLeadDiscoveryRunner $jobLeadDiscoveryRunner,
+        ResumeDiscoveryQueryProfileResolver $resumeDiscoveryQueryProfileResolver,
     ): int {
         $user = User::query()->find($this->argument('user_id'));
 
@@ -28,10 +31,24 @@ class DiscoverJobLeads extends Command
 
         $source = (string) $this->argument('source');
         $query = $this->option('query');
+        $userProfile = UserProfile::query()
+            ->where('user_id', $user->id)
+            ->first();
+        $queryProfiles = $resumeDiscoveryQueryProfileResolver->resolve(
+            is_string($query) ? $query : null,
+            $userProfile?->base_resume_text,
+            $userProfile?->core_skills ?? [],
+        );
         $discoveryBatchId = (string) Str::uuid();
 
         try {
-            $summary = $jobLeadDiscoveryRunner->discoverForUser($user->id, $source, is_string($query) ? $query : null, $discoveryBatchId);
+            $summary = $jobLeadDiscoveryRunner->discoverForUser(
+                $user->id,
+                $source,
+                is_string($query) ? $query : null,
+                $discoveryBatchId,
+                $queryProfiles,
+            );
         } catch (Throwable $throwable) {
             $this->error($throwable->getMessage());
 

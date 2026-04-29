@@ -105,6 +105,81 @@ class JobDiscoveryQueryMatcher
      *     location?: string|null,
      *     work_mode?: string|null
      * } $job
+     * @param list<array{key: string, label: string, signals: list<string>, aliases: list<string>, query: string}> $queryProfiles
+     * @return array{
+     *     matches: bool,
+     *     matched_by_query: bool,
+     *     matched_query_profile_keys: list<string>,
+     *     reasons: list<string>
+     * }
+     */
+    public function explainWithProfiles(?string $query, array $job, array $queryProfiles = []): array
+    {
+        $queryExplanation = $this->explain($query, $job);
+
+        if ($queryExplanation['matches']) {
+            return [
+                'matches' => true,
+                'matched_by_query' => true,
+                'matched_query_profile_keys' => [],
+                'reasons' => [],
+            ];
+        }
+
+        if ($this->normalizeText($query) === null) {
+            return [
+                'matches' => true,
+                'matched_by_query' => false,
+                'matched_query_profile_keys' => [],
+                'reasons' => [],
+            ];
+        }
+
+        $matchedQueryProfileKeys = [];
+        $haystackText = $this->jobHaystackText($job);
+        $haystackTokens = $this->tokens($haystackText);
+
+        foreach ($queryProfiles as $queryProfile) {
+            if (! is_array($queryProfile)) {
+                continue;
+            }
+
+            if (
+                ! $this->matches($queryProfile['query'] ?? null, $job)
+                && ! $this->matchesProfileAliases($queryProfile, $haystackTokens, $haystackText)
+            ) {
+                continue;
+            }
+
+            $matchedQueryProfileKeys[] = (string) $queryProfile['key'];
+        }
+
+        if ($matchedQueryProfileKeys !== []) {
+            return [
+                'matches' => true,
+                'matched_by_query' => false,
+                'matched_query_profile_keys' => array_values(array_unique($matchedQueryProfileKeys)),
+                'reasons' => [],
+            ];
+        }
+
+        return [
+            'matches' => false,
+            'matched_by_query' => false,
+            'matched_query_profile_keys' => [],
+            'reasons' => $queryExplanation['reasons'],
+        ];
+    }
+
+    /**
+     * @param array{
+     *     company_name?: string|null,
+     *     description_text?: string|null,
+     *     extracted_keywords?: array<int, string>|null,
+     *     job_title?: string|null,
+     *     location?: string|null,
+     *     work_mode?: string|null
+     * } $job
      * @return array{matches: bool, reasons: list<string>}
      */
     public function explain(?string $query, array $job): array
@@ -300,6 +375,39 @@ class JobDiscoveryQueryMatcher
         }
 
         return $normalizedText;
+    }
+
+    /**
+     * @param array{key: string, label: string, signals: list<string>, aliases: list<string>, query: string} $queryProfile
+     * @param list<string> $haystackTokens
+     */
+    private function matchesProfileAliases(array $queryProfile, array $haystackTokens, string $haystackText): bool
+    {
+        foreach ($queryProfile['aliases'] ?? [] as $alias) {
+            if (! is_string($alias)) {
+                continue;
+            }
+
+            $normalizedAlias = $this->normalizeText($alias);
+
+            if ($normalizedAlias === null) {
+                continue;
+            }
+
+            if (str_contains($normalizedAlias, ' ')) {
+                if (str_contains($haystackText, $normalizedAlias)) {
+                    return true;
+                }
+
+                continue;
+            }
+
+            if ($this->containsToken($normalizedAlias, $haystackTokens, $haystackText)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function normalizeUnicode(string $text): string

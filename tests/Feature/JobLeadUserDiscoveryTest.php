@@ -97,7 +97,14 @@ it('shares source level discovery results through flash after redirect', functio
             ->where('flash.discovery.0.source', 'python-job-board')
             ->where('flash.discovery.0.fetched', 3)
             ->where('flash.discovery.0.created', 2)
+            ->where('flash.discovery.0.imported', 2)
             ->where('flash.discovery.0.duplicates', 0)
+            ->where('flash.discovery.0.visible_by_default', 0)
+            ->where('flash.discovery.0.hidden_by_default', 2)
+            ->where('flash.discovery.0.ready_analysis', 1)
+            ->where('flash.discovery.0.limited_analysis', 1)
+            ->where('flash.discovery.0.missing_description', 0)
+            ->where('flash.discovery.0.missing_keywords', 1)
             ->where('flash.discovery.0.skipped_not_matching_query', 0)
             ->where('flash.discovery.0.invalid', 1)
             ->where('flash.discovery.0.failed', 0)
@@ -105,7 +112,14 @@ it('shares source level discovery results through flash after redirect', functio
             ->where('flash.discovery.1.source', 'django-community-jobs')
             ->where('flash.discovery.1.fetched', 3)
             ->where('flash.discovery.1.created', 2)
+            ->where('flash.discovery.1.imported', 2)
             ->where('flash.discovery.1.duplicates', 0)
+            ->where('flash.discovery.1.visible_by_default', 0)
+            ->where('flash.discovery.1.hidden_by_default', 2)
+            ->where('flash.discovery.1.ready_analysis', 2)
+            ->where('flash.discovery.1.limited_analysis', 0)
+            ->where('flash.discovery.1.missing_description', 0)
+            ->where('flash.discovery.1.missing_keywords', 0)
             ->where('flash.discovery.1.skipped_not_matching_query', 0)
             ->where('flash.discovery.1.invalid', 1)
             ->where('flash.discovery.1.failed', 0)
@@ -185,9 +199,13 @@ it('returns a summary even when one discovery source fails', function (): void {
     expect($discovery)->toHaveCount(2)
         ->and($discovery[0]['source'])->toBe('python-job-board')
         ->and($discovery[0]['failed'])->toBe(1)
+        ->and($discovery[0]['hidden_by_default'])->toBe(0)
+        ->and($discovery[0]['limited_analysis'])->toBe(0)
         ->and($discovery[0]['discovery_batch_id'])->not->toBeNull()
         ->and($discovery[1]['source'])->toBe('django-community-jobs')
         ->and($discovery[1]['created'])->toBe(2)
+        ->and($discovery[1]['hidden_by_default'])->toBe(2)
+        ->and($discovery[1]['limited_analysis'])->toBe(0)
         ->and($discovery[1]['discovery_batch_id'])->toBe($discovery[0]['discovery_batch_id']);
 
     $userProfile = UserProfile::query()->where('user_id', $user->id)->sole();
@@ -226,10 +244,14 @@ it('imports only matching discovered jobs when a search query is provided', func
     expect($discovery)->toHaveCount(2)
         ->and($discovery[0]['source'])->toBe('python-job-board')
         ->and($discovery[0]['created'])->toBe(1)
+        ->and($discovery[0]['hidden_by_default'])->toBe(1)
+        ->and($discovery[0]['limited_analysis'])->toBe(0)
         ->and($discovery[0]['skipped_not_matching_query'])->toBe(1)
         ->and($discovery[0]['discovery_batch_id'])->not->toBeNull()
         ->and($discovery[1]['source'])->toBe('django-community-jobs')
         ->and($discovery[1]['created'])->toBe(0)
+        ->and($discovery[1]['hidden_by_default'])->toBe(0)
+        ->and($discovery[1]['limited_analysis'])->toBe(0)
         ->and($discovery[1]['skipped_not_matching_query'])->toBe(2)
         ->and($discovery[1]['discovery_batch_id'])->toBe($discovery[0]['discovery_batch_id']);
 
@@ -394,4 +416,60 @@ it('shows newly created jobs in latest discovery view even when conflicting filt
             ->where('matchedJobs.0.location_classification', JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL)
         )
         ->assertSee('Bright Studio');
+});
+
+it('explains latest discovery funnel counts when an international manual discovery match is hidden, then shown', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'JavaScript Vue frontend engineer.',
+        'core_skills' => ['JavaScript', 'Vue'],
+        'auto_discover_jobs' => false,
+    ]);
+
+    config()->set('job_discovery.supported_sources', ['larajobs']);
+
+    Http::fake([
+        'https://larajobs.com/' => Http::response(
+            file_get_contents(base_path('tests/Fixtures/larajobs_listing.html')),
+            200,
+        ),
+    ]);
+
+    $this->actingAs($user)
+        ->post(route('job-leads.discover'), [
+            'search_query' => 'javascript',
+        ])
+        ->assertRedirect(route('job-leads.index'));
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 0)
+            ->where('latestDiscoveryMatchFunnel.latest_batch_total_count', 1)
+            ->where('latestDiscoveryMatchFunnel.matched_before_default_hiding_count', 1)
+            ->where('latestDiscoveryMatchFunnel.visible_matched_count', 0)
+            ->where('latestDiscoveryMatchFunnel.hidden_international_count', 1)
+            ->where('latestDiscoveryMatchFunnel.hidden_ignored_count', 0)
+            ->where('latestDiscoveryMatchFunnel.imported_not_matched_count', 0)
+        );
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index', [
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Bright Studio')
+            ->where('latestDiscoveryMatchFunnel.latest_batch_total_count', 1)
+            ->where('latestDiscoveryMatchFunnel.matched_before_default_hiding_count', 1)
+            ->where('latestDiscoveryMatchFunnel.visible_matched_count', 1)
+            ->where('latestDiscoveryMatchFunnel.hidden_international_count', 0)
+            ->where('latestDiscoveryMatchFunnel.imported_not_matched_count', 0)
+        );
 });

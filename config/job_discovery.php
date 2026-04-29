@@ -4,32 +4,99 @@ $useFixtureResponses = (bool) env('JOB_DISCOVERY_USE_FIXTURES', false);
 
 $fixtureCompanyCareerTargets = [
     [
-        'name' => 'Example BH Tech',
-        'website_url' => 'https://example.com',
+        'name' => 'Nubank',
+        'website_url' => 'https://nubank.com.br',
+        'region' => 'São Paulo',
+        'parser_strategy' => 'structured_lists',
+        'career_urls' => [
+            'https://fixtures.nubank.com.br/careers',
+        ],
+    ],
+    [
+        'name' => 'iFood',
+        'website_url' => 'https://ifood.com.br',
+        'region' => 'Brazil',
+        'parser_strategy' => 'structured_lists',
+        'career_urls' => [
+            'https://fixtures.ifood.com.br/carreiras',
+        ],
+    ],
+    [
+        'name' => 'Mercado Livre',
+        'website_url' => 'https://mercadolivre.com.br',
+        'region' => 'Brazil',
+        'parser_strategy' => 'structured_lists',
+        'career_urls' => [
+            'https://fixtures.mercadolivre.com.br/careers',
+        ],
+    ],
+    [
+        'name' => 'VTEX',
+        'website_url' => 'https://vtex.com',
+        'region' => 'São Paulo',
+        'parser_strategy' => 'structured_lists',
+        'career_urls' => [
+            'https://fixtures.vtex.com/careers',
+        ],
+    ],
+    [
+        'name' => 'Stone',
+        'website_url' => 'https://stone.com.br',
+        'region' => 'Brazil',
+        'parser_strategy' => 'ats_board',
+        'career_urls' => [
+            'https://fixtures.stone.com.br/careers',
+        ],
+    ],
+    [
+        'name' => 'PagBank',
+        'website_url' => 'https://pagbank.com.br',
+        'region' => 'São Paulo',
+        'parser_strategy' => 'ats_board',
+        'career_urls' => [
+            'https://fixtures.pagbank.com.br/careers',
+        ],
+    ],
+    [
+        'name' => 'Hotmart',
+        'website_url' => 'https://hotmart.com',
         'region' => 'Belo Horizonte',
+        'parser_strategy' => 'structured_lists',
         'career_urls' => [
-            'https://example.com/carreiras',
+            'https://fixtures.hotmart.com/jobs',
         ],
     ],
     [
-        'name' => 'Example Gupy Product',
-        'website_url' => 'https://example-gupy.com',
-        'region' => 'Brazil',
+        'name' => 'QuintoAndar',
+        'website_url' => 'https://quintoandar.com.br',
+        'region' => 'São Paulo',
+        'parser_strategy' => 'structured_lists',
         'career_urls' => [
-            'https://example-gupy.com/careers',
+            'https://fixtures.quintoandar.com.br/carreiras',
         ],
     ],
     [
-        'name' => 'Example Brazil SaaS',
-        'website_url' => 'https://example-saas.com',
+        'name' => 'Grupo OLX',
+        'website_url' => 'https://olxbrasil.com.br',
         'region' => 'Brazil',
+        'parser_strategy' => 'structured_lists',
         'career_urls' => [
-            'https://example-saas.com/careers',
+            'https://fixtures.olx.com.br/vagas',
+        ],
+    ],
+    [
+        'name' => 'Magazine Luiza',
+        'website_url' => 'https://magazineluiza.com.br',
+        'region' => 'Brazil',
+        'parser_strategy' => 'structured_lists',
+        'career_urls' => [
+            'https://fixtures.magalu.com.br/carreiras',
         ],
     ],
 ];
 
 return [
+    'fixture_supported_sources' => ['larajobs', 'company-career-pages'],
     'supported_sources' => $useFixtureResponses
         ? ['larajobs', 'company-career-pages']
         : [
@@ -40,189 +107,111 @@ return [
             'company-career-pages',
         ],
     'use_fixture_responses' => $useFixtureResponses,
+    'fixture_company_career_targets' => $fixtureCompanyCareerTargets,
     'fixture_responses' => [
         'larajobs' => base_path('tests/Fixtures/larajobs_listing.html'),
         'company_career_pages' => [
-            'https://example.com/carreiras' => base_path('tests/Fixtures/company_career_page_software.html'),
-            'https://example-gupy.com/careers' => base_path('tests/Fixtures/company_career_page_gupy_multi.html'),
-            'https://example-saas.com/careers' => base_path('tests/Fixtures/company_career_page_gupy_multi_two.html'),
+            'https://fixtures.nubank.com.br/careers' => base_path('tests/Fixtures/company_career_page_brazil_strong.html'),
+            'https://fixtures.ifood.com.br/carreiras' => base_path('tests/Fixtures/company_career_page_brazil_promising.html'),
+            'https://fixtures.mercadolivre.com.br/careers' => base_path('tests/Fixtures/company_career_page_brazil_weak.html'),
+            'https://fixtures.vtex.com/careers' => base_path('tests/Fixtures/company_career_page_generic.html'),
+            'https://fixtures.stone.com.br/careers' => base_path('tests/Fixtures/company_career_page_gupy_multi.html'),
+            'https://fixtures.pagbank.com.br/careers' => base_path('tests/Fixtures/company_career_page_gupy_multi_two.html'),
+            'https://fixtures.hotmart.com/jobs' => base_path('tests/Fixtures/company_career_page_brazil_promising.html'),
+            'https://fixtures.quintoandar.com.br/carreiras' => base_path('tests/Fixtures/company_career_page_brazil_strong.html'),
+            'https://fixtures.olx.com.br/vagas' => base_path('tests/Fixtures/company_career_page_brazil_weak.html'),
+            'https://fixtures.magalu.com.br/carreiras' => base_path('tests/Fixtures/company_career_page_generic.html'),
         ],
     ],
     'company_career_targets' => $useFixtureResponses ? $fixtureCompanyCareerTargets : [
         [
-            'name' => 'Meliuz',
-            'website_url' => 'https://www.meliuz.com.br',
-            'region' => 'Belo Horizonte',
+            'name' => 'Nubank',
+            'website_url' => 'https://nubank.com.br',
+            'region' => 'São Paulo',
+            'parser_strategy' => 'structured_lists',
             'career_urls' => [
-                'https://meliuz.gupy.io/',
+                'https://international.nubank.com.br/careers/',
+            ],
+        ],
+        [
+            'name' => 'iFood',
+            'website_url' => 'https://ifood.com.br',
+            'region' => 'Brazil',
+            'parser_strategy' => 'structured_lists',
+            'career_urls' => [
+                'https://institucional.ifood.com.br/comunidade/carreiras/',
+            ],
+        ],
+        [
+            'name' => 'Mercado Livre',
+            'website_url' => 'https://mercadolivre.com.br',
+            'region' => 'Brazil',
+            'parser_strategy' => 'structured_lists',
+            'career_urls' => [
+                'https://careers-meli.mercadolibre.com/en',
+            ],
+        ],
+        [
+            'name' => 'VTEX',
+            'website_url' => 'https://vtex.com',
+            'region' => 'São Paulo',
+            'parser_strategy' => 'structured_lists',
+            'career_urls' => [
+                'https://vtex.com/us-en/about-us/',
+            ],
+        ],
+        [
+            'name' => 'Stone',
+            'website_url' => 'https://stone.com.br',
+            'region' => 'Brazil',
+            'parser_strategy' => 'ats_board',
+            'career_urls' => [
+                'https://jornadastone.gupy.io/',
+            ],
+        ],
+        [
+            'name' => 'PagBank',
+            'website_url' => 'https://pagbank.com.br',
+            'region' => 'São Paulo',
+            'parser_strategy' => 'ats_board',
+            'career_urls' => [
+                'https://pagseguro.gupy.io/',
             ],
         ],
         [
             'name' => 'Hotmart',
             'website_url' => 'https://hotmart.com',
             'region' => 'Belo Horizonte',
+            'parser_strategy' => 'structured_lists',
             'career_urls' => [
-                'https://hotmart.com/en/jobs/',
-            ],
-        ],
-        [
-            'name' => 'Sympla',
-            'website_url' => 'https://www.sympla.com.br',
-            'region' => 'Belo Horizonte',
-            'career_urls' => [
-                'https://www.sympla.com.br/index.php/trabalhe-conosco',
-            ],
-        ],
-        [
-            'name' => 'Contabilizei',
-            'website_url' => 'https://www.contabilizei.com.br',
-            'region' => 'São Paulo',
-            'career_urls' => [
-                'https://contabilizei.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Omie',
-            'website_url' => 'https://www.omie.com.br',
-            'region' => 'São Paulo',
-            'career_urls' => [
-                'https://carreirasomie.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Asaas',
-            'website_url' => 'https://www.asaas.com',
-            'region' => 'Brazil',
-            'career_urls' => [
-                'https://asaas.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Asaas Tech',
-            'website_url' => 'https://www.asaas.com',
-            'region' => 'Brazil',
-            'career_urls' => [
-                'https://asaastech.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Gupy Tech',
-            'website_url' => 'https://www.gupy.io',
-            'region' => 'São Paulo',
-            'career_urls' => [
-                'https://tech-career.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Stone Tecnologia',
-            'website_url' => 'https://www.stone.com.br',
-            'region' => 'Brazil',
-            'career_urls' => [
-                'https://stech.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Stone Banking',
-            'website_url' => 'https://www.stone.com.br',
-            'region' => 'Brazil',
-            'career_urls' => [
-                'https://stonebanking.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Stone',
-            'website_url' => 'https://www.stone.com.br',
-            'region' => 'São Paulo',
-            'career_urls' => [
-                'https://jornadastone.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Trinks',
-            'website_url' => 'https://www.trinks.com',
-            'region' => 'Rio de Janeiro',
-            'career_urls' => [
-                'https://trinks.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Leapfone',
-            'website_url' => 'https://www.leapfone.com.br',
-            'region' => 'São Paulo',
-            'career_urls' => [
-                'https://leapfone.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Efí Bank',
-            'website_url' => 'https://sejaefi.com.br',
-            'region' => 'Brazil',
-            'career_urls' => [
-                'https://sejaefi.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Conta Simples',
-            'website_url' => 'https://contasimples.com',
-            'region' => 'São Paulo',
-            'career_urls' => [
-                'https://contasimples.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Mercos',
-            'website_url' => 'https://mercos.com',
-            'region' => 'Brazil',
-            'career_urls' => [
-                'https://mercos.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Zenvia',
-            'website_url' => 'https://www.zenvia.com',
-            'region' => 'Brazil',
-            'career_urls' => [
-                'https://zenvia.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Cadastra',
-            'website_url' => 'https://www.cadastra.com',
-            'region' => 'São Paulo',
-            'career_urls' => [
-                'https://cadastra.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'MindMiners',
-            'website_url' => 'https://mindminers.com',
-            'region' => 'São Paulo',
-            'career_urls' => [
-                'https://mindminers.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Intelia',
-            'website_url' => 'https://intelia.com.br',
-            'region' => 'Brazil',
-            'career_urls' => [
-                'https://intelia.gupy.io/',
-            ],
-        ],
-        [
-            'name' => 'Sankhya',
-            'website_url' => 'https://www.sankhya.com.br',
-            'region' => 'Brazil',
-            'career_urls' => [
-                'https://sankhya.gupy.io/',
+                'https://hotmart.com/en/jobs',
             ],
         ],
         [
             'name' => 'QuintoAndar',
-            'website_url' => 'https://www.quintoandar.com.br',
+            'website_url' => 'https://quintoandar.com.br',
             'region' => 'São Paulo',
+            'parser_strategy' => 'structured_lists',
             'career_urls' => [
-                'https://carreiras.quintoandar.com.br/home-2/?lang=en',
+                'https://carreiras.quintoandar.com.br/home/trabalho/',
+            ],
+        ],
+        [
+            'name' => 'Grupo OLX',
+            'website_url' => 'https://olxbrasil.com.br',
+            'region' => 'Brazil',
+            'parser_strategy' => 'structured_lists',
+            'career_urls' => [
+                'https://olxbrasil.com.br/vagas/',
+            ],
+        ],
+        [
+            'name' => 'Magazine Luiza',
+            'website_url' => 'https://magazineluiza.com.br',
+            'region' => 'Brazil',
+            'parser_strategy' => 'structured_lists',
+            'career_urls' => [
+                'https://carreiras.magazineluiza.com.br/vagas/',
             ],
         ],
     ],

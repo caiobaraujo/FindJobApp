@@ -38,6 +38,36 @@ it('renders detected resume skills when available', function (): void {
         );
 });
 
+it('exposes deterministic resume discovery signals for development inspection', function (): void {
+    $user = User::factory()->create();
+    $resumeText = file_get_contents(base_path('tests/Fixtures/resume_discovery_signals_full_stack.txt'));
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => $resumeText,
+        'core_skills' => ['PHP', 'Laravel', 'Python', 'Django', 'Vue.js', 'Angular', 'Docker', 'SQL', 'MySQL', 'OpenAI', 'NLP', 'LLMs'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('resume-profile.show'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('Profile/ResumeProfile')
+            ->where('resumeDiscoverySignals.canonical_skills.0', 'vue')
+            ->where('resumeDiscoverySignals.canonical_skills.5', 'laravel')
+            ->where('resumeDiscoverySignals.role_families.0', 'frontend_vue')
+            ->where('resumeDiscoverySignals.role_families.4', 'backend_python')
+            ->where('resumeDiscoverySignals.role_families.9', 'ai_applied')
+            ->where('resumeDiscoverySignals.aliases.2', 'vuejs')
+            ->where('resumeDiscoverySignals.aliases', fn ($aliases): bool => $aliases->contains('openai'))
+            ->where('resumeDiscoverySignals.query_profiles.0.key', 'frontend_vue')
+            ->where('resumeDiscoverySignals.query_profiles.2.key', 'backend_python')
+            ->where('resumeDiscoverySignals.query_profiles.2.signals', ['backend_python', 'backend', 'python', 'django'])
+            ->where('resumeDiscoverySignals.query_profiles.7.key', 'ai_applied')
+            ->where('resumeDiscoverySignals.query_profiles.7.signals', ['ai_applied', 'chatbot', 'nlp', 'llm', 'openai'])
+        );
+});
+
 it('renders an empty detected resume skills state when unavailable', function (): void {
     $user = User::factory()->create();
 

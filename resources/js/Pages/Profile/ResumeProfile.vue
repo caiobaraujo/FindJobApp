@@ -1,4 +1,5 @@
 <script setup>
+import ResumeDiscoverySignalsCard from '@/Components/ResumeDiscoverySignalsCard.vue';
 import ResumeSkillsCard from '@/Components/ResumeSkillsCard.vue';
 import UserProfileForm from '@/Components/UserProfileForm.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
@@ -16,6 +17,10 @@ const props = defineProps({
     },
     detectedResumeSkills: {
         type: Array,
+        required: true,
+    },
+    resumeDiscoverySignals: {
+        type: Object,
         required: true,
     },
     workModes: {
@@ -92,6 +97,9 @@ function submit() {
 
         <AppShell>
             <ResumeSkillsCard :skills="detectedResumeSkills" />
+            <div class="mt-6">
+                <ResumeDiscoverySignalsCard :signals="resumeDiscoverySignals" />
+            </div>
 
             <SectionCard
                 :title="t('resume.upload_title', 'Upload your resume')"

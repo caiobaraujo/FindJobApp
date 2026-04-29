@@ -899,3 +899,296 @@ it('keeps matched only mode active when lead status filters are applied', functi
         )
         ->assertDontSee('Non Matching Saved Lead');
 });
+
+it('shows matched jobs visibility summary counts for default hidden ignored and international leads', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue and SQL experience.',
+        'core_skills' => ['Laravel', 'Vue', 'SQL'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Visible Brazil Match',
+        'location' => 'Remote Brazil',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    JobLead::factory()->for($user)->ignored()->create([
+        'company_name' => 'Ignored Brazil Match',
+        'location' => 'Remote Brazil',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Visible International Match',
+        'location' => 'Remote, United States',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    JobLead::factory()->for($user)->ignored()->create([
+        'company_name' => 'Ignored International Match',
+        'location' => 'Remote, Germany',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Visible Unmatched Brazil Lead',
+        'location' => 'Remote Brazil',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['python'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Visible Brazil Match')
+            ->where('matchedJobsVisibilitySummary.visible_count', 1)
+            ->where('matchedJobsVisibilitySummary.hidden_ignored_count', 2)
+            ->where('matchedJobsVisibilitySummary.hidden_international_count', 2)
+            ->where('matchedJobsVisibilitySummary.total_count', 4)
+        );
+});
+
+it('shows zero hidden matched job summary counts when ignored and international filters are already enabled', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue and SQL experience.',
+        'core_skills' => ['Laravel', 'Vue', 'SQL'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Brazil Match',
+        'location' => 'Remote Brazil',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    JobLead::factory()->for($user)->ignored()->create([
+        'company_name' => 'Ignored Match',
+        'location' => 'Remote Brazil',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'International Match',
+        'location' => 'Remote, Canada',
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index', [
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+            'show_ignored' => 1,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 3)
+            ->where('matchedJobsVisibilitySummary.visible_count', 3)
+            ->where('matchedJobsVisibilitySummary.hidden_ignored_count', 0)
+            ->where('matchedJobsVisibilitySummary.hidden_international_count', 0)
+            ->where('matchedJobsVisibilitySummary.total_count', 3)
+        );
+});
+
+it('shows latest discovery funnel counts for ignored status work mode and search filters', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue and SQL experience.',
+        'core_skills' => ['Laravel', 'Vue', 'SQL'],
+        'last_discovery_batch_id' => 'latest-batch-1',
+    ]);
+
+    JobLead::factory()->for($user)->shortlisted()->create([
+        'company_name' => 'Scoped Visible Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-1',
+    ]);
+
+    JobLead::factory()->for($user)->ignored()->create([
+        'company_name' => 'Scoped Ignored Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-1',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Scoped Saved Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-1',
+    ]);
+
+    JobLead::factory()->for($user)->shortlisted()->create([
+        'company_name' => 'Scoped Hybrid Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_HYBRID,
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-1',
+    ]);
+
+    JobLead::factory()->for($user)->shortlisted()->create([
+        'company_name' => 'Other Search Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-1',
+    ]);
+
+    JobLead::factory()->for($user)->shortlisted()->create([
+        'company_name' => 'Scoped Unmatched Lead',
+        'job_title' => 'Python Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['python'],
+        'discovery_batch_id' => 'latest-batch-1',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index', [
+            'lead_status' => JobLead::STATUS_SHORTLISTED,
+            'work_mode' => JobLead::WORK_MODE_REMOTE,
+            'search' => 'Scoped',
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Scoped Visible Match')
+            ->where('latestDiscoveryMatchFunnel.latest_batch_total_count', 6)
+            ->where('latestDiscoveryMatchFunnel.matched_before_default_hiding_count', 5)
+            ->where('latestDiscoveryMatchFunnel.visible_matched_count', 1)
+            ->where('latestDiscoveryMatchFunnel.hidden_ignored_count', 1)
+            ->where('latestDiscoveryMatchFunnel.hidden_international_count', 0)
+            ->where('latestDiscoveryMatchFunnel.hidden_status_filter_count', 1)
+            ->where('latestDiscoveryMatchFunnel.hidden_analysis_readiness_filter_count', 0)
+            ->where('latestDiscoveryMatchFunnel.hidden_analysis_state_filter_count', 0)
+            ->where('latestDiscoveryMatchFunnel.hidden_work_mode_filter_count', 1)
+            ->where('latestDiscoveryMatchFunnel.hidden_search_text_filter_count', 1)
+            ->where('latestDiscoveryMatchFunnel.imported_not_matched_count', 1)
+        );
+});
+
+it('counts limited analysis discovery leads as imported but not considered matched', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue and SQL experience.',
+        'core_skills' => ['Laravel', 'Vue', 'SQL'],
+        'last_discovery_batch_id' => 'latest-batch-2',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Ready Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-2',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Needs Description Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => null,
+        'extracted_keywords' => [],
+        'discovery_batch_id' => 'latest-batch-2',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index', [
+            'analysis_readiness' => JobLead::ANALYSIS_READINESS_READY,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Ready Match')
+            ->where('latestDiscoveryMatchFunnel.latest_batch_total_count', 2)
+            ->where('latestDiscoveryMatchFunnel.matched_before_default_hiding_count', 1)
+            ->where('latestDiscoveryMatchFunnel.visible_matched_count', 1)
+            ->where('latestDiscoveryMatchFunnel.hidden_analysis_readiness_filter_count', 0)
+            ->where('latestDiscoveryMatchFunnel.imported_not_matched_count', 1)
+        );
+});
+
+it('keeps analysis state funnel counts explicit even when missing-analysis leads are not considered matched', function (): void {
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Laravel engineer with Vue and SQL experience.',
+        'core_skills' => ['Laravel', 'Vue', 'SQL'],
+        'last_discovery_batch_id' => 'latest-batch-3',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Analyzed Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => 'Full description',
+        'extracted_keywords' => ['laravel'],
+        'discovery_batch_id' => 'latest-batch-3',
+    ]);
+
+    JobLead::factory()->for($user)->saved()->create([
+        'company_name' => 'Missing Analysis Match',
+        'job_title' => 'Laravel Engineer',
+        'location' => 'Remote Brazil',
+        'work_mode' => JobLead::WORK_MODE_REMOTE,
+        'description_text' => null,
+        'extracted_keywords' => [],
+        'discovery_batch_id' => 'latest-batch-3',
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('matched-jobs.index', [
+            'analysis_state' => JobLead::ANALYSIS_STATE_ANALYZED,
+        ]))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->has('matchedJobs', 1)
+            ->where('matchedJobs.0.company_name', 'Analyzed Match')
+            ->where('latestDiscoveryMatchFunnel.latest_batch_total_count', 2)
+            ->where('latestDiscoveryMatchFunnel.matched_before_default_hiding_count', 1)
+            ->where('latestDiscoveryMatchFunnel.visible_matched_count', 1)
+            ->where('latestDiscoveryMatchFunnel.hidden_analysis_state_filter_count', 0)
+            ->where('latestDiscoveryMatchFunnel.imported_not_matched_count', 1)
+        );
+});

@@ -1,10 +1,16 @@
 - Read `README.md` first.
+- Read `ARCHITECTURE_CONTEXT.md` before substantial product or architecture work.
 - Run `bin/setup` before first change.
 - Run `php artisan test` after every change.
 - Run `npm run build` when frontend files change.
-- Treat `UserProfile` as the primary resume-first automation input.
-- Treat `JobLead` as the source of matched jobs.
+- Treat `UserProfile` as the primary resume-first discovery input.
+- Treat `JobLead` as the central discovery entity and workspace record.
 - Treat `Application` as a secondary workflow.
+- Prioritize discovery volume validation and lead usefulness over new product surfaces.
+- Keep matching deterministic and explainable.
+- Keep URL-only leads valid and honest even without analysis.
+- Only deterministic, source-specific fetching/parsing for explicitly configured sources is allowed.
+- Do not introduce paid, opaque, or AI-based external APIs in the current phase.
 - Keep functions small.
 - Keep files small.
 - Prefer early return.
@@ -15,7 +21,7 @@
 - Add frontend features in `resources/js/Pages` and `resources/js/Components`.
 - Add feature coverage in `tests/Feature`.
 - Scope all user data to the authenticated user.
-- Design the fastest user value around resume-first matching.
+- Design the fastest user value around resume-first discovery and deterministic lead evaluation.
 - Keep screens and manual forms to a minimum.
 - Preserve source context for future ingestion and optimization features.
 - Treat auth, ownership, and validation as critical paths.

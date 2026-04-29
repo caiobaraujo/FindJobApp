@@ -13,6 +13,7 @@ beforeEach(function (): void {
 
 it('creates a markdown diagnostics report with all predefined scenarios', function (): void {
     config()->set('job_discovery.supported_sources', ['larajobs']);
+    config()->set('job_discovery.fixture_supported_sources', ['larajobs']);
     $reportPath = storage_path('app/discovery-diagnostics/latest.md');
 
     $this->artisan('discovery:diagnose --fresh --fixture')
@@ -26,6 +27,12 @@ it('creates a markdown diagnostics report with all predefined scenarios', functi
     expect($report)->toContain('# Discovery Diagnostics')
         ->and($report)->toContain('## Scenario Summary')
         ->and($report)->toContain('## Source Performance')
+        ->and($report)->toContain('Imported | Deduplicated')
+        ->and($report)->toContain('Visible by default | Hidden by default | Ready analysis | Limited analysis')
+        ->and($report)->toContain('Batch observability:')
+        ->and($report)->toContain('Imported vs deduplicated:')
+        ->and($report)->toContain('Hidden by default filters:')
+        ->and($report)->toContain('Analysis coverage:')
         ->and($report)->toContain('## Warnings')
         ->and($report)->toContain('## Recommendations');
 
@@ -47,6 +54,7 @@ it('creates a markdown diagnostics report with all predefined scenarios', functi
 
 it('adds warnings for zero-result searches and hidden-by-default leads', function (): void {
     config()->set('job_discovery.supported_sources', ['larajobs']);
+    config()->set('job_discovery.fixture_supported_sources', ['larajobs']);
     $reportPath = storage_path('app/discovery-diagnostics/latest.md');
 
     $this->artisan('discovery:diagnose --fresh --fixture')
@@ -58,8 +66,55 @@ it('adds warnings for zero-result searches and hidden-by-default leads', functio
         ->and($report)->toContain('hidden from the default Brazil workspace');
 });
 
+it('includes zero-safe observability details for empty scenarios', function (): void {
+    config()->set('job_discovery.supported_sources', ['larajobs']);
+    config()->set('job_discovery.fixture_supported_sources', ['larajobs']);
+    $reportPath = storage_path('app/discovery-diagnostics/latest.md');
+
+    $this->artisan('discovery:diagnose --fresh --fixture')
+        ->assertSuccessful();
+
+    $report = File::get($reportPath);
+
+    expect($report)->toContain('### python')
+        ->and($report)->toContain('Imported vs deduplicated: 0 imported, 0 deduplicated')
+        ->and($report)->toContain('Analysis coverage: 0 ready, 0 limited, 0 missing description, 0 missing keywords');
+});
+
+it('reports company career page usefulness per curated target', function (): void {
+    config()->set('job_discovery.supported_sources', ['company-career-pages']);
+    $reportPath = storage_path('app/discovery-diagnostics/latest.md');
+
+    $this->artisan('discovery:diagnose --fresh --fixture')
+        ->assertSuccessful();
+
+    $report = File::get($reportPath);
+
+    expect($report)->toContain('## Company Career Page Target Performance')
+        ->and($report)->toContain('| Target | Bucket | Action | Fetched | Matched | Imported | Deduplicated | Skipped | Hidden by default | International hidden | Query skip rate | Import rate |')
+        ->and($report)->toContain('Nubank')
+        ->and($report)->toContain('Stone')
+        ->and($report)->toContain('PagBank')
+        ->and($report)->toContain('QuintoAndar')
+        ->and($report)->toContain('VTEX')
+        ->and($report)->toContain('Magazine Luiza')
+        ->and($report)->toContain('strong')
+        ->and($report)->toContain('promising')
+        ->and($report)->toContain('no-signal')
+        ->and($report)->toContain('keep strong targets')
+        ->and($report)->toContain('review promising targets')
+        ->and($report)->toContain('## Company Career Page Target Recommendations')
+        ->and($report)->toContain('Keep strong targets:')
+        ->and($report)->toContain('Review promising targets:')
+        ->and($report)->toContain('Investigate no-signal targets:')
+        ->and($report)->toContain('Company career page targets:')
+        ->and($report)->toContain('100.0%')
+        ->and($report)->toContain('0.0%');
+});
+
 it('reports source failures in the markdown output', function (): void {
     config()->set('job_discovery.supported_sources', ['larajobs', 'python-job-board']);
+    config()->set('job_discovery.fixture_supported_sources', ['larajobs', 'python-job-board']);
     $reportPath = storage_path('app/discovery-diagnostics/latest.md');
 
     Http::fake([

@@ -10,10 +10,13 @@ use App\Http\Requests\StoreJobLeadRequest;
 use App\Http\Requests\UpdateJobLeadRequest;
 use App\Models\JobLead;
 use App\Models\UserProfile;
+use App\Services\JobDiscovery\DiscoverySourceObservability;
 use App\Services\JobDiscovery\JobLeadDiscoveryRunner;
 use App\Services\JobLeadKeywordExtractor;
 use App\Services\JobLeadImportService;
 use App\Services\JobLeadMatchAnalyzer;
+use App\Services\ResumeDiscoverySignalBuilder;
+use App\Services\ResumeDiscoveryQueryProfileResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -34,18 +37,7 @@ class JobLeadController extends Controller
         $filters = $this->normalizedFilters($this->filters($request), $userProfile);
         $matchedOnly = $request->routeIs('matched-jobs.index');
         $detectedResumeSkills = $this->detectedResumeSkills($userProfile);
-        $jobLeads = JobLead::query()
-            ->where('user_id', $request->user()->id)
-            ->visibleInWorkspace($filters['show_ignored'], $filters['lead_status'] ?? null)
-            ->discoveryBatch($this->resolvedDiscoveryBatchId($filters['discovery_batch'] ?? null, $userProfile))
-            ->leadStatus($filters['lead_status'] ?? null)
-            ->analysisReadiness($filters['analysis_readiness'] ?? null)
-            ->workMode($filters['work_mode'] ?? null)
-            ->analysisState($filters['analysis_state'] ?? null)
-            ->orderByPriority()
-            ->search($filters['search'] ?? null)
-            ->get();
-        $jobLeads = $this->filterJobLeadsByLocationScope($jobLeads, $filters['location_scope']);
+        $jobLeads = $this->workspaceJobLeads($request->user()->id, $filters, $userProfile);
 
         if ($filters['is_latest_discovery_view']) {
             Log::info('job lead workspace latest discovery view', [
@@ -82,6 +74,21 @@ class JobLeadController extends Controller
             'resumeReady' => $this->resumeReady($userProfile),
             'resumeNeedsTextInput' => $this->resumeNeedsTextInput($userProfile),
             'matchedJobs' => $matchedJobs,
+            'latestDiscoveryMatchFunnel' => $matchedOnly
+                ? $this->latestDiscoveryMatchFunnel(
+                    $request->user()->id,
+                    $filters,
+                    $userProfile,
+                )
+                : null,
+            'matchedJobsVisibilitySummary' => $matchedOnly
+                ? $this->matchedJobsVisibilitySummary(
+                    $request->user()->id,
+                    $filters,
+                    $userProfile,
+                    count($matchedJobs),
+                )
+                : null,
             'workModes' => JobLead::workModes(),
             'latestDiscoveryBatchId' => $userProfile?->last_discovery_batch_id,
         ]);
@@ -92,7 +99,7 @@ class JobLeadController extends Controller
         $user = $request->user();
         $userProfile = $this->userProfile($user->id);
         $matchedJobsCount = count($this->matchedJobs(
-            JobLead::query()->where('user_id', $user->id)->orderByPriority()->get(),
+            $this->workspaceJobLeads($user->id, $this->defaultMatchedJobsFilters(), $userProfile),
             $userProfile,
         ));
 
@@ -232,13 +239,24 @@ class JobLeadController extends Controller
             ]));
     }
 
-    public function discover(Request $request, JobLeadDiscoveryRunner $jobLeadDiscoveryRunner): RedirectResponse
+    public function discover(
+        Request $request,
+        JobLeadDiscoveryRunner $jobLeadDiscoveryRunner,
+        DiscoverySourceObservability $discoverySourceObservability,
+        ResumeDiscoveryQueryProfileResolver $resumeDiscoveryQueryProfileResolver,
+    ): RedirectResponse
     {
         $validatedData = $request->validate([
             'search_query' => ['nullable', 'string', 'max:120'],
         ]);
         $searchQuery = Str::of((string) ($validatedData['search_query'] ?? ''))->squish()->value();
         $searchQuery = $searchQuery === '' ? null : $searchQuery;
+        $userProfile = $this->userProfile($request->user()->id);
+        $queryProfiles = $resumeDiscoveryQueryProfileResolver->resolve(
+            $searchQuery,
+            $userProfile?->base_resume_text,
+            $userProfile?->core_skills ?? [],
+        );
         $discoveryBatchId = (string) Str::uuid();
         $summary = [
             'fetched' => 0,
@@ -247,16 +265,25 @@ class JobLeadController extends Controller
             'skipped_not_matching_query' => 0,
             'invalid' => 0,
             'failed' => 0,
+            'matched_by_query_profiles' => 0,
+            'created_by_query_profiles' => 0,
         ];
         $sourceResults = [];
 
         foreach ($jobLeadDiscoveryRunner->supportedSources() as $source) {
             try {
-                $sourceSummary = $jobLeadDiscoveryRunner->discoverForUser($request->user()->id, $source, $searchQuery, $discoveryBatchId);
+                $sourceSummary = $jobLeadDiscoveryRunner->discoverForUser(
+                    $request->user()->id,
+                    $source,
+                    $searchQuery,
+                    $discoveryBatchId,
+                    $queryProfiles,
+                );
             } catch (Throwable) {
                 $summary['failed']++;
                 $sourceResults[] = [
                     'source' => $source,
+                    'source_name' => $jobLeadDiscoveryRunner->source($source)->sourceName(),
                     'fetched' => 0,
                     'created' => 0,
                     'duplicates' => 0,
@@ -264,6 +291,10 @@ class JobLeadController extends Controller
                     'invalid' => 0,
                     'failed' => 1,
                     'query_used' => $searchQuery !== null,
+                    'query_profile_keys' => [],
+                    'matched_by_query_profiles' => 0,
+                    'created_by_query_profiles' => 0,
+                    'created_match_details' => [],
                     'discovery_batch_id' => $discoveryBatchId,
                 ];
 
@@ -276,8 +307,11 @@ class JobLeadController extends Controller
             $summary['skipped_not_matching_query'] += $sourceSummary['skipped_not_matching_query'];
             $summary['invalid'] += $sourceSummary['invalid'];
             $summary['failed'] += $sourceSummary['failed'];
+            $summary['matched_by_query_profiles'] += $sourceSummary['matched_by_query_profiles'];
+            $summary['created_by_query_profiles'] += $sourceSummary['created_by_query_profiles'];
             $sourceResults[] = [
                 'source' => $sourceSummary['source'],
+                'source_name' => $jobLeadDiscoveryRunner->source($source)->sourceName(),
                 'fetched' => $sourceSummary['fetched'],
                 'created' => $sourceSummary['created'],
                 'duplicates' => $sourceSummary['duplicates'],
@@ -285,6 +319,10 @@ class JobLeadController extends Controller
                 'invalid' => $sourceSummary['invalid'],
                 'failed' => $sourceSummary['failed'],
                 'query_used' => $sourceSummary['query_used'],
+                'query_profile_keys' => $sourceSummary['query_profile_keys'],
+                'matched_by_query_profiles' => $sourceSummary['matched_by_query_profiles'],
+                'created_by_query_profiles' => $sourceSummary['created_by_query_profiles'],
+                'created_match_details' => $sourceSummary['created_match_details'],
                 'discovery_batch_id' => $sourceSummary['discovery_batch_id'],
             ];
         }
@@ -294,26 +332,42 @@ class JobLeadController extends Controller
         $createdJobLeads = JobLead::query()
             ->where('user_id', $request->user()->id)
             ->where('discovery_batch_id', $discoveryBatchId)
-            ->get(['id', 'lead_status', 'location', 'source_name']);
+            ->get(['id', 'lead_status', 'location', 'source_name', 'description_text', 'extracted_keywords']);
+        $sourceObservability = $discoverySourceObservability->summarizeSources($createdJobLeads, $sourceResults);
 
         Log::info('job discovery completed', [
             'user_id' => $request->user()->id,
             'search_query' => $searchQuery,
+            'query_profile_keys' => array_values(array_unique(array_merge(
+                [],
+                ...array_map(
+                    fn (array $profile): array => [(string) ($profile['key'] ?? '')],
+                    $queryProfiles,
+                ),
+            ))),
             'discovery_batch_id' => $discoveryBatchId,
             'summary' => $summary,
+            'source_observability' => $sourceObservability,
+            'created_match_details' => collect($sourceResults)
+                ->flatMap(fn (array $sourceResult): array => $sourceResult['created_match_details'] ?? [])
+                ->values()
+                ->all(),
             'created_job_leads' => $createdJobLeads
                 ->map(fn (JobLead $jobLead): array => [
                     'id' => $jobLead->id,
                     'location_classification' => $jobLead->locationClassification(),
                     'lead_status' => $jobLead->lead_status,
                     'source_name' => $jobLead->source_name,
+                    'matched_query_profile_keys' => collect($sourceResults)
+                        ->flatMap(fn (array $sourceResult): array => $sourceResult['created_match_details'] ?? [])
+                        ->firstWhere('job_lead_id', (int) $jobLead->id)['query_profile_keys'] ?? [],
                 ])
                 ->all(),
         ]);
 
         return redirect()
             ->route('job-leads.index')
-            ->with('discovery', $sourceResults)
+            ->with('discovery', $sourceObservability)
             ->with('discovery_batch_id', $discoveryBatchId)
             ->with('discovery_created_count', $summary['created'])
             ->with('discovery_search_query', $searchQuery)
@@ -489,6 +543,401 @@ class JobLeadController extends Controller
             'work_mode' => $filters['work_mode'] ?? '',
             'is_latest_discovery_view' => $filters['is_latest_discovery_view'] ?? false,
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array{
+     *     visible_count: int,
+     *     hidden_ignored_count: int,
+     *     hidden_international_count: int,
+     *     total_count: int
+     * }
+     */
+    private function matchedJobsVisibilitySummary(
+        int $userId,
+        array $filters,
+        ?UserProfile $userProfile,
+        int $visibleCount,
+    ): array {
+        $allLocationFilters = $this->filtersIncludingInternational(
+            $this->filtersIncludingIgnored($filters),
+        );
+        $matchedJobs = $this->matchedJobs(
+            $this->workspaceJobLeads($userId, $allLocationFilters, $userProfile),
+            $userProfile,
+        );
+        $totalCount = count($matchedJobs);
+
+        return [
+            'visible_count' => $visibleCount,
+            'hidden_ignored_count' => $this->hiddenIgnoredMatchedCount($matchedJobs, $filters),
+            'hidden_international_count' => $this->hiddenInternationalMatchedCount($matchedJobs, $filters),
+            'total_count' => $totalCount,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array{
+     *     latest_batch_id: string|null,
+     *     latest_batch_total_count: int,
+     *     matched_before_default_hiding_count: int,
+     *     visible_matched_count: int,
+     *     hidden_international_count: int,
+     *     hidden_ignored_count: int,
+     *     hidden_status_filter_count: int,
+     *     hidden_analysis_readiness_filter_count: int,
+     *     hidden_analysis_state_filter_count: int,
+     *     hidden_work_mode_filter_count: int,
+     *     hidden_search_text_filter_count: int,
+     *     imported_not_matched_count: int,
+     *     resume_ready: bool
+     * }|null
+     */
+    private function latestDiscoveryMatchFunnel(
+        int $userId,
+        array $filters,
+        ?UserProfile $userProfile,
+    ): ?array {
+        $latestBatchId = $userProfile?->last_discovery_batch_id;
+
+        if (! is_string($latestBatchId) || trim($latestBatchId) === '') {
+            return null;
+        }
+
+        $latestBatchJobLeads = JobLead::query()
+            ->where('user_id', $userId)
+            ->where('discovery_batch_id', $latestBatchId)
+            ->orderByPriority()
+            ->get();
+
+        $resumeReady = $this->resumeReady($userProfile);
+
+        if (! $resumeReady) {
+            return [
+                'latest_batch_id' => $latestBatchId,
+                'latest_batch_total_count' => $latestBatchJobLeads->count(),
+                'matched_before_default_hiding_count' => 0,
+                'visible_matched_count' => 0,
+                'hidden_international_count' => 0,
+                'hidden_ignored_count' => 0,
+                'hidden_status_filter_count' => 0,
+                'hidden_analysis_readiness_filter_count' => 0,
+                'hidden_analysis_state_filter_count' => 0,
+                'hidden_work_mode_filter_count' => 0,
+                'hidden_search_text_filter_count' => 0,
+                'imported_not_matched_count' => $latestBatchJobLeads->count(),
+                'resume_ready' => false,
+            ];
+        }
+
+        $matchedLatestBatchJobLeads = $this->matchedJobLeads($latestBatchJobLeads, $userProfile);
+        $remainingMatchedJobLeads = $matchedLatestBatchJobLeads;
+        $hiddenIgnoredCount = 0;
+        $hiddenInternationalCount = 0;
+        $hiddenStatusFilterCount = 0;
+        $hiddenAnalysisReadinessFilterCount = 0;
+        $hiddenAnalysisStateFilterCount = 0;
+        $hiddenWorkModeFilterCount = 0;
+        $hiddenSearchTextFilterCount = 0;
+
+        $remainingMatchedJobLeads = $this->consumeFilteredJobLeads(
+            $remainingMatchedJobLeads,
+            fn ($jobLeads) => $this->filterJobLeadsByIgnoredVisibility($jobLeads, $filters),
+            $hiddenIgnoredCount,
+        );
+        $remainingMatchedJobLeads = $this->consumeFilteredJobLeads(
+            $remainingMatchedJobLeads,
+            fn ($jobLeads) => $this->filterJobLeadsByLocationScope($jobLeads, $filters['location_scope']),
+            $hiddenInternationalCount,
+        );
+        $remainingMatchedJobLeads = $this->consumeFilteredJobLeads(
+            $remainingMatchedJobLeads,
+            fn ($jobLeads) => $this->filterJobLeadsByLeadStatus($jobLeads, $filters['lead_status'] ?? null),
+            $hiddenStatusFilterCount,
+        );
+        $remainingMatchedJobLeads = $this->consumeFilteredJobLeads(
+            $remainingMatchedJobLeads,
+            fn ($jobLeads) => $this->filterJobLeadsByAnalysisReadiness($jobLeads, $filters['analysis_readiness'] ?? null),
+            $hiddenAnalysisReadinessFilterCount,
+        );
+        $remainingMatchedJobLeads = $this->consumeFilteredJobLeads(
+            $remainingMatchedJobLeads,
+            fn ($jobLeads) => $this->filterJobLeadsByAnalysisState($jobLeads, $filters['analysis_state'] ?? null),
+            $hiddenAnalysisStateFilterCount,
+        );
+        $remainingMatchedJobLeads = $this->consumeFilteredJobLeads(
+            $remainingMatchedJobLeads,
+            fn ($jobLeads) => $this->filterJobLeadsByWorkMode($jobLeads, $filters['work_mode'] ?? null),
+            $hiddenWorkModeFilterCount,
+        );
+        $remainingMatchedJobLeads = $this->consumeFilteredJobLeads(
+            $remainingMatchedJobLeads,
+            fn ($jobLeads) => $this->filterJobLeadsBySearchText($jobLeads, $filters['search'] ?? null),
+            $hiddenSearchTextFilterCount,
+        );
+
+        return [
+            'latest_batch_id' => $latestBatchId,
+            'latest_batch_total_count' => $latestBatchJobLeads->count(),
+            'matched_before_default_hiding_count' => $matchedLatestBatchJobLeads->count(),
+            'visible_matched_count' => $remainingMatchedJobLeads->count(),
+            'hidden_international_count' => $hiddenInternationalCount,
+            'hidden_ignored_count' => $hiddenIgnoredCount,
+            'hidden_status_filter_count' => $hiddenStatusFilterCount,
+            'hidden_analysis_readiness_filter_count' => $hiddenAnalysisReadinessFilterCount,
+            'hidden_analysis_state_filter_count' => $hiddenAnalysisStateFilterCount,
+            'hidden_work_mode_filter_count' => $hiddenWorkModeFilterCount,
+            'hidden_search_text_filter_count' => $hiddenSearchTextFilterCount,
+            'imported_not_matched_count' => $latestBatchJobLeads->count() - $matchedLatestBatchJobLeads->count(),
+            'resume_ready' => true,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function defaultMatchedJobsFilters(): array
+    {
+        return [
+            'analysis_readiness' => '',
+            'analysis_state' => '',
+            'discovery_batch' => '',
+            'lead_status' => '',
+            'location_scope' => JobLead::LOCATION_SCOPE_BRAZIL,
+            'search' => '',
+            'show_ignored' => false,
+            'work_mode' => '',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function filtersIncludingIgnored(array $filters): array
+    {
+        if (($filters['show_ignored'] ?? false) || ($filters['lead_status'] ?? null) === JobLead::STATUS_IGNORED) {
+            return $filters;
+        }
+
+        return [
+            ...$filters,
+            'show_ignored' => true,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return array<string, mixed>
+     */
+    private function filtersIncludingInternational(array $filters): array
+    {
+        if (($filters['location_scope'] ?? JobLead::LOCATION_SCOPE_BRAZIL) === JobLead::LOCATION_SCOPE_ALL) {
+            return $filters;
+        }
+
+        return [
+            ...$filters,
+            'location_scope' => JobLead::LOCATION_SCOPE_ALL,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $filters
+     * @return \Illuminate\Support\Collection<int, JobLead>
+     */
+    private function workspaceJobLeads(int $userId, array $filters, ?UserProfile $userProfile)
+    {
+        $jobLeads = JobLead::query()
+            ->where('user_id', $userId)
+            ->visibleInWorkspace($filters['show_ignored'], $filters['lead_status'] ?? null)
+            ->discoveryBatch($this->resolvedDiscoveryBatchId($filters['discovery_batch'] ?? null, $userProfile))
+            ->leadStatus($filters['lead_status'] ?? null)
+            ->analysisReadiness($filters['analysis_readiness'] ?? null)
+            ->workMode($filters['work_mode'] ?? null)
+            ->analysisState($filters['analysis_state'] ?? null)
+            ->orderByPriority()
+            ->search($filters['search'] ?? null)
+            ->get();
+
+        return $this->filterJobLeadsByLocationScope($jobLeads, $filters['location_scope']);
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     */
+    private function matchedJobCount($jobLeads, ?UserProfile $userProfile): int
+    {
+        return count($this->matchedJobs($jobLeads, $userProfile));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $matchedJobs
+     */
+    private function hiddenIgnoredMatchedCount(array $matchedJobs, array $filters): int
+    {
+        if (($filters['show_ignored'] ?? false) || ($filters['lead_status'] ?? null) === JobLead::STATUS_IGNORED) {
+            return 0;
+        }
+
+        return count(array_filter(
+            $matchedJobs,
+            fn (array $jobLead): bool => ($jobLead['lead_status'] ?? null) === JobLead::STATUS_IGNORED,
+        ));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $matchedJobs
+     */
+    private function hiddenInternationalMatchedCount(array $matchedJobs, array $filters): int
+    {
+        if (($filters['location_scope'] ?? JobLead::LOCATION_SCOPE_BRAZIL) === JobLead::LOCATION_SCOPE_ALL) {
+            return 0;
+        }
+
+        return count(array_filter(
+            $matchedJobs,
+            fn (array $jobLead): bool => ($jobLead['location_classification'] ?? null) === JobLead::LOCATION_CLASSIFICATION_INTERNATIONAL,
+        ));
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     */
+    private function matchedJobLeads($jobLeads, ?UserProfile $userProfile)
+    {
+        $matchedJobIds = collect($this->matchedJobs($jobLeads, $userProfile))
+            ->pluck('id')
+            ->all();
+
+        return $jobLeads
+            ->filter(fn (JobLead $jobLead): bool => in_array($jobLead->id, $matchedJobIds, true))
+            ->values();
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     * @param callable(\Illuminate\Support\Collection<int, JobLead>): \Illuminate\Support\Collection<int, JobLead> $filter
+     * @param-out int $hiddenCount
+     * @return \Illuminate\Support\Collection<int, JobLead>
+     */
+    private function consumeFilteredJobLeads($jobLeads, callable $filter, int &$hiddenCount)
+    {
+        $filteredJobLeads = $filter($jobLeads)->values();
+        $hiddenCount = $jobLeads->count() - $filteredJobLeads->count();
+
+        return $filteredJobLeads;
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     */
+    private function filterJobLeadsByIgnoredVisibility($jobLeads, array $filters)
+    {
+        if (($filters['show_ignored'] ?? false) || ($filters['lead_status'] ?? null) === JobLead::STATUS_IGNORED) {
+            return $jobLeads->values();
+        }
+
+        return $jobLeads
+            ->filter(fn (JobLead $jobLead): bool => $jobLead->lead_status !== JobLead::STATUS_IGNORED)
+            ->values();
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     */
+    private function filterJobLeadsByLeadStatus($jobLeads, ?string $leadStatus)
+    {
+        if (blank($leadStatus)) {
+            return $jobLeads->values();
+        }
+
+        return $jobLeads
+            ->filter(fn (JobLead $jobLead): bool => $jobLead->lead_status === $leadStatus)
+            ->values();
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     */
+    private function filterJobLeadsByAnalysisReadiness($jobLeads, ?string $analysisReadiness)
+    {
+        if (blank($analysisReadiness)) {
+            return $jobLeads->values();
+        }
+
+        if ($analysisReadiness === JobLead::ANALYSIS_READINESS_READY) {
+            return $jobLeads
+                ->filter(fn (JobLead $jobLead): bool => ! $jobLead->hasLimitedAnalysis())
+                ->values();
+        }
+
+        if ($analysisReadiness !== JobLead::ANALYSIS_READINESS_NEEDS_DESCRIPTION) {
+            return $jobLeads->values();
+        }
+
+        return $jobLeads
+            ->filter(fn (JobLead $jobLead): bool => $jobLead->hasLimitedAnalysis())
+            ->values();
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     */
+    private function filterJobLeadsByAnalysisState($jobLeads, ?string $analysisState)
+    {
+        if (blank($analysisState)) {
+            return $jobLeads->values();
+        }
+
+        if ($analysisState === JobLead::ANALYSIS_STATE_ANALYZED) {
+            return $jobLeads
+                ->filter(fn (JobLead $jobLead): bool => ! $jobLead->hasLimitedAnalysis())
+                ->values();
+        }
+
+        if ($analysisState !== JobLead::ANALYSIS_STATE_MISSING) {
+            return $jobLeads->values();
+        }
+
+        return $jobLeads
+            ->filter(fn (JobLead $jobLead): bool => $jobLead->hasLimitedAnalysis())
+            ->values();
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     */
+    private function filterJobLeadsByWorkMode($jobLeads, ?string $workMode)
+    {
+        if (blank($workMode)) {
+            return $jobLeads->values();
+        }
+
+        return $jobLeads
+            ->filter(fn (JobLead $jobLead): bool => $jobLead->work_mode === $workMode)
+            ->values();
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, JobLead> $jobLeads
+     */
+    private function filterJobLeadsBySearchText($jobLeads, ?string $search)
+    {
+        if (blank($search)) {
+            return $jobLeads->values();
+        }
+
+        $search = mb_strtolower((string) $search);
+
+        return $jobLeads
+            ->filter(function (JobLead $jobLead) use ($search): bool {
+                return str_contains(mb_strtolower((string) $jobLead->company_name), $search)
+                    || str_contains(mb_strtolower((string) $jobLead->job_title), $search);
+            })
+            ->values();
     }
 
     /**
@@ -1077,35 +1526,10 @@ class JobLeadController extends Controller
             return [];
         }
 
-        $skills = [];
-
-        foreach ($userProfile->core_skills ?? [] as $skill) {
-            if (! is_string($skill)) {
-                continue;
-            }
-
-            $normalizedSkill = $this->nullableDescriptionText($skill);
-
-            if ($normalizedSkill === null) {
-                continue;
-            }
-
-            $skills[] = mb_strtolower($normalizedSkill);
-        }
-
-        if (filled($userProfile->base_resume_text)) {
-            $analysis = app(JobLeadKeywordExtractor::class)->analyze($userProfile->base_resume_text);
-
-            foreach ($analysis['extracted_keywords'] as $keyword) {
-                if (! is_string($keyword)) {
-                    continue;
-                }
-
-                $skills[] = $keyword;
-            }
-        }
-
-        return array_slice(array_values(array_unique($skills)), 0, 10);
+        return app(ResumeDiscoverySignalBuilder::class)->detectedSkills(
+            $userProfile->base_resume_text,
+            $userProfile->core_skills ?? [],
+        );
     }
 
     /**
