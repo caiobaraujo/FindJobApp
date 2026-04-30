@@ -99,3 +99,27 @@ it('extracts valid gupy jobs from additional curated fixture targets', function 
         ->and($parsed['entries'][0]['job_title'])->toBe('Data Platform Engineer')
         ->and($parsed['entries'][0]['company_name'])->toBe('Positivo Tecnologia');
 });
+
+it('keeps broader deterministic it roles while still rejecting non technical gupy jobs', function (): void {
+    $html = file_get_contents(__DIR__.'/../Fixtures/gupy_public_jobs_broader_it_listing.html');
+
+    expect($html)->not->toBeFalse();
+
+    $parsed = app(GupyPublicJobsDiscoverySource::class)->parseListingHtmlWithDiagnostics($html, [
+        'listing_url' => 'https://example.gupy.io/',
+        'target_name' => 'Example Tech',
+        'company_name' => 'Example Tech',
+        'platform' => 'gupy',
+        'parser_strategy' => 'gupy_listing',
+    ]);
+
+    expect($parsed['candidate_links'])->toBe(4)
+        ->and($parsed['skipped_expired'])->toBe(0)
+        ->and($parsed['skipped_missing_company'])->toBe(0)
+        ->and($parsed['entries'])->toHaveCount(3)
+        ->and(array_column($parsed['entries'], 'job_title'))->toBe([
+            'Analista de Infraestrutura Senior',
+            'Consultor SAP CPI SR',
+            'Analista Seguranca da Informacao SR (Fortinet)',
+        ]);
+});

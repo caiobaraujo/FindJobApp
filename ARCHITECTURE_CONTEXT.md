@@ -324,6 +324,8 @@ Fixture mode:
 
 `gupy-public-jobs` fixture mode now uses deterministic curated Gupy listing and detail HTML fixtures so import counts, deduplication, per-company diagnostics, and detail-enrichment behavior remain repeatable.
 
+The curated Gupy parser should keep broader deterministic IT roles when the public listing text is explicit, including infrastructure, SAP, information security, field service, IT operations, and access-management roles. It must still reject generic non-technology business roles from the same public boards.
+
 Fixture-only negative Gupy targets may remain visible in diagnostics to preserve deterministic missing-company coverage, but URL-only negative targets must not drive keep/review/deprioritize recommendations as if they were real curated companies.
 
 ---
