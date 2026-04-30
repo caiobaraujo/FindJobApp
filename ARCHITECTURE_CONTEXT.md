@@ -278,6 +278,8 @@ Implemented:
     - company name required from the curated target or explicit page evidence
 - Current curated targets include:
     - Afya
+    - Atento TI
+    - Grupo Autoglass Administrativo
     - Omie
     - FCamara
     - Minsait
@@ -285,9 +287,13 @@ Implemented:
     - Gaudium
     - Montreal
     - CIGAM
+    - Gupy Tech
+    - Pmweb
     - Positivo Tecnologia
+    - Teltex Tecnologia
     - Gran
     - JBS
+    - Vsoft Tecnologia
 
 Enabled by default:
 
