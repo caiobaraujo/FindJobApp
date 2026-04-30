@@ -125,7 +125,7 @@ $fixtureGupyPublicJobTargets = [
     [
         'name' => 'Omie',
         'parser_strategy' => 'gupy_listing',
-        'listing_url' => 'https://omie.gupy.io/',
+        'listing_url' => 'https://carreirasomie.gupy.io/',
     ],
     [
         'name' => 'FCamara',
@@ -135,7 +135,17 @@ $fixtureGupyPublicJobTargets = [
     [
         'name' => 'Gran',
         'parser_strategy' => 'gupy_listing',
-        'listing_url' => 'https://gran.gupy.io/',
+        'listing_url' => 'https://vemsergran.gupy.io/',
+    ],
+    [
+        'name' => 'CIGAM',
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://vempracigam.gupy.io/',
+    ],
+    [
+        'name' => 'JBS',
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://grupojbs.gupy.io/',
     ],
     [
         'name' => 'Minsait',
@@ -195,12 +205,16 @@ return [
             'https://afya.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_afya_listing.html'),
             'https://afya.gupy.io/jobs/71001' => base_path('tests/Fixtures/gupy_public_jobs_backend_python_detail.html'),
             'https://afya.gupy.io/jobs/71002' => base_path('tests/Fixtures/gupy_public_jobs_frontend_javascript_detail.html'),
-            'https://omie.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_omie_listing.html'),
-            'https://omie.gupy.io/jobs/72001' => base_path('tests/Fixtures/gupy_public_jobs_backend_php_detail.html'),
+            'https://carreirasomie.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_omie_listing.html'),
+            'https://carreirasomie.gupy.io/jobs/72001' => base_path('tests/Fixtures/gupy_public_jobs_backend_php_detail.html'),
             'https://fcamara.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_fcamara_listing.html'),
             'https://fcamara.gupy.io/jobs/73001' => base_path('tests/Fixtures/gupy_public_jobs_devops_detail.html'),
-            'https://gran.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_gran_listing.html'),
-            'https://gran.gupy.io/jobs/74001' => base_path('tests/Fixtures/gupy_public_jobs_qa_data_detail.html'),
+            'https://vemsergran.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_gran_listing.html'),
+            'https://vemsergran.gupy.io/jobs/74001' => base_path('tests/Fixtures/gupy_public_jobs_qa_data_detail.html'),
+            'https://vempracigam.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_cigam_listing.html'),
+            'https://vempracigam.gupy.io/jobs/78001' => base_path('tests/Fixtures/gupy_public_jobs_cigam_infra_detail.html'),
+            'https://grupojbs.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_jbs_listing.html'),
+            'https://grupojbs.gupy.io/jobs/79001' => base_path('tests/Fixtures/gupy_public_jobs_jbs_security_detail.html'),
             'https://minsait.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_minsait_listing.html'),
             'https://minsait.gupy.io/jobs/76001' => base_path('tests/Fixtures/gupy_public_jobs_backend_java_detail.html'),
             'https://positivotecnologia.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_positivo_listing.html'),
@@ -327,7 +341,7 @@ return [
         [
             'name' => 'Omie',
             'parser_strategy' => 'gupy_listing',
-            'listing_url' => 'https://omie.gupy.io/',
+            'listing_url' => 'https://carreirasomie.gupy.io/',
         ],
         [
             'name' => 'FCamara',
@@ -357,7 +371,7 @@ return [
         [
             'name' => 'CIGAM',
             'parser_strategy' => 'gupy_listing',
-            'listing_url' => 'https://cigam.gupy.io/',
+            'listing_url' => 'https://vempracigam.gupy.io/',
         ],
         [
             'name' => 'Positivo Tecnologia',
@@ -367,12 +381,12 @@ return [
         [
             'name' => 'Gran',
             'parser_strategy' => 'gupy_listing',
-            'listing_url' => 'https://gran.gupy.io/',
+            'listing_url' => 'https://vemsergran.gupy.io/',
         ],
         [
             'name' => 'JBS',
             'parser_strategy' => 'gupy_listing',
-            'listing_url' => 'https://jbs.gupy.io/',
+            'listing_url' => 'https://grupojbs.gupy.io/',
         ],
     ],
 ];

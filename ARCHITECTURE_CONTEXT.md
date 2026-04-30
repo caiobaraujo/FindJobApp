@@ -326,6 +326,8 @@ Fixture mode:
 
 The curated Gupy parser should keep broader deterministic IT roles when the public listing text is explicit, including infrastructure, SAP, information security, field service, IT operations, and access-management roles. It must still reject generic non-technology business roles from the same public boards.
 
+The curated live Gupy inventory must stay pinned to current official public job-board subdomains. When a company moves from an outdated public subdomain to a new official one, the curated target should be updated directly rather than left to accumulate noisy failed diagnostics.
+
 Fixture-only negative Gupy targets may remain visible in diagnostics to preserve deterministic missing-company coverage, but URL-only negative targets must not drive keep/review/deprioritize recommendations as if they were real curated companies.
 
 ---
