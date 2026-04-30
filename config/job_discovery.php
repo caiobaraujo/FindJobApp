@@ -183,9 +183,19 @@ $fixtureGupyPublicJobTargets = [
         'listing_url' => 'https://autoglassadministrativo.gupy.io/',
     ],
     [
+        'name' => 'Asaas',
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://asaas.gupy.io/',
+    ],
+    [
         'name' => 'Atento TI',
         'parser_strategy' => 'gupy_listing',
         'listing_url' => 'https://atentoti.gupy.io/',
+    ],
+    [
+        'name' => 'Zenvia',
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://zenvia.gupy.io/',
     ],
     [
         'name' => null,
@@ -259,8 +269,12 @@ return [
             'https://pmweb.gupy.io/jobs/10661413' => base_path('tests/Fixtures/gupy_public_jobs_pmweb_data_detail.html'),
             'https://autoglassadministrativo.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_autoglass_listing.html'),
             'https://autoglassadministrativo.gupy.io/jobs/11199204' => base_path('tests/Fixtures/gupy_public_jobs_autoglass_data_detail.html'),
+            'https://asaas.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_asaas_listing.html'),
+            'https://asaas.gupy.io/jobs/11223001' => base_path('tests/Fixtures/gupy_public_jobs_asaas_analytics_detail.html'),
             'https://atentoti.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_atento_listing.html'),
             'https://atentoti.gupy.io/jobs/11133219' => base_path('tests/Fixtures/gupy_public_jobs_atento_fullstack_detail.html'),
+            'https://zenvia.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_zenvia_listing.html'),
+            'https://zenvia.gupy.io/jobs/11047855' => base_path('tests/Fixtures/gupy_public_jobs_zenvia_backend_detail.html'),
             'https://mystery.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_mystery_listing.html'),
         ],
     ],
@@ -456,9 +470,19 @@ return [
             'listing_url' => 'https://autoglassadministrativo.gupy.io/',
         ],
         [
+            'name' => 'Asaas',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://asaas.gupy.io/',
+        ],
+        [
             'name' => 'Atento TI',
             'parser_strategy' => 'gupy_listing',
             'listing_url' => 'https://atentoti.gupy.io/',
+        ],
+        [
+            'name' => 'Zenvia',
+            'parser_strategy' => 'gupy_listing',
+            'listing_url' => 'https://zenvia.gupy.io/',
         ],
     ],
 ];

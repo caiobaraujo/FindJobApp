@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'resume_variant_model' => env('OPENAI_RESUME_VARIANT_MODEL', 'gpt-5-mini'),
+    ],
+
 ];

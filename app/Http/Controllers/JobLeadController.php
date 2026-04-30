@@ -9,6 +9,7 @@ use App\Http\Requests\ImportJobLeadFromUrlRequest;
 use App\Http\Requests\StoreJobLeadRequest;
 use App\Http\Requests\UpdateJobLeadRequest;
 use App\Models\JobLead;
+use App\Models\ResumeVariant;
 use App\Models\UserProfile;
 use App\Services\JobDiscovery\DiscoverySourceObservability;
 use App\Services\JobDiscovery\JobDiscoveryQueryMatcher;
@@ -411,12 +412,22 @@ class JobLeadController extends Controller
     public function edit(JobLead $jobLead, Request $request): Response
     {
         $this->authorizeOwner($jobLead, $request);
+        $userProfile = $this->userProfile($request->user()->id);
 
         return Inertia::render('JobLeads/Edit', [
             'jobLead' => $this->jobLeadData($jobLead),
             'matchAnalysis' => $this->matchAnalysis($jobLead, $request->user()->id),
             'leadStatuses' => JobLead::leadStatuses(),
             'workModes' => JobLead::workModes(),
+            'resumeVariantModes' => $this->resumeVariantModes(),
+            'resumeVariants' => $this->resumeVariantData($jobLead),
+            'resumeVariantRequirements' => [
+                'has_resume_text' => $userProfile !== null && filled($userProfile->base_resume_text),
+                'has_job_description' => filled($jobLead->description_text),
+            ],
+            'canGenerateResumeVariant' => $userProfile !== null
+                && filled($userProfile->base_resume_text)
+                && filled($jobLead->description_text),
         ]);
     }
 
@@ -1272,6 +1283,48 @@ class JobLeadController extends Controller
             'lead_status' => $jobLead->lead_status,
             'discovered_at' => $jobLead->discovered_at?->toDateString(),
         ];
+    }
+
+    /**
+     * @return list<array<string, string>>
+     */
+    private function resumeVariantModes(): array
+    {
+        return [
+            [
+                'value' => ResumeVariant::MODE_FAITHFUL,
+                'label' => 'Faithful',
+                'description' => 'Use only skills already present in your resume.',
+            ],
+            [
+                'value' => ResumeVariant::MODE_ATS_BOOST,
+                'label' => 'ATS boost',
+                'description' => 'Add job keywords with careful familiarity or exposure language.',
+            ],
+            [
+                'value' => ResumeVariant::MODE_ATS_SAFE,
+                'label' => 'ATS safe',
+                'description' => 'Add job keywords with neutral alignment or interest language.',
+            ],
+        ];
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function resumeVariantData(JobLead $jobLead): array
+    {
+        return $jobLead->resumeVariants()
+            ->latest()
+            ->limit(5)
+            ->get()
+            ->map(fn (ResumeVariant $resumeVariant): array => [
+                'id' => $resumeVariant->id,
+                'mode' => $resumeVariant->mode,
+                'generated_text' => $resumeVariant->generated_text,
+                'created_at' => $resumeVariant->created_at?->toIso8601String(),
+            ])
+            ->all();
     }
 
     /**

@@ -22,8 +22,8 @@ it('imports deterministic leads from curated gupy public job fixtures', function
         'user_id' => $user->id,
         'source' => 'gupy-public-jobs',
     ])
-        ->expectsOutput('Fetched: 17')
-        ->expectsOutput('Created: 15')
+        ->expectsOutput('Fetched: 19')
+        ->expectsOutput('Created: 17')
         ->expectsOutput('Duplicates skipped: 0')
         ->expectsOutput('Invalid skipped: 0')
         ->expectsOutput('Failed: 0')
@@ -40,6 +40,7 @@ it('imports deterministic leads from curated gupy public job fixtures', function
 
     expect($countsByCompany)->toBe([
         'Afya' => 2,
+        'Asaas' => 1,
         'Atento TI' => 1,
         'CIGAM' => 1,
         'FCamara' => 1,
@@ -53,6 +54,7 @@ it('imports deterministic leads from curated gupy public job fixtures', function
         'Positivo Tecnologia' => 1,
         'Teltex Tecnologia' => 1,
         'Vsoft Tecnologia' => 1,
+        'Zenvia' => 1,
     ]);
 
     $cigamLead = JobLead::query()
@@ -86,14 +88,14 @@ it('deduplicates deterministic gupy public leads across repeated runs', function
         'user_id' => $user->id,
         'source' => 'gupy-public-jobs',
     ])
-        ->expectsOutput('Fetched: 17')
+        ->expectsOutput('Fetched: 19')
         ->expectsOutput('Created: 0')
-        ->expectsOutput('Duplicates skipped: 15')
+        ->expectsOutput('Duplicates skipped: 17')
         ->expectsOutput('Invalid skipped: 0')
         ->expectsOutput('Failed: 0')
         ->assertExitCode(0);
 
-    expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(15);
+    expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(17);
 });
 
 it('exposes per-company diagnostics for the gupy public jobs source', function (): void {
@@ -107,9 +109,9 @@ it('exposes per-company diagnostics for the gupy public jobs source', function (
         discoveryBatchId: 'batch-gupy-public-jobs',
     );
 
-    expect($summary['created'])->toBe(15)
+    expect($summary['created'])->toBe(17)
         ->and($summary['duplicates'])->toBe(0)
-        ->and($summary['target_diagnostics'])->toHaveCount(15)
+        ->and($summary['target_diagnostics'])->toHaveCount(17)
         ->and(collect($summary['target_diagnostics'])->firstWhere('target_name', 'Afya')['fetched_candidates'])->toBe(3)
         ->and(collect($summary['target_diagnostics'])->firstWhere('target_name', 'Afya')['matched_candidates'])->toBe(2)
         ->and(collect($summary['target_diagnostics'])->firstWhere('target_name', 'Afya')['imported'])->toBe(2)
@@ -126,7 +128,9 @@ it('exposes per-company diagnostics for the gupy public jobs source', function (
         ->and(collect($summary['target_diagnostics'])->firstWhere('target_name', 'Teltex Tecnologia')['imported'])->toBe(1)
         ->and(collect($summary['target_diagnostics'])->firstWhere('target_name', 'Pmweb')['imported'])->toBe(1)
         ->and(collect($summary['target_diagnostics'])->firstWhere('target_name', 'Grupo Autoglass Administrativo')['imported'])->toBe(1)
-        ->and(collect($summary['target_diagnostics'])->firstWhere('target_name', 'Atento TI')['imported'])->toBe(1);
+        ->and(collect($summary['target_diagnostics'])->firstWhere('target_name', 'Asaas')['imported'])->toBe(1)
+        ->and(collect($summary['target_diagnostics'])->firstWhere('target_name', 'Atento TI')['imported'])->toBe(1)
+        ->and(collect($summary['target_diagnostics'])->firstWhere('target_name', 'Zenvia')['imported'])->toBe(1);
 
     $mystery = collect($summary['target_diagnostics'])
         ->firstWhere('target_identifier', 'https://mystery.gupy.io/');
@@ -148,7 +152,7 @@ it('supports deterministic query filtering for gupy public jobs', function (): v
         'source' => 'gupy-public-jobs',
         '--query' => 'python',
     ])
-        ->expectsOutput('Fetched: 17')
+        ->expectsOutput('Fetched: 19')
         ->assertExitCode(0);
 });
 
@@ -188,10 +192,10 @@ it('supports javascript frontend backend and remoto queries for gupy public jobs
         discoveryBatchId: 'batch-gupy-remoto',
     );
 
-    expect($javascriptSummary['created'])->toBe(3)
+    expect($javascriptSummary['created'])->toBe(4)
         ->and($frontendSummary['created'])->toBe(1)
-        ->and($backendSummary['created'])->toBe(3)
-        ->and($remotoSummary['created'])->toBe(9);
+        ->and($backendSummary['created'])->toBe(4)
+        ->and($remotoSummary['created'])->toBe(10);
 });
 
 it('uses resume-derived query profiles with gupy public jobs during discovery', function (): void {

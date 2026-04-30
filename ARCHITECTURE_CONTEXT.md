@@ -114,6 +114,16 @@ Secondary entity.
 - Created after a lead becomes relevant
 - Must not drive architecture decisions
 
+### ResumeVariant
+
+Additive portfolio feature.
+
+- Belongs to a user
+- Belongs to a selected `JobLead`
+- Stores a generated resume variant for one explicit mode
+- Must not affect discovery, matching, ranking, or workspace filtering
+- Uses the existing `UserProfile` resume text plus `JobLead` description context only
+
 ---
 
 ## Non-Negotiable Constraints
@@ -128,6 +138,7 @@ Secondary entity.
 - Do not introduce paid, opaque, or AI-based external APIs
 - Discovery must be deterministic and testable with fixtures
 - Matched and missing job keywords must be computed from canonical taxonomy-based resume signals, not raw substring matching against resume text
+- Exception: AI is allowed only for explicit user-triggered `ResumeVariant` generation and must stay isolated from discovery, matching, ranking, and workspace behavior
 
 ---
 
@@ -286,6 +297,7 @@ Implemented:
     - Global Hitss
     - Gaudium
     - Montreal
+    - Asaas
     - CIGAM
     - Gupy Tech
     - Pmweb
@@ -294,6 +306,7 @@ Implemented:
     - Gran
     - JBS
     - Vsoft Tecnologia
+    - Zenvia
 
 Enabled by default:
 

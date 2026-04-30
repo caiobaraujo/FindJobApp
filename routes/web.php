@@ -3,6 +3,7 @@
 use App\Http\Controllers\ApplicationController;
 use App\Http\Controllers\JobLeadController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ResumeVariantController;
 use App\Http\Controllers\UserProfileController;
 use Illuminate\Foundation\Application;
 use Illuminate\Http\Request;
@@ -42,6 +43,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/job-leads/import', [JobLeadController::class, 'importFromUrl'])->name('job-leads.import');
     Route::post('/job-leads/import/post', [JobLeadController::class, 'importFromPost'])->name('job-leads.import-post');
     Route::post('/job-leads/import/bulk', [JobLeadController::class, 'bulkImportFromUrls'])->name('job-leads.bulk-import');
+    Route::post('/job-leads/{jobLead}/resume-variants', [ResumeVariantController::class, 'store'])
+        ->name('job-leads.resume-variants.store');
     Route::resource('job-leads', JobLeadController::class)->except(['show']);
     Route::patch('/applications/{application}/status', [ApplicationController::class, 'updateStatus'])
         ->name('applications.status.update');

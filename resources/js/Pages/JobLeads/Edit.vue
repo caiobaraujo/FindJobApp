@@ -1,5 +1,6 @@
 <script setup>
 import JobLeadMatchCard from '@/Components/JobLeadMatchCard.vue';
+import ResumeVariantCard from '@/Components/ResumeVariantCard.vue';
 import AppShell from '@/Components/ui/AppShell.vue';
 import JobLeadForm from '@/Components/JobLeadForm.vue';
 import { useI18n } from '@/composables/useI18n';
@@ -20,6 +21,22 @@ const props = defineProps({
     },
     leadStatuses: {
         type: Array,
+        required: true,
+    },
+    resumeVariantModes: {
+        type: Array,
+        required: true,
+    },
+    resumeVariantRequirements: {
+        type: Object,
+        required: true,
+    },
+    resumeVariants: {
+        type: Array,
+        required: true,
+    },
+    canGenerateResumeVariant: {
+        type: Boolean,
         required: true,
     },
     workModes: {
@@ -194,6 +211,19 @@ function deleteJobLead() {
                 :description="t('job_lead_edit.resume_match_description', 'Compare this job lead against your resume profile to see what your current base resume already covers and what is still missing.')"
             >
                 <JobLeadMatchCard :analysis="matchAnalysis" />
+            </SectionCard>
+
+            <SectionCard
+                :title="t('job_lead_edit.resume_variant_title', 'Tailored resume variants')"
+                :description="t('job_lead_edit.resume_variant_description', 'Generate a small ATS-oriented version of your resume for this lead without changing discovery or workspace behavior.')"
+            >
+                <ResumeVariantCard
+                    :job-lead-id="jobLead.id"
+                    :modes="resumeVariantModes"
+                    :requirements="resumeVariantRequirements"
+                    :variants="resumeVariants"
+                    :can-generate="canGenerateResumeVariant"
+                />
             </SectionCard>
 
             <SectionCard

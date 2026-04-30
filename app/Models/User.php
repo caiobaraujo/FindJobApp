@@ -52,4 +52,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(Application::class);
     }
+
+    public function resumeVariants(): HasMany
+    {
+        return $this->hasMany(ResumeVariant::class);
+    }
 }
