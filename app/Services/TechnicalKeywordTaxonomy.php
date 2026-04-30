@@ -142,6 +142,7 @@ class TechnicalKeywordTaxonomy
                 'git' => ['aliases' => ['git']],
                 'github_actions' => ['aliases' => ['github actions']],
                 'devops' => ['aliases' => ['devops', 'dev ops']],
+                'observability' => ['aliases' => ['observability', 'observabilidade']],
             ],
             'testing' => [
                 'testing' => ['aliases' => ['testing', 'testes', 'automated testing']],
@@ -179,6 +180,7 @@ class TechnicalKeywordTaxonomy
             ],
             'architecture' => [
                 'microservices' => ['aliases' => ['microservices', 'micro services', 'micro-servicos', 'microservicos']],
+                'middleware' => ['aliases' => ['middleware']],
                 'rest_api' => [
                     'aliases' => ['rest', 'rest api', 'restful api', 'restful apis'],
                     'requires_context' => ['api', 'backend', 'endpoint', 'http', 'integration', 'microservices', 'service'],
@@ -204,6 +206,9 @@ class TechnicalKeywordTaxonomy
                 'communication' => ['aliases' => ['communication', 'comunicacao']],
                 'product' => ['aliases' => ['product', 'produto']],
                 'design' => ['aliases' => ['design']],
+            ],
+            'security' => [
+                'fortinet' => ['aliases' => ['fortinet']],
             ],
         ];
     }

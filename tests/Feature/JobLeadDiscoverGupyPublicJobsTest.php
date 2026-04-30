@@ -46,6 +46,22 @@ it('imports deterministic leads from curated gupy public job fixtures', function
         'Omie' => 1,
         'Positivo Tecnologia' => 1,
     ]);
+
+    $cigamLead = JobLead::query()
+        ->where('user_id', $user->id)
+        ->where('company_name', 'CIGAM')
+        ->sole();
+
+    $jbsLead = JobLead::query()
+        ->where('user_id', $user->id)
+        ->where('company_name', 'JBS')
+        ->sole();
+
+    expect($cigamLead->extracted_keywords)->toContain('middleware')
+        ->and($cigamLead->extracted_keywords)->toContain('observability')
+        ->and($cigamLead->hasLimitedAnalysis())->toBeFalse()
+        ->and($jbsLead->extracted_keywords)->toContain('fortinet')
+        ->and($jbsLead->hasLimitedAnalysis())->toBeFalse();
 });
 
 it('deduplicates deterministic gupy public leads across repeated runs', function (): void {

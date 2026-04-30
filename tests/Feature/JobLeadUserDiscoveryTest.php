@@ -13,6 +13,19 @@ beforeEach(function (): void {
     ]);
 });
 
+function useBrazilFixtureDiscoverySources(): void
+{
+    config()->set('job_discovery.use_fixture_responses', true);
+    config()->set('job_discovery.supported_sources', [
+        'company-career-pages',
+        'brazilian-tech-job-boards',
+        'gupy-public-jobs',
+    ]);
+    config()->set('job_discovery.company_career_targets', config('job_discovery.fixture_company_career_targets'));
+    config()->set('job_discovery.brazilian_tech_job_board_targets', config('job_discovery.fixture_brazilian_tech_job_board_targets'));
+    config()->set('job_discovery.gupy_public_job_targets', config('job_discovery.fixture_gupy_public_job_targets'));
+}
+
 it('does not allow guests to trigger job discovery', function (): void {
     $this->post(route('job-leads.discover'))
         ->assertRedirect(route('login'));
@@ -125,6 +138,50 @@ it('shares source level discovery results through flash after redirect', functio
             ->where('flash.discovery.1.failed', 0)
             ->where('flash.discovery.1.query_used', false)
         );
+});
+
+it('keeps fixture-backed brazil discovery leads visible across matched and broader workspace groups', function (): void {
+    useBrazilFixtureDiscoverySources();
+
+    $user = User::factory()->create();
+
+    UserProfile::query()->create([
+        'user_id' => $user->id,
+        'base_resume_text' => 'Backend and data software engineer in Brazil with Python, JavaScript, frontend, backend, remote, APIs, cloud, SQL and product engineering experience.',
+        'core_skills' => ['Python', 'JavaScript', 'Frontend', 'Backend', 'Remote', 'SQL', 'APIs', 'Cloud'],
+        'auto_discover_jobs' => false,
+    ]);
+
+    $response = $this->actingAs($user)
+        ->followingRedirects()
+        ->post(route('job-leads.discover'))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Index')
+            ->where('discoveryStatus.last_discovered_new_count', 36)
+            ->where('latestDiscoveryWorkspaceSplit.latest_batch_total_count', 36)
+            ->where('latestDiscoveryWorkspaceSplit.hidden_international_count', 0)
+            ->has('flash.discovery', 3)
+            ->where('flash.discovery.0.source', 'company-career-pages')
+            ->where('flash.discovery.0.imported', 22)
+            ->where('flash.discovery.1.source', 'brazilian-tech-job-boards')
+            ->where('flash.discovery.1.imported', 5)
+            ->where('flash.discovery.2.source', 'gupy-public-jobs')
+            ->where('flash.discovery.2.imported', 9)
+            ->where('flash.discovery.2.limited_analysis', 0)
+            ->where('flash.discovery.2.missing_description', 0)
+            ->where('flash.discovery.2.hidden_by_default', 0)
+        );
+
+    $split = $response->inertiaProps('latestDiscoveryWorkspaceSplit');
+    $matchedJobs = collect($response->inertiaProps('matchedJobs'));
+
+    expect($split['matched_leads_count'])->toBeGreaterThan(0)
+        ->and($split['unmatched_leads_count'])->toBeGreaterThan(0)
+        ->and($split['visible_matched_count'])->toBeGreaterThan(0)
+        ->and($split['visible_unmatched_count'])->toBeGreaterThan(0)
+        ->and($matchedJobs->pluck('source_name')->contains('Gupy Public Jobs'))->toBeTrue()
+        ->and($matchedJobs->pluck('has_limited_analysis')->contains(true))->toBeFalse();
 });
 
 it('skips duplicates when the user triggers discovery again', function (): void {
