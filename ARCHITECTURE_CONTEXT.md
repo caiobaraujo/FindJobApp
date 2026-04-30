@@ -628,6 +628,8 @@ The same report now also summarizes, per curated target or platform when availab
 - missing-company skips
 - detail enrichment successes and failures
 
+For multi-target deterministic sources, the top-level listing HTTP status must stay `200` when at least one curated target fetch succeeds. Individual target failures remain visible in the per-target `failed` counts instead of downgrading the whole source run to a misleading `404`.
+
 Use it for Brazilian board diagnosis with commands like:
 
 ```bash

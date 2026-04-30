@@ -87,6 +87,8 @@ class BrazilianTechJobBoardsDiscoverySource implements JobDiscoverySource
     public function discoverEntriesWithDiagnostics(): array
     {
         $statusCode = 200;
+        $hasSuccessfulFetch = false;
+        $highestFailureStatusCode = 0;
         $candidateCount = 0;
         $invalidCount = 0;
         $entries = [];
@@ -116,19 +118,21 @@ class BrazilianTechJobBoardsDiscoverySource implements JobDiscoverySource
                 $pageFetch = $this->fetchListingPageHtml($listingUrl);
 
                 if ($pageFetch === null) {
-                    $statusCode = max($statusCode, 500);
+                    $highestFailureStatusCode = max($highestFailureStatusCode, 500);
                     $targets[$targetIdentifier]['failed']++;
 
                     continue;
                 }
-
-                $statusCode = max($statusCode, $pageFetch['status_code']);
 
                 if (! $pageFetch['successful']) {
+                    $highestFailureStatusCode = max($highestFailureStatusCode, $pageFetch['status_code']);
                     $targets[$targetIdentifier]['failed']++;
 
                     continue;
                 }
+
+                $hasSuccessfulFetch = true;
+                $statusCode = max($statusCode, $pageFetch['status_code']);
 
                 $parsed = $this->parseListingHtmlWithDiagnostics($pageFetch['body'], $normalizedTarget);
 
@@ -144,7 +148,7 @@ class BrazilianTechJobBoardsDiscoverySource implements JobDiscoverySource
         }
 
         return [
-            'status_code' => $statusCode,
+            'status_code' => $hasSuccessfulFetch ? $statusCode : max($statusCode, $highestFailureStatusCode),
             'candidate_links' => $candidateCount,
             'parsed_jobs' => count($entries),
             'invalid_links' => $invalidCount,

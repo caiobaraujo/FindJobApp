@@ -84,6 +84,8 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
     public function discoverEntriesWithDiagnostics(): array
     {
         $statusCode = 200;
+        $hasSuccessfulFetch = false;
+        $highestFailureStatusCode = 0;
         $candidateCount = 0;
         $invalidCount = 0;
         $entries = [];
@@ -104,16 +106,19 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
                 $pageFetch = $this->fetchCareerPageHtml($careerUrl);
 
                 if ($pageFetch === null) {
-                    $statusCode = max($statusCode, 500);
+                    $highestFailureStatusCode = max($highestFailureStatusCode, 500);
 
                     continue;
                 }
-
-                $statusCode = max($statusCode, $pageFetch['status_code']);
 
                 if (! $pageFetch['successful']) {
+                    $highestFailureStatusCode = max($highestFailureStatusCode, $pageFetch['status_code']);
+
                     continue;
                 }
+
+                $hasSuccessfulFetch = true;
+                $statusCode = max($statusCode, $pageFetch['status_code']);
 
                 $parsed = $this->parseCareerPageHtmlWithDiagnostics($pageFetch['body'], [
                     'career_url' => $careerUrl,
@@ -143,7 +148,7 @@ class CompanyCareerPagesDiscoverySource implements JobDiscoverySource
         }
 
         return [
-            'status_code' => $statusCode,
+            'status_code' => $hasSuccessfulFetch ? $statusCode : max($statusCode, $highestFailureStatusCode),
             'candidate_links' => $candidateCount,
             'parsed_jobs' => count($entries),
             'invalid_links' => $invalidCount,
