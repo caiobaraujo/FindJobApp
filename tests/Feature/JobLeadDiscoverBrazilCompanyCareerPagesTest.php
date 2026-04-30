@@ -19,8 +19,8 @@ it('imports deterministic leads from the curated brazilian company career page f
         'user_id' => $user->id,
         'source' => 'company-career-pages',
     ])
-        ->expectsOutput('Fetched: 18')
-        ->expectsOutput('Created: 18')
+        ->expectsOutput('Fetched: 22')
+        ->expectsOutput('Created: 22')
         ->expectsOutput('Duplicates skipped: 0')
         ->expectsOutput('Invalid skipped: 0')
         ->expectsOutput('Failed: 0')
@@ -41,11 +41,10 @@ it('imports deterministic leads from the curated brazilian company career page f
         'PagBank' => 3,
         'QuintoAndar' => 3,
         'Stone' => 3,
+        'VTEX' => 2,
+        'Magazine Luiza' => 2,
         'iFood' => 2,
     ]);
-
-    expect(JobLead::query()->where('user_id', $user->id)->where('company_name', 'VTEX')->count())->toBe(0)
-        ->and(JobLead::query()->where('user_id', $user->id)->where('company_name', 'Magazine Luiza')->count())->toBe(0);
 });
 
 it('deduplicates deterministic leads across repeated curated brazilian company career page runs', function (): void {
@@ -62,12 +61,12 @@ it('deduplicates deterministic leads across repeated curated brazilian company c
         'user_id' => $user->id,
         'source' => 'company-career-pages',
     ])
-        ->expectsOutput('Fetched: 18')
+        ->expectsOutput('Fetched: 22')
         ->expectsOutput('Created: 0')
-        ->expectsOutput('Duplicates skipped: 18')
+        ->expectsOutput('Duplicates skipped: 22')
         ->expectsOutput('Invalid skipped: 0')
         ->expectsOutput('Failed: 0')
         ->assertExitCode(0);
 
-    expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(18);
+    expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(22);
 });

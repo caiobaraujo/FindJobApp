@@ -2,77 +2,82 @@
 
 use App\Console\Commands\DiagnoseDiscovery;
 
-it('classifies strong company career page targets deterministically', function (): void {
+it('classifies strong calibration targets deterministically', function (): void {
     $classification = app(DiagnoseDiscovery::class)->classifyCompanyCareerTarget([
         'fetched_candidates' => 10,
         'matched_candidates' => 5,
         'imported' => 4,
         'skipped_by_query' => 5,
         'hidden_by_default' => 0,
+        'failed' => 0,
     ]);
 
     expect($classification)->toBe([
         'bucket' => 'strong',
-        'action' => 'keep strong targets',
+        'action' => 'keep',
     ]);
 });
 
-it('classifies promising company career page targets deterministically', function (): void {
+it('classifies promising calibration targets deterministically', function (): void {
     $classification = app(DiagnoseDiscovery::class)->classifyCompanyCareerTarget([
         'fetched_candidates' => 10,
         'matched_candidates' => 2,
         'imported' => 2,
         'skipped_by_query' => 8,
-        'hidden_by_default' => 0,
+        'hidden_by_default' => 1,
+        'failed' => 0,
     ]);
 
     expect($classification)->toBe([
         'bucket' => 'promising',
-        'action' => 'review promising targets',
+        'action' => 'review',
     ]);
 });
 
-it('classifies weak company career page targets deterministically', function (): void {
+it('classifies weak calibration targets deterministically', function (): void {
     $classification = app(DiagnoseDiscovery::class)->classifyCompanyCareerTarget([
         'fetched_candidates' => 10,
         'matched_candidates' => 1,
-        'imported' => 1,
+        'imported' => 0,
         'skipped_by_query' => 9,
         'hidden_by_default' => 0,
+        'failed' => 0,
     ]);
 
     expect($classification)->toBe([
         'bucket' => 'weak',
-        'action' => 'deprioritize weak targets',
+        'action' => 'deprioritize',
     ]);
 });
 
-it('classifies no signal company career page targets deterministically', function (): void {
+it('classifies no signal calibration targets deterministically', function (): void {
     $classification = app(DiagnoseDiscovery::class)->classifyCompanyCareerTarget([
         'fetched_candidates' => 10,
         'matched_candidates' => 0,
         'imported' => 0,
         'skipped_by_query' => 10,
         'hidden_by_default' => 0,
+        'failed' => 0,
     ]);
 
     expect($classification)->toBe([
         'bucket' => 'no-signal',
-        'action' => 'investigate no-signal targets',
+        'action' => 'investigate',
     ]);
 });
 
-it('does not classify hidden high volume targets as strong', function (): void {
+it('keeps failed targets out of keep or review buckets', function (): void {
     $classification = app(DiagnoseDiscovery::class)->classifyCompanyCareerTarget([
         'fetched_candidates' => 10,
         'matched_candidates' => 5,
         'imported' => 4,
         'skipped_by_query' => 5,
-        'hidden_by_default' => 1,
+        'hidden_by_default' => 0,
+        'failed' => 1,
     ]);
 
     expect($classification)->toBe([
-        'bucket' => 'promising',
-        'action' => 'review promising targets',
+        'bucket' => 'weak',
+        'action' => 'investigate',
     ]);
 });

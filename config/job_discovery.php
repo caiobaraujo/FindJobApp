@@ -138,6 +138,16 @@ $fixtureGupyPublicJobTargets = [
         'listing_url' => 'https://gran.gupy.io/',
     ],
     [
+        'name' => 'Minsait',
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://minsait.gupy.io/',
+    ],
+    [
+        'name' => 'Positivo Tecnologia',
+        'parser_strategy' => 'gupy_listing',
+        'listing_url' => 'https://positivotecnologia.gupy.io/',
+    ],
+    [
         'name' => null,
         'parser_strategy' => 'gupy_listing',
         'listing_url' => 'https://mystery.gupy.io/',
@@ -145,9 +155,9 @@ $fixtureGupyPublicJobTargets = [
 ];
 
 return [
-    'fixture_supported_sources' => ['larajobs', 'company-career-pages', 'gupy-public-jobs'],
+    'fixture_supported_sources' => ['larajobs', 'company-career-pages', 'brazilian-tech-job-boards', 'gupy-public-jobs'],
     'supported_sources' => $useFixtureResponses
-        ? ['larajobs', 'company-career-pages', 'gupy-public-jobs']
+        ? ['larajobs', 'company-career-pages', 'brazilian-tech-job-boards', 'gupy-public-jobs']
         : array_values(array_filter([
             'python-job-board',
             'django-community-jobs',
@@ -167,13 +177,13 @@ return [
             'https://fixtures.nubank.com.br/careers' => base_path('tests/Fixtures/company_career_page_brazil_strong.html'),
             'https://fixtures.ifood.com.br/carreiras' => base_path('tests/Fixtures/company_career_page_brazil_promising.html'),
             'https://fixtures.mercadolivre.com.br/careers' => base_path('tests/Fixtures/company_career_page_brazil_weak.html'),
-            'https://fixtures.vtex.com/careers' => base_path('tests/Fixtures/company_career_page_generic.html'),
+            'https://fixtures.vtex.com/careers' => base_path('tests/Fixtures/company_career_page_vtex_technology.html'),
             'https://fixtures.stone.com.br/careers' => base_path('tests/Fixtures/company_career_page_gupy_multi.html'),
             'https://fixtures.pagbank.com.br/careers' => base_path('tests/Fixtures/company_career_page_gupy_multi_two.html'),
             'https://fixtures.hotmart.com/jobs' => base_path('tests/Fixtures/company_career_page_brazil_promising.html'),
             'https://fixtures.quintoandar.com.br/carreiras' => base_path('tests/Fixtures/company_career_page_brazil_strong.html'),
             'https://fixtures.olx.com.br/vagas' => base_path('tests/Fixtures/company_career_page_brazil_weak.html'),
-            'https://fixtures.magalu.com.br/carreiras' => base_path('tests/Fixtures/company_career_page_generic.html'),
+            'https://fixtures.magalu.com.br/carreiras' => base_path('tests/Fixtures/company_career_page_magalu_technology.html'),
         ],
         'brazilian_tech_job_boards' => [
             'https://fixtures.programathor.com.br/jobs' => base_path('tests/Fixtures/brazilian_tech_job_boards_programathor.html'),
@@ -191,6 +201,10 @@ return [
             'https://fcamara.gupy.io/jobs/73001' => base_path('tests/Fixtures/gupy_public_jobs_devops_detail.html'),
             'https://gran.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_gran_listing.html'),
             'https://gran.gupy.io/jobs/74001' => base_path('tests/Fixtures/gupy_public_jobs_qa_data_detail.html'),
+            'https://minsait.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_minsait_listing.html'),
+            'https://minsait.gupy.io/jobs/76001' => base_path('tests/Fixtures/gupy_public_jobs_backend_java_detail.html'),
+            'https://positivotecnologia.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_positivo_listing.html'),
+            'https://positivotecnologia.gupy.io/jobs/77001' => base_path('tests/Fixtures/gupy_public_jobs_data_platform_detail.html'),
             'https://mystery.gupy.io/' => base_path('tests/Fixtures/gupy_public_jobs_mystery_listing.html'),
         ],
     ],

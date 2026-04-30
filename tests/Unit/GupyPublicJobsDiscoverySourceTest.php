@@ -78,3 +78,24 @@ it('enriches a gupy backend detail page with rich job specific text', function (
         ->and($enriched['description_text'])->toContain('PostgreSQL')
         ->and($enriched['description_text'])->toContain('REST');
 });
+
+it('extracts valid gupy jobs from additional curated fixture targets', function (): void {
+    $html = file_get_contents(__DIR__.'/../Fixtures/gupy_public_jobs_positivo_listing.html');
+
+    expect($html)->not->toBeFalse();
+
+    $parsed = app(GupyPublicJobsDiscoverySource::class)->parseListingHtmlWithDiagnostics($html, [
+        'listing_url' => 'https://positivotecnologia.gupy.io/',
+        'target_name' => 'Positivo Tecnologia',
+        'company_name' => 'Positivo Tecnologia',
+        'platform' => 'gupy',
+        'parser_strategy' => 'gupy_listing',
+    ]);
+
+    expect($parsed['candidate_links'])->toBe(1)
+        ->and($parsed['skipped_expired'])->toBe(0)
+        ->and($parsed['skipped_missing_company'])->toBe(0)
+        ->and($parsed['entries'])->toHaveCount(1)
+        ->and($parsed['entries'][0]['job_title'])->toBe('Data Platform Engineer')
+        ->and($parsed['entries'][0]['company_name'])->toBe('Positivo Tecnologia');
+});

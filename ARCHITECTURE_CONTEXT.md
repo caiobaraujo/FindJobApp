@@ -324,6 +324,8 @@ Fixture mode:
 
 `gupy-public-jobs` fixture mode now uses deterministic curated Gupy listing and detail HTML fixtures so import counts, deduplication, per-company diagnostics, and detail-enrichment behavior remain repeatable.
 
+Fixture-only negative Gupy targets may remain visible in diagnostics to preserve deterministic missing-company coverage, but URL-only negative targets must not drive keep/review/deprioritize recommendations as if they were real curated companies.
+
 ---
 
 ## Workspace Behavior
@@ -433,6 +435,7 @@ php artisan job-leads:discover-all
 php artisan discovery:calibrate
 php artisan discovery:diagnose
 php artisan discovery:inspect-source
+php artisan discovery:diagnose --brazil --fixture
 ```
 
 Tests cover:
@@ -554,6 +557,67 @@ For `brazilian-tech-job-boards`, source diagnostics now also preserve per-platfo
 - failed count
 
 `discovery:diagnose --fixture` now forces the fixture-backed source set and fixture career targets deterministically from the command flag.
+
+`discovery:diagnose --brazil --fixture` now provides a deterministic Brazil-first calibration report across:
+
+- `company-career-pages`
+- `brazilian-tech-job-boards`
+- `gupy-public-jobs`
+
+The Brazil calibration scenarios now include:
+
+- `no query`
+- `python`
+- `javascript`
+- `frontend`
+- `backend`
+- `remoto`
+- `data`
+- `devops`
+
+The Brazil calibration report now summarizes, per source:
+
+- fetched candidate count
+- parsed candidate count
+- matched candidate count
+- imported lead count
+- deduplicated count
+- skipped-by-query count
+- skipped-missing-company count
+- skipped-expired or closed count
+- failed count
+- hidden-by-default count
+- limited-analysis count
+- missing-description count
+- missing-keyword count
+
+The same report now also summarizes, per curated target or platform when available:
+
+- source key
+- target or company or platform name
+- parser strategy
+- fetched candidate count
+- matched candidate count
+- imported lead count
+- deduplicated count
+- skipped-by-query count
+- skipped-missing-company count
+- skipped-expired or closed count
+- failed count
+- import rate
+- query-skip rate
+- deterministic bucket:
+    - `strong`
+    - `promising`
+    - `weak`
+    - `no-signal`
+- deterministic recommendation:
+    - `keep`
+    - `review`
+    - `deprioritize`
+    - `investigate`
+
+`discovery:diagnose` also now accepts repeated `--query` values so fixture-backed calibration runs can stay deterministic while focusing on a smaller scenario subset without network access.
 
 `discovery:inspect-source` now provides a no-import dry run for one source so local development can distinguish:
 

@@ -22,8 +22,8 @@ it('imports deterministic leads from the curated brazilian tech job board fixtur
         'user_id' => $user->id,
         'source' => 'brazilian-tech-job-boards',
     ])
-        ->expectsOutput('Fetched: 6')
-        ->expectsOutput('Created: 3')
+        ->expectsOutput('Fetched: 8')
+        ->expectsOutput('Created: 5')
         ->expectsOutput('Duplicates skipped: 0')
         ->expectsOutput('Invalid skipped: 0')
         ->expectsOutput('Failed: 0')
@@ -37,8 +37,8 @@ it('imports deterministic leads from the curated brazilian tech job board fixtur
         ->all();
 
     expect($countsByPlatform)->toBe([
-        'programathor' => 2,
-        'remotar' => 1,
+        'programathor' => 3,
+        'remotar' => 2,
     ]);
 
     $lead = JobLead::query()
@@ -69,14 +69,14 @@ it('deduplicates deterministic brazilian tech job board leads across repeated ru
         'user_id' => $user->id,
         'source' => 'brazilian-tech-job-boards',
     ])
-        ->expectsOutput('Fetched: 6')
+        ->expectsOutput('Fetched: 8')
         ->expectsOutput('Created: 0')
-        ->expectsOutput('Duplicates skipped: 3')
+        ->expectsOutput('Duplicates skipped: 5')
         ->expectsOutput('Invalid skipped: 0')
         ->expectsOutput('Failed: 0')
         ->assertExitCode(0);
 
-    expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(3);
+    expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(5);
 });
 
 it('exposes per-platform diagnostics for the brazilian tech job boards source', function (): void {
@@ -90,14 +90,14 @@ it('exposes per-platform diagnostics for the brazilian tech job boards source', 
         discoveryBatchId: 'batch-brazil-tech-boards',
     );
 
-    expect($summary['created'])->toBe(3)
+    expect($summary['created'])->toBe(5)
         ->and($summary['duplicates'])->toBe(0)
         ->and($summary['target_diagnostics'])->toHaveCount(2)
         ->and($summary['target_diagnostics'][0]['target_name'])->toBe('ProgramaThor')
         ->and($summary['target_diagnostics'][0]['platform'])->toBe('programathor')
-        ->and($summary['target_diagnostics'][0]['fetched_candidates'])->toBe(4)
-        ->and($summary['target_diagnostics'][0]['matched_candidates'])->toBe(2)
-        ->and($summary['target_diagnostics'][0]['imported'])->toBe(2)
+        ->and($summary['target_diagnostics'][0]['fetched_candidates'])->toBe(5)
+        ->and($summary['target_diagnostics'][0]['matched_candidates'])->toBe(3)
+        ->and($summary['target_diagnostics'][0]['imported'])->toBe(3)
         ->and($summary['target_diagnostics'][0]['deduplicated'])->toBe(0)
         ->and($summary['target_diagnostics'][0]['skipped_by_query'])->toBe(0)
         ->and($summary['target_diagnostics'][0]['skipped_expired'])->toBe(1)
@@ -105,9 +105,9 @@ it('exposes per-platform diagnostics for the brazilian tech job boards source', 
         ->and($summary['target_diagnostics'][0]['failed'])->toBe(0)
         ->and($summary['target_diagnostics'][1]['target_name'])->toBe('Remotar')
         ->and($summary['target_diagnostics'][1]['platform'])->toBe('remotar')
-        ->and($summary['target_diagnostics'][1]['fetched_candidates'])->toBe(2)
-        ->and($summary['target_diagnostics'][1]['matched_candidates'])->toBe(1)
-        ->and($summary['target_diagnostics'][1]['imported'])->toBe(1)
+        ->and($summary['target_diagnostics'][1]['fetched_candidates'])->toBe(3)
+        ->and($summary['target_diagnostics'][1]['matched_candidates'])->toBe(2)
+        ->and($summary['target_diagnostics'][1]['imported'])->toBe(2)
         ->and($summary['target_diagnostics'][1]['deduplicated'])->toBe(0)
         ->and($summary['target_diagnostics'][1]['skipped_by_query'])->toBe(0)
         ->and($summary['target_diagnostics'][1]['skipped_expired'])->toBe(1)
@@ -139,18 +139,18 @@ it('uses resume-derived query profiles with the brazilian tech job boards source
         ->assertInertia(fn (Assert $page) => $page
             ->component('JobLeads/Index')
             ->where('flash.discovery.0.source', 'brazilian-tech-job-boards')
-            ->where('flash.discovery.0.created', 1)
-            ->where('flash.discovery.0.created_by_query_profiles', 1)
+            ->where('flash.discovery.0.created', 2)
+            ->where('flash.discovery.0.created_by_query_profiles', 2)
             ->where('flash.discovery.0.query_profile_keys', ['frontend_vue'])
             ->where('flash.discovery.0.target_diagnostics.0.target_name', 'Remotar')
             ->where('flash.discovery.0.target_diagnostics.0.platform', 'remotar')
+            ->where('flash.discovery.0.target_diagnostics.0.fetched_candidates', 3)
             ->where('flash.discovery.0.target_diagnostics.0.skipped_expired', 1)
         );
 
-    $lead = JobLead::query()->where('user_id', $user->id)->sole();
-
-    expect($lead->job_title)->toBe('Vue.js Product Engineer')
-        ->and($lead->source_platform)->toBe('remotar');
+    expect(JobLead::query()->where('user_id', $user->id)->count())->toBe(2)
+        ->and(JobLead::query()->where('user_id', $user->id)->where('job_title', 'Vue.js Product Engineer')->exists())->toBeTrue()
+        ->and(JobLead::query()->where('user_id', $user->id)->where('source_platform', 'remotar')->count())->toBe(2);
 });
 
 it('imports a qa python programathor lead with full detail text and matches python without false javascript', function (): void {

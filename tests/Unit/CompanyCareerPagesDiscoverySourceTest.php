@@ -44,6 +44,24 @@ it('does not import a generic curated company page without software job signals'
     expect($parsed['entries'])->toBe([]);
 });
 
+it('extracts structured software jobs from the curated vtex fixture', function (): void {
+    $html = file_get_contents(__DIR__.'/../Fixtures/company_career_page_vtex_technology.html');
+
+    expect($html)->not->toBeFalse();
+
+    $parsed = app(CompanyCareerPagesDiscoverySource::class)->parseCareerPageHtmlWithDiagnostics($html, [
+        'career_url' => 'https://fixtures.vtex.com/careers',
+        'company_name' => 'VTEX',
+        'region' => 'São Paulo',
+        'website_url' => 'https://vtex.com',
+        'parser_strategy' => 'structured_lists',
+    ]);
+
+    expect($parsed['candidate_links'])->toBe(2)
+        ->and($parsed['entries'])->toHaveCount(2)
+        ->and($parsed['entries'][0]['company_name'])->toBe('VTEX');
+});
+
 it('extracts multiple visible ats jobs from an ats board fixture', function (): void {
     $html = file_get_contents(__DIR__.'/../Fixtures/company_career_page_gupy_multi.html');
 
