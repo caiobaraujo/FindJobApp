@@ -214,8 +214,8 @@ function deleteJobLead() {
             </SectionCard>
 
             <SectionCard
-                :title="t('job_lead_edit.resume_variant_title', 'Tailored resume variants')"
-                :description="t('job_lead_edit.resume_variant_description', 'Generate a small ATS-oriented version of your resume for this lead without changing discovery or workspace behavior.')"
+                :title="t('resume_variants.title')"
+                :description="t('resume_variants.description')"
             >
                 <ResumeVariantCard
                     :job-lead-id="jobLead.id"

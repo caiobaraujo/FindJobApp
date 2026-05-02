@@ -29,15 +29,27 @@ class ResumeVariantController extends Controller
 
         abort_if($userProfile === null, 404);
 
-        $resumeVariantGenerator->generate(
+        $resumeVariant = $resumeVariantGenerator->generate(
             $request->user()->id,
             $jobLead,
             $userProfile,
             (string) $validated['mode'],
         );
 
+        $errorMessages = [
+            __('app.resume_variants.unavailable'),
+            __('app.resume_variants.unavailable_model'),
+            __('app.resume_variants.generation_failed'),
+        ];
+
+        $flashKey = in_array($resumeVariant->generated_text, $errorMessages, true)
+            ? 'error'
+            : 'success';
+
         return redirect()
             ->route('job-leads.edit', $jobLead)
-            ->with('success', 'Tailored resume generated.');
+            ->with($flashKey, $flashKey === 'error'
+                ? $resumeVariant->generated_text
+                : __('app.resume_variants.generated_success'));
     }
 }

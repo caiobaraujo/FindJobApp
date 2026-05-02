@@ -40,4 +40,9 @@ return [
         'resume_variant_model' => env('OPENAI_RESUME_VARIANT_MODEL', 'gpt-5-mini'),
     ],
 
+    'gemini' => [
+        'key' => env('GEMINI_API_KEY'),
+        'model' => env('GEMINI_MODEL', 'gemini-2.5-flash-lite'),
+    ],
+
 ];

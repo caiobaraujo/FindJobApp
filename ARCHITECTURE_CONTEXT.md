@@ -134,11 +134,11 @@ Additive portfolio feature.
 - URL-only leads must remain valid and honest
 - Do not invent job data or keywords
 - All data is user-scoped
-- No AI features in the current phase
+- No AI features outside explicit user-triggered `ResumeVariant` generation
 - Do not introduce paid, opaque, or AI-based external APIs
 - Discovery must be deterministic and testable with fixtures
 - Matched and missing job keywords must be computed from canonical taxonomy-based resume signals, not raw substring matching against resume text
-- Exception: AI is allowed only for explicit user-triggered `ResumeVariant` generation and must stay isolated from discovery, matching, ranking, and workspace behavior
+- Exception: AI is allowed only for explicit user-triggered `ResumeVariant` generation via Gemini/Google AI Studio and must stay isolated from discovery, matching, ranking, and workspace behavior
 
 ---
 

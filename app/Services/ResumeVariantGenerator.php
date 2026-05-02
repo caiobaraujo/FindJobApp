@@ -6,8 +6,7 @@ use App\Models\JobLead;
 use App\Models\ResumeVariant;
 use App\Models\UserProfile;
 use Illuminate\Http\Client\Factory as HttpFactory;
-use Illuminate\Http\Client\RequestException;
-use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -26,41 +25,96 @@ class ResumeVariantGenerator
     ): ResumeVariant {
         $this->validateInputs($jobLead, $userProfile, $mode);
 
-        $response = $this->http
-            ->withToken((string) config('services.openai.api_key'))
-            ->acceptJson()
-            ->asJson()
-            ->post('https://api.openai.com/v1/responses', [
-                'model' => config('services.openai.resume_variant_model', 'gpt-5-mini'),
-                'instructions' => $this->instructionsForMode($mode),
-                'input' => $this->inputForGeneration($jobLead, $userProfile, $mode),
-            ]);
+        $apiKey = (string) config('services.gemini.key');
+        $model = (string) config('services.gemini.model');
+
+        if (blank($apiKey)) {
+            return $this->createVariant($userId, $jobLead, $mode, __('app.resume_variants.unavailable'));
+        }
+
+        if (blank($model)) {
+            return $this->createVariant($userId, $jobLead, $mode, __('app.resume_variants.unavailable_model'));
+        }
 
         try {
-            $response->throw();
-        } catch (RequestException $exception) {
-            throw ValidationException::withMessages([
-                'mode' => 'Resume generation is unavailable right now.',
-            ]);
-        }
+            $response = $this->http
+                ->acceptJson()
+                ->asJson()
+                ->post(
+                    sprintf(
+                        'https://generativelanguage.googleapis.com/v1beta/models/%s:generateContent?key=%s',
+                        rawurlencode($model),
+                        rawurlencode($apiKey),
+                    ),
+                    $this->requestPayload($jobLead, $userProfile, $mode),
+                );
 
-        $generatedText = Str::of((string) $response->json('output_text'))
-            ->replace("\r\n", "\n")
-            ->trim()
-            ->value();
+            if (! $response->successful()) {
+                $this->logGeminiFailure($response->status(), data_get($response->json(), 'error.message'));
+
+                return $this->createVariant($userId, $jobLead, $mode, __('app.resume_variants.generation_failed'));
+            }
+
+            $generatedText = Str::of((string) data_get($response->json(), 'candidates.0.content.parts.0.text'))
+                ->replace("\r\n", "\n")
+                ->trim()
+                ->value();
+        } catch (\Throwable $throwable) {
+            $this->logGeminiFailure(null, $throwable->getMessage());
+
+            return $this->createVariant($userId, $jobLead, $mode, __('app.resume_variants.generation_failed'));
+        }
 
         if ($generatedText === '') {
-            throw ValidationException::withMessages([
-                'mode' => 'Resume generation returned an empty result.',
-            ]);
+            $this->logGeminiFailure($response->status() ?? null, data_get($response->json(), 'error.message'));
+
+            return $this->createVariant($userId, $jobLead, $mode, __('app.resume_variants.generation_failed'));
         }
 
+        return $this->createVariant($userId, $jobLead, $mode, $generatedText);
+    }
+
+    private function logGeminiFailure(?int $status, ?string $errorMessage): void
+    {
+        Log::warning('Gemini resume generation failed.', array_filter([
+            'status' => $status,
+            'error_message' => blank($errorMessage) ? null : Str::of($errorMessage)->limit(200)->value(),
+        ], static fn (mixed $value): bool => $value !== null && $value !== ''));
+    }
+
+    private function createVariant(
+        int $userId,
+        JobLead $jobLead,
+        string $mode,
+        string $generatedText,
+    ): ResumeVariant {
         return ResumeVariant::query()->create([
             'user_id' => $userId,
             'job_lead_id' => $jobLead->id,
             'mode' => $mode,
             'generated_text' => $generatedText,
         ]);
+    }
+
+    /**
+     * @return array{contents: array<int, array{parts: array<int, array{text: string}>}>}
+     */
+    private function requestPayload(JobLead $jobLead, UserProfile $userProfile, string $mode): array
+    {
+        return [
+            'contents' => [
+                [
+                    'parts' => [
+                        [
+                            'text' => implode("\n\n", [
+                                $this->instructionsForMode($mode),
+                                $this->inputForGeneration($jobLead, $userProfile, $mode),
+                            ]),
+                        ],
+                    ],
+                ],
+            ],
+        ];
     }
 
     private function validateInputs(JobLead $jobLead, UserProfile $userProfile, string $mode): void
@@ -82,49 +136,30 @@ class ResumeVariantGenerator
                 'mode' => 'Add the full job description before generating a tailored resume.',
             ]);
         }
-
-        if (blank(config('services.openai.api_key'))) {
-            throw ValidationException::withMessages([
-                'mode' => 'Resume generation is not configured.',
-            ]);
-        }
     }
 
     private function instructionsForMode(string $mode): string
     {
-        $modeRules = match ($mode) {
-            ResumeVariant::MODE_FAITHFUL => implode("\n", [
-                '- Use only skills and technologies already present in the base resume or core skills.',
-                '- Do not add new technologies from the job if they are not already in the resume.',
-                '- Keep the language confident but strictly faithful to the user background.',
-            ]),
-            ResumeVariant::MODE_ATS_BOOST => implode("\n", [
-                '- Include important job technologies even when they are not in the base resume.',
-                '- For missing technologies, use safe phrases such as "familiarity with", "exposure to", or "experience with similar technologies".',
-                '- Do not claim direct professional experience for missing technologies.',
-            ]),
-            ResumeVariant::MODE_ATS_SAFE => implode("\n", [
-                '- Include important job technologies even when they are not in the base resume.',
-                '- For missing technologies, use neutral phrases such as "interest in" or "aligned with".',
-                '- Do not imply professional experience for missing technologies.',
-            ]),
-        };
-
         return implode("\n", [
             'You rewrite resumes for ATS screening.',
-            'Output plain text only. Do not use markdown fences.',
-            'Use simple ATS-friendly sections and concise bullets.',
+            'Output plain text only. Do not use markdown fences, code fences, markdown tables, emojis, or icons.',
+            'Use exactly these section headings in this order: Summary, Core Skills, Professional Experience, Target Role Alignment.',
+            'Keep the output realistic, concise, and defensible.',
             'Never invent jobs, companies, years of experience, degrees, or certifications.',
             'Never claim direct experience with a technology unless it is already present in the base resume or core skills.',
-            'Preserve the candidate background while improving keyword clarity for the selected role.',
-            $modeRules,
+            'Keep the candidate background recognizable while improving keyword clarity for the selected role.',
+            'SUMMARY rules: write 2 to 4 lines as a short paragraph, mention the main stack from the resume, and include job keywords safely when allowed by mode.',
+            'CORE SKILLS rules: use bullet points, keep real skills first, then add job keywords allowed by the selected mode.',
+            'PROFESSIONAL EXPERIENCE rules: lightly rewrite the resume experience text into ATS-friendly bullets or short entries, but do not invent roles, employers, dates, or credentials.',
+            'TARGET ROLE ALIGNMENT rules: make this the key section and vary it strongly by mode.',
+            $this->modeRules($mode),
         ]);
     }
 
     private function inputForGeneration(JobLead $jobLead, UserProfile $userProfile, string $mode): string
     {
-        $keywords = Arr::wrap($jobLead->extracted_keywords);
-        $coreSkills = Arr::wrap($userProfile->core_skills);
+        $keywords = $this->normalizedList($jobLead->extracted_keywords ?? []);
+        $coreSkills = $this->normalizedList($userProfile->core_skills ?? []);
 
         return implode("\n\n", [
             'Selected mode: '.$mode,
@@ -136,13 +171,45 @@ class ResumeVariantGenerator
             trim((string) $userProfile->base_resume_text),
             'Job description:',
             trim((string) $jobLead->description_text),
-            implode("\n", [
-                'Write a tailored resume in plain text with these sections when supported by the base resume:',
-                'Summary',
-                'Core Skills',
-                'Professional Experience Highlights',
-                'Education or Certifications only if already present in the base resume',
-            ]),
+            'Do not add an education section unless the base resume already includes education or certifications and the job relevance is clear.',
         ]);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizedList(array $items): array
+    {
+        return array_values(array_filter(array_unique(array_map(
+            static fn (mixed $item): string => trim((string) $item),
+            $items,
+        )), static fn (string $item): bool => $item !== ''));
+    }
+
+    private function modeRules(string $mode): string
+    {
+        return match ($mode) {
+            ResumeVariant::MODE_FAITHFUL => implode("\n", [
+                'FAITHFUL mode:',
+                '- Use only skills, tools, and domains already present in the base resume or core skills.',
+                '- Do not add new technologies from the job description.',
+                '- Target Role Alignment should explain fit using existing background only.',
+                '- Keep the resume honest and conservative.',
+            ]),
+            ResumeVariant::MODE_ATS_BOOST => implode("\n", [
+                'ATS_BOOST mode:',
+                '- Include all key job technologies in the alignment section.',
+                '- Use safe language such as "familiarity with", "exposure to", or "experience with similar technologies" for anything not in the resume.',
+                '- Never claim direct professional experience for technologies not present in the resume.',
+                '- Prioritize keyword presence while staying defensible.',
+            ]),
+            ResumeVariant::MODE_ATS_SAFE => implode("\n", [
+                'ATS_SAFE mode:',
+                '- Include key job technologies in the alignment section.',
+                '- Use neutral language such as "interest in", "aligned with", or "motivated to work with" for anything not in the resume.',
+                '- Do not imply professional experience for technologies not present in the resume.',
+                '- Prioritize clarity and gentle keyword coverage.',
+            ]),
+        };
     }
 }

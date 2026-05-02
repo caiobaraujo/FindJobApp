@@ -1293,18 +1293,18 @@ class JobLeadController extends Controller
         return [
             [
                 'value' => ResumeVariant::MODE_FAITHFUL,
-                'label' => 'Faithful',
-                'description' => 'Use only skills already present in your resume.',
+                'label' => __('app.resume_variants.modes.faithful.label'),
+                'description' => __('app.resume_variants.modes.faithful.description'),
             ],
             [
                 'value' => ResumeVariant::MODE_ATS_BOOST,
-                'label' => 'ATS boost',
-                'description' => 'Add job keywords with careful familiarity or exposure language.',
+                'label' => __('app.resume_variants.modes.ats_boost.label'),
+                'description' => __('app.resume_variants.modes.ats_boost.description'),
             ],
             [
                 'value' => ResumeVariant::MODE_ATS_SAFE,
-                'label' => 'ATS safe',
-                'description' => 'Add job keywords with neutral alignment or interest language.',
+                'label' => __('app.resume_variants.modes.ats_safe.label'),
+                'description' => __('app.resume_variants.modes.ats_safe.description'),
             ],
         ];
     }
