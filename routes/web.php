@@ -45,6 +45,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/job-leads/import/bulk', [JobLeadController::class, 'bulkImportFromUrls'])->name('job-leads.bulk-import');
     Route::post('/job-leads/{jobLead}/resume-variants', [ResumeVariantController::class, 'store'])
         ->name('job-leads.resume-variants.store');
+    Route::get('/resume-variants/{resumeVariant}/download', [ResumeVariantController::class, 'download'])
+        ->name('resume-variants.download');
     Route::resource('job-leads', JobLeadController::class)->except(['show']);
     Route::patch('/applications/{application}/status', [ApplicationController::class, 'updateStatus'])
         ->name('applications.status.update');

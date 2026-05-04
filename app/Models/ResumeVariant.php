@@ -41,4 +41,32 @@ class ResumeVariant extends Model
     {
         return $this->belongsTo(JobLead::class);
     }
+
+    public function isErrorState(): bool
+    {
+        return $this->errorMessage() !== null;
+    }
+
+    public function errorMessage(): ?string
+    {
+        $generatedText = trim((string) $this->generated_text);
+
+        if ($generatedText === '') {
+            return null;
+        }
+
+        foreach (['en', 'pt', 'es'] as $locale) {
+            foreach ([
+                'app.resume_variants.unavailable',
+                'app.resume_variants.unavailable_model',
+                'app.resume_variants.generation_failed',
+            ] as $translationKey) {
+                if ($generatedText === __($translationKey, [], $locale)) {
+                    return $generatedText;
+                }
+            }
+        }
+
+        return null;
+    }
 }

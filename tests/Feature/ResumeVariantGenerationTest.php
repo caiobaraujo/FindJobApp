@@ -308,6 +308,173 @@ it('exposes localized resume variant modes on the job lead edit page', function 
         );
 });
 
+it('keeps resume variant error states explicit across locale switches', function (): void {
+    $user = User::factory()->create();
+
+    $jobLead = JobLead::factory()->for($user)->create([
+        'company_name' => 'Asaas',
+        'job_title' => 'Analytics Engineer',
+        'source_url' => 'https://asaas.gupy.io/jobs/11223001',
+        'description_text' => 'Need Python, Airflow, SQL, dbt, and cloud experience for analytics engineering.',
+        'extracted_keywords' => ['python', 'airflow', 'sql', 'dbt', 'cloud'],
+    ]);
+
+    ResumeVariant::query()->create([
+        'user_id' => $user->id,
+        'job_lead_id' => $jobLead->id,
+        'mode' => ResumeVariant::MODE_FAITHFUL,
+        'generated_text' => __('app.resume_variants.unavailable_model', [], 'en'),
+    ]);
+
+    $this->actingAs($user)
+        ->withSession(['locale' => 'pt'])
+        ->get(route('job-leads.edit', $jobLead))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Edit')
+            ->where('resumeVariants.0.is_error', true)
+            ->where('resumeVariants.0.error_message', __('app.resume_variants.unavailable_model', [], 'en'))
+            ->where('resumeVariants.0.generated_text', __('app.resume_variants.unavailable_model', [], 'en'))
+            ->where('resumeVariantModes.0.label', __('app.resume_variants.modes.faithful.label', [], 'pt'))
+            ->where('resumeVariantModes.1.label', __('app.resume_variants.modes.ats_boost.label', [], 'pt'))
+            ->where('resumeVariantModes.2.label', __('app.resume_variants.modes.ats_safe.label', [], 'pt'))
+        );
+});
+
+it('exposes a download pdf action for successful resume variants on the edit page', function (): void {
+    $user = User::factory()->create();
+
+    $jobLead = JobLead::factory()->for($user)->create([
+        'company_name' => 'Asaas',
+        'job_title' => 'Analytics Engineer',
+        'source_url' => 'https://asaas.gupy.io/jobs/11223001',
+        'description_text' => 'Need Python, Airflow, SQL, dbt, and cloud experience for analytics engineering.',
+        'extracted_keywords' => ['python', 'airflow', 'sql', 'dbt', 'cloud'],
+    ]);
+
+    $resumeVariant = ResumeVariant::query()->create([
+        'user_id' => $user->id,
+        'job_lead_id' => $jobLead->id,
+        'mode' => ResumeVariant::MODE_FAITHFUL,
+        'generated_text' => implode("\n", [
+            'Summary',
+            'Backend engineer with PHP and Laravel experience.',
+            '',
+            'Core Skills',
+            '- PHP',
+            '- Laravel',
+        ]),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.edit', $jobLead))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Edit')
+            ->where('resumeVariants.0.is_error', false)
+            ->where('resumeVariants.0.download_url', route('resume-variants.download', $resumeVariant))
+        );
+});
+
+it('allows a user to download a pdf for their own successful resume variant without triggering gemini', function (): void {
+    Http::fake();
+
+    $user = User::factory()->create([
+        'name' => 'Taylor Dev',
+    ]);
+
+    $jobLead = JobLead::factory()->for($user)->create([
+        'company_name' => 'Asaas',
+        'job_title' => 'Analytics Engineer',
+        'source_url' => 'https://asaas.gupy.io/jobs/11223001',
+    ]);
+
+    $resumeVariant = ResumeVariant::query()->create([
+        'user_id' => $user->id,
+        'job_lead_id' => $jobLead->id,
+        'mode' => ResumeVariant::MODE_ATS_SAFE,
+        'generated_text' => implode("\n", [
+            'Summary',
+            'Backend engineer with PHP and Laravel experience.',
+            '',
+            'Core Skills',
+            '- PHP',
+            '- Laravel',
+            '',
+            'Professional Experience',
+            '- Built backend systems with Laravel.',
+            '',
+            'Target Role Alignment',
+            '- Aligned with analytics-focused backend roles.',
+        ]),
+    ]);
+
+    $response = $this->actingAs($user)
+        ->get(route('resume-variants.download', $resumeVariant));
+
+    $response->assertOk()
+        ->assertHeader('content-type', 'application/pdf')
+        ->assertHeader('content-disposition', 'attachment; filename=analytics-engineer-asaas-ats_safe.pdf');
+
+    expect($response->getContent())
+        ->toStartWith('%PDF')
+        ->and(ResumeVariant::query()->count())->toBe(1);
+
+    Http::assertNothingSent();
+});
+
+it('prevents a user from downloading another users resume variant pdf', function (): void {
+    $owner = User::factory()->create();
+    $otherUser = User::factory()->create();
+
+    $jobLead = JobLead::factory()->for($owner)->create([
+        'company_name' => 'Asaas',
+        'job_title' => 'Analytics Engineer',
+        'source_url' => 'https://asaas.gupy.io/jobs/11223001',
+    ]);
+
+    $resumeVariant = ResumeVariant::query()->create([
+        'user_id' => $owner->id,
+        'job_lead_id' => $jobLead->id,
+        'mode' => ResumeVariant::MODE_FAITHFUL,
+        'generated_text' => "Summary\nOwner resume variant",
+    ]);
+
+    $this->actingAs($otherUser)
+        ->get(route('resume-variants.download', $resumeVariant))
+        ->assertForbidden();
+});
+
+it('does not expose or allow pdf download for error resume variants', function (): void {
+    $user = User::factory()->create();
+
+    $jobLead = JobLead::factory()->for($user)->create([
+        'company_name' => 'Asaas',
+        'job_title' => 'Analytics Engineer',
+        'source_url' => 'https://asaas.gupy.io/jobs/11223001',
+    ]);
+
+    $resumeVariant = ResumeVariant::query()->create([
+        'user_id' => $user->id,
+        'job_lead_id' => $jobLead->id,
+        'mode' => ResumeVariant::MODE_FAITHFUL,
+        'generated_text' => __('app.resume_variants.unavailable'),
+    ]);
+
+    $this->actingAs($user)
+        ->get(route('job-leads.edit', $jobLead))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('JobLeads/Edit')
+            ->where('resumeVariants.0.is_error', true)
+            ->where('resumeVariants.0.download_url', null)
+        );
+
+    $this->actingAs($user)
+        ->get(route('resume-variants.download', $resumeVariant))
+        ->assertNotFound();
+});
+
 it('keeps the generated output distinct across faithful ats boost and ats safe modes', function (): void {
     config()->set('services.gemini.key', 'test-gemini-key');
     config()->set('services.gemini.model', 'gemini-2.5-flash-lite');

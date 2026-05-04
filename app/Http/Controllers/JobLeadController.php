@@ -1318,12 +1318,21 @@ class JobLeadController extends Controller
             ->latest()
             ->limit(5)
             ->get()
-            ->map(fn (ResumeVariant $resumeVariant): array => [
-                'id' => $resumeVariant->id,
-                'mode' => $resumeVariant->mode,
-                'generated_text' => $resumeVariant->generated_text,
-                'created_at' => $resumeVariant->created_at?->toIso8601String(),
-            ])
+            ->map(function (ResumeVariant $resumeVariant): array {
+                $errorMessage = $resumeVariant->errorMessage();
+
+                return [
+                    'download_url' => $errorMessage === null
+                        ? route('resume-variants.download', $resumeVariant)
+                        : null,
+                    'error_message' => $errorMessage,
+                    'id' => $resumeVariant->id,
+                    'is_error' => $errorMessage !== null,
+                    'mode' => $resumeVariant->mode,
+                    'generated_text' => $resumeVariant->generated_text,
+                    'created_at' => $resumeVariant->created_at?->toIso8601String(),
+                ];
+            })
             ->all();
     }
 

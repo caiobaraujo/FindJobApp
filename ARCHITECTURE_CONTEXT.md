@@ -121,6 +121,7 @@ Additive portfolio feature.
 - Belongs to a user
 - Belongs to a selected `JobLead`
 - Stores a generated resume variant for one explicit mode
+- Stored variants may be exported to a simple ATS-friendly PDF without regeneration
 - Must not affect discovery, matching, ranking, or workspace filtering
 - Uses the existing `UserProfile` resume text plus `JobLead` description context only
 

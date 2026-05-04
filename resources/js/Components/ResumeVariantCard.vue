@@ -2,7 +2,7 @@
 import InputError from '@/Components/InputError.vue';
 import { useI18n } from '@/composables/useI18n';
 import { useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 
 const props = defineProps({
     canGenerate: {
@@ -32,6 +32,9 @@ const generateForm = useForm({
     mode: props.modes[0]?.value ?? 'faithful',
 });
 const copiedAction = ref('');
+const copyFeedback = ref('');
+const clipboardSupported = computed(() => typeof navigator !== 'undefined'
+    && typeof navigator.clipboard?.writeText === 'function');
 const sectionDefinitions = [
     { title: 'Summary', labelKey: 'resume_variants.sections.summary' },
     { title: 'Core Skills', labelKey: 'resume_variants.sections.core_skills' },
@@ -47,12 +50,19 @@ function generate() {
 }
 
 async function copyVariant(variant) {
+    if (!clipboardSupported.value) {
+        copyFeedback.value = 'unsupported';
+        return;
+    }
+
     try {
         await navigator.clipboard.writeText(variant.generated_text);
         copiedAction.value = `${variant.id}:full`;
+        copyFeedback.value = '';
         clearCopiedActionLater(variant.id, 'full');
     } catch {
         copiedAction.value = '';
+        copyFeedback.value = 'unsupported';
     }
 }
 
@@ -63,12 +73,19 @@ async function copySummary(variant) {
         return;
     }
 
+    if (!clipboardSupported.value) {
+        copyFeedback.value = 'unsupported';
+        return;
+    }
+
     try {
         await navigator.clipboard.writeText(summary);
         copiedAction.value = `${variant.id}:summary`;
+        copyFeedback.value = '';
         clearCopiedActionLater(variant.id, 'summary');
     } catch {
         copiedAction.value = '';
+        copyFeedback.value = 'unsupported';
     }
 }
 
@@ -90,16 +107,8 @@ function formatSectionTitle(title) {
     return section ? t(section.labelKey, title) : title;
 }
 
-function generationErrorMessages() {
-    return [
-        t('resume_variants.unavailable'),
-        t('resume_variants.unavailable_model'),
-        t('resume_variants.generation_failed'),
-    ];
-}
-
 function isUnavailableVariant(variant) {
-    return generationErrorMessages().includes(String(variant.generated_text ?? '').trim());
+    return Boolean(variant.is_error);
 }
 
 function normalizeHeading(line) {
@@ -282,9 +291,17 @@ function bodyLines(body) {
                     v-if="!isUnavailableVariant(variant)"
                     class="flex flex-wrap gap-3"
                 >
+                    <a
+                        v-if="variant.download_url"
+                        :href="variant.download_url"
+                        class="premium-button-secondary"
+                    >
+                        {{ t('resume_variants.download_pdf') }}
+                    </a>
                     <button
                         type="button"
                         class="premium-button-secondary"
+                        :disabled="!clipboardSupported"
                         @click="copySummary(variant)"
                     >
                         {{ copiedAction === `${variant.id}:summary`
@@ -294,6 +311,7 @@ function bodyLines(body) {
                     <button
                         type="button"
                         class="premium-button-secondary"
+                        :disabled="!clipboardSupported"
                         @click="copyVariant(variant)"
                     >
                         {{ copiedAction === `${variant.id}:full`
@@ -303,11 +321,18 @@ function bodyLines(body) {
                 </div>
             </div>
 
+            <p
+                v-if="!isUnavailableVariant(variant) && copyFeedback === 'unsupported'"
+                class="mt-3 text-sm text-amber-100"
+            >
+                {{ t('resume_variants.copy_unavailable') }}
+            </p>
+
             <div
                 v-if="isUnavailableVariant(variant)"
                 class="mt-5 rounded-3xl border border-amber-500/20 bg-amber-500/10 p-5 text-sm leading-7 text-amber-50"
             >
-                {{ t('resume_variants.unavailable') }}
+                {{ variant.error_message || t('resume_variants.unavailable') }}
             </div>
 
             <div
